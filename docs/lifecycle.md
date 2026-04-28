@@ -71,7 +71,7 @@ The condition requires `votes_yes > votes_no` (strict majority). A tie resolves 
 Abstain votes are included in `total_votes` for quorum calculation but do not influence the yes/no comparison. A proposal can reach quorum entirely through Abstain votes and still be Rejected.
 
 **Zero token balance**
-`cast_vote()` reverts with `NoVotingPower` if the voter's token balance is zero at the time of the call. There is no snapshot; balance is read live.
+`cast_vote()` reverts with `NoVotingPower` if the voter's token balance is zero at the time of the call. The balance is snapshotted at vote time and stored; see ADR-003.
 
 **Double voting**
 Each address may vote exactly once per proposal. A second call reverts with `AlreadyVoted`.

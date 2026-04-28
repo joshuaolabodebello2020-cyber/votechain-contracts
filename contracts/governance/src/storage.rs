@@ -1,6 +1,39 @@
 use soroban_sdk::{Env, Address};
 use crate::types::{ContractError, DataKey, Proposal, VoteRecord};
 
+// =============================================================================
+// Storage Strategy
+// =============================================================================
+//
+// Soroban provides three storage tiers. Each key in this contract is assigned
+// to the tier that best matches its access pattern and lifetime:
+//
+// INSTANCE storage  – contract-wide singleton values that share the contract's
+//                     TTL. Reads are cheap because the entire instance bucket is
+//                     loaded in one host-function call. Used for configuration
+//                     that is set once and read on almost every invocation.
+//
+//   DataKey::Admin              – admin address (set at init, read on admin ops)
+//   DataKey::VotingToken        – governance token address (read on every vote)
+//   DataKey::ProposalCount      – monotonic proposal ID counter
+//   DataKey::MinProposalBalance – minimum token balance to create a proposal
+//   DataKey::ProposalCooldown   – seconds between proposals per address
+//   DataKey::Version            – semver tuple (major, minor, patch)
+//
+// PERSISTENT storage – per-key TTL, survives ledger expiry independently.
+//                      Used for data that must outlive any single ledger and
+//                      is keyed by a variable (proposal ID, voter address, etc.).
+//
+//   DataKey::Proposal(id)                  – full proposal struct
+//   DataKey::HasVoted(proposal_id, voter)  – deduplication flag per voter
+//   DataKey::VoteRecord(proposal_id, voter)– immutable vote audit record
+//   DataKey::VoterSnapshot(proposal_id, voter) – balance snapshot at vote time
+//   DataKey::LastProposal(proposer)        – timestamp of proposer's last proposal
+//
+// TEMPORARY storage  – not used in this contract. Allowances in the token
+//                      contract use temporary storage; see token/src/storage.rs.
+// =============================================================================
+
 /// Persists a proposal to contract storage, keyed by its ID.
 pub fn save_proposal(env: &Env, p: &Proposal) {
     env.storage().persistent().set(&DataKey::Proposal(p.id), p);

@@ -127,9 +127,16 @@ Full state diagram, transition conditions, and edge cases: [docs/lifecycle.md](d
 
 ### Pass Conditions
 
+A proposal passes when both conditions hold after the voting period ends:
+
 ```
-total_votes >= quorum  AND  votes_yes > votes_no
+total_votes = votes_yes + votes_no + votes_abstain
+
+Passed   if total_votes >= quorum  AND  votes_yes > votes_no
+Rejected otherwise
 ```
+
+Abstain votes count toward the quorum threshold but do not influence the yes/no majority. A tie (`votes_yes == votes_no`) resolves as Rejected even when quorum is met.
 
 ---
 

@@ -1,6 +1,35 @@
 use soroban_sdk::{Env, Address};
 use crate::types::{ContractError, TokenDataKey};
 
+// =============================================================================
+// Storage Strategy
+// =============================================================================
+//
+// Soroban provides three storage tiers. Each key in this contract is assigned
+// to the tier that best matches its access pattern and lifetime:
+//
+// INSTANCE storage  – contract-wide singleton values that share the contract's
+//                     TTL. Reads are cheap because the entire instance bucket is
+//                     loaded in one host-function call. Used for configuration
+//                     that is set once and read on almost every invocation.
+//
+//   TokenDataKey::Admin       – admin address (set at init, read on mint/burn)
+//   TokenDataKey::TotalSupply – total tokens in circulation (read on every mint/burn)
+//   TokenDataKey::Version     – semver tuple (major, minor, patch)
+//
+// PERSISTENT storage – per-key TTL, survives ledger expiry independently.
+//                      Used for data keyed by a variable (owner address, etc.)
+//                      that must survive indefinitely.
+//
+//   TokenDataKey::Balance(owner) – token balance per address
+//
+// TEMPORARY storage  – expires at the end of the ledger entry's TTL without
+//                      renewal. Suitable for short-lived approvals that do not
+//                      need to persist across many ledgers.
+//
+//   TokenDataKey::Allowance(owner, spender) – ERC-20-style spending allowance
+// =============================================================================
+
 /// Returns the token balance of `owner`. Defaults to `0` if never set.
 pub fn balance_of(env: &Env, owner: &Address) -> i128 {
     env.storage().persistent().get(&TokenDataKey::Balance(owner.clone())).unwrap_or(0)

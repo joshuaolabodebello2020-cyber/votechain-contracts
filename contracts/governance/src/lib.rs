@@ -14,14 +14,12 @@ mod prop_tests;
 use soroban_sdk::{contract, contractclient, contractimpl, token, Address, Env, String};
 use storage::{
     get_admin, get_last_proposal, get_min_proposal_balance, get_proposal_cooldown,
-    get_version, get_voting_token, has_voted, is_initialized, load_proposal, mark_voted,
-    next_id, save_proposal, set_admin, set_last_proposal, set_min_proposal_balance,
-    set_proposal_cooldown, set_version, set_voting_token, save_vote_record, get_vote_record,
+    get_version, get_voter_snapshot, get_voting_token, has_voted, is_initialized,
+    load_proposal, mark_voted, next_id, save_proposal, save_vote_record, save_voter_snapshot,
+    set_admin, set_last_proposal, set_min_proposal_balance, set_proposal_cooldown,
+    set_version, set_voting_token, get_vote_record,
 };
 use types::{ContractError, DataKey, Proposal, ProposalState, Vote, VoteRecord};
-
-const MAX_TITLE_LEN: u32 = 256;
-const MAX_DESC_LEN: u32 = 4096;
 
 const MAX_TITLE_LEN: u32 = 128;
 const MAX_DESC_LEN: u32 = 1024;
@@ -109,12 +107,6 @@ impl GovernanceContract {
         // Duration: within [MIN_DURATION, MAX_DURATION]
         if duration < MIN_DURATION || duration > MAX_DURATION {
             return Err(ContractError::InvalidDurationRange);
-        }
-        if title.len() > MAX_TITLE_LEN {
-            return Err(ContractError::TitleTooLong);
-        }
-        if description.len() > MAX_DESC_LEN {
-            return Err(ContractError::DescriptionTooLong);
         }
 
         let token_client = token::Client::new(&env, &get_voting_token(&env)?);
@@ -244,6 +236,21 @@ impl GovernanceContract {
     pub fn get_vote(env: Env, proposal_id: u64, voter: Address) -> Option<VoteRecord> {
         get_vote_record(&env, proposal_id, &voter)
     }
+
+    /// Finalises a proposal after its voting period has ended.
+    ///
+    /// Computes the outcome using the following rules:
+    ///
+    /// ```text
+    /// total_votes = votes_yes + votes_no + votes_abstain
+    ///
+    /// Passed   if total_votes >= quorum AND votes_yes > votes_no
+    /// Rejected otherwise (quorum not met, or votes_yes <= votes_no)
+    /// ```
+    ///
+    /// Abstain votes count toward the quorum threshold but do not influence
+    /// the yes/no majority comparison. A tie (`votes_yes == votes_no`) resolves
+    /// as Rejected even when quorum is met.
     ///
     /// # Errors
     /// - [`ContractError::ProposalNotFound`] if `proposal_id` does not exist.

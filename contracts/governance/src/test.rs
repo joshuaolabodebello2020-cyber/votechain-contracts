@@ -827,3 +827,77 @@ fn test_get_vote_correct_type_for_abstain() {
 }
 
 // ── end SC-023 ────────────────────────────────────────────────────────────────
+
+// ── SC-021: abstain votes count toward quorum ─────────────────────────────────
+
+/// Abstain votes must be included in total_votes for the quorum check.
+/// A proposal where only abstain votes are cast should pass quorum and then
+/// be Rejected (because votes_yes == 0 <= votes_no == 0 is not strictly greater).
+#[test]
+fn test_abstain_votes_count_toward_quorum() {
+    let t = setup_env();
+    let voter = Address::generate(&t.env);
+    // quorum = 500_000; voter abstains with exactly that weight
+    let id = t.client.create_proposal(
+        &voter,
+        &String::from_str(&t.env, "Abstain quorum"),
+        &String::from_str(&t.env, "desc"),
+        &500_000,
+        &3600,
+    );
+    mint_and_vote(&t, &voter, id, Vote::Abstain, 500_000);
+
+    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+    t.client.finalise(&id);
+
+    // Quorum was met (500_000 >= 500_000) but votes_yes (0) is not > votes_no (0),
+    // so the proposal is Rejected — not Active, confirming abstain counted.
+    assert_eq!(t.client.get_proposal(&id).state, ProposalState::Rejected);
+}
+
+/// Abstain votes combined with Yes votes should push a proposal over quorum
+/// and allow it to pass when votes_yes > votes_no.
+#[test]
+fn test_abstain_plus_yes_meets_quorum_and_passes() {
+    let t = setup_env();
+    let voter_yes = Address::generate(&t.env);
+    let voter_abs = Address::generate(&t.env);
+    // quorum = 1_000_000; yes = 600_000, abstain = 400_000 → total = 1_000_000
+    let id = t.client.create_proposal(
+        &voter_yes,
+        &String::from_str(&t.env, "Mixed quorum"),
+        &String::from_str(&t.env, "desc"),
+        &1_000_000,
+        &3600,
+    );
+    mint_and_vote(&t, &voter_yes, id, Vote::Yes,     600_000);
+    mint_and_vote(&t, &voter_abs, id, Vote::Abstain, 400_000);
+
+    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+    t.client.finalise(&id);
+
+    assert_eq!(t.client.get_proposal(&id).state, ProposalState::Passed);
+}
+
+/// Without abstain votes the same Yes total falls below quorum and is Rejected.
+#[test]
+fn test_yes_alone_below_quorum_rejected() {
+    let t = setup_env();
+    let voter = Address::generate(&t.env);
+    // quorum = 1_000_000; only 600_000 yes votes — below quorum
+    let id = t.client.create_proposal(
+        &voter,
+        &String::from_str(&t.env, "Below quorum"),
+        &String::from_str(&t.env, "desc"),
+        &1_000_000,
+        &3600,
+    );
+    mint_and_vote(&t, &voter, id, Vote::Yes, 600_000);
+
+    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+    t.client.finalise(&id);
+
+    assert_eq!(t.client.get_proposal(&id).state, ProposalState::Rejected);
+}
+
+// ── end SC-021 ────────────────────────────────────────────────────────────────

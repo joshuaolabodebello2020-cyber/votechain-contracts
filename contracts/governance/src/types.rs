@@ -41,6 +41,14 @@ pub enum ContractError {
     TitleTooLong = 17,
     /// 18 – Proposal description exceeds maximum byte length
     DescriptionTooLong = 18,
+    /// 19 – Proposal title is empty or exceeds maximum byte length
+    InvalidTitle = 19,
+    /// 20 – Proposal description is empty or exceeds maximum byte length
+    InvalidDescription = 20,
+    /// 21 – Duration is outside the allowed [MIN_DURATION, MAX_DURATION] range
+    InvalidDurationRange = 21,
+    /// 22 – Quorum exceeds the total token supply
+    QuorumExceedsSupply = 22,
 }
 
 #[contracttype]
