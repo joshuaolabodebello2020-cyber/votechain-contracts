@@ -13,11 +13,12 @@ mod prop_tests;
 
 use soroban_sdk::{contract, contractclient, contractimpl, token, Address, Env, String};
 use storage::{
-    get_admin, get_last_proposal, get_min_proposal_balance, get_proposal_cooldown,
-    get_version, get_voter_snapshot, get_voting_token, has_voted, is_initialized,
-    load_proposal, mark_voted, next_id, save_proposal, save_vote_record, save_voter_snapshot,
-    set_admin, set_last_proposal, set_min_proposal_balance, set_proposal_cooldown,
-    set_version, set_voting_token, get_vote_record,
+    get_admin, get_contract_state, get_last_proposal, get_min_proposal_balance,
+    get_proposal_cooldown, get_restrict_admin_vote, get_version, get_voter_snapshot,
+    get_voting_token, has_voted, is_initialized, is_paused, load_proposal, mark_voted, next_id,
+    save_proposal, save_vote_record, save_voter_snapshot, set_admin, set_contract_state,
+    set_last_proposal, set_min_proposal_balance, set_paused, set_proposal_cooldown,
+    set_restrict_admin_vote, set_version, set_voting_token, get_vote_record,
 };
 use types::{ContractError, ContractState, DataKey, Proposal, ProposalState, Vote, VoteRecord};
 
@@ -41,6 +42,10 @@ impl GovernanceContract {
     ///
     /// Must be called exactly once before any other function.
     ///
+    /// # Parameters
+    /// - `restrict_admin_vote`: when `true`, the admin address cannot cast votes on proposals
+    ///   they created, preventing a conflict of interest.
+    ///
     /// # Errors
     /// - [`ContractError::AlreadyInitialized`] if the contract has already been initialised.
     pub fn initialize(
@@ -49,6 +54,7 @@ impl GovernanceContract {
         voting_token: Address,
         min_proposal_balance: i128,
         proposal_cooldown: u64,
+        restrict_admin_vote: bool,
     ) -> Result<(), ContractError> {
         if is_initialized(&env) {
             return Err(ContractError::AlreadyInitialized);
@@ -62,6 +68,7 @@ impl GovernanceContract {
         if proposal_cooldown > 0 {
             set_proposal_cooldown(&env, proposal_cooldown);
         }
+        set_restrict_admin_vote(&env, restrict_admin_vote);
         set_version(&env, (1, 0, 0));
         set_contract_state(&env, &ContractState::Ready);
         events::contract_initialized(&env, &admin);
@@ -89,6 +96,9 @@ impl GovernanceContract {
         quorum: i128,
         duration: u64,
     ) -> Result<u64, ContractError> {
+        if is_paused(&env) {
+            return Err(ContractError::ContractPaused);
+        }
         proposer.require_auth();
 
         // Title: non-empty, max 256 chars
@@ -166,12 +176,18 @@ impl GovernanceContract {
     /// - [`ContractError::AlreadyVoted`] if the voter has already voted on this proposal.
     /// - [`ContractError::NoVotingPower`] if the voter's token balance is zero.
     /// - [`ContractError::VoteTallyOverflow`] if adding the vote weight would overflow `i128`.
+    /// - [`ContractError::AdminVoteRestricted`] if `restrict_admin_vote` is enabled and the admin
+    ///   attempts to vote on a proposal they created.
+    /// - [`ContractError::ContractPaused`] if the contract is paused.
     pub fn cast_vote(
         env: Env,
         voter: Address,
         proposal_id: u64,
         vote: Vote,
     ) -> Result<(), ContractError> {
+        if is_paused(&env) {
+            return Err(ContractError::ContractPaused);
+        }
         voter.require_auth();
 
         let proposal = load_proposal(&env, proposal_id)?;
@@ -183,11 +199,18 @@ impl GovernanceContract {
         if now < proposal.start_time {
             return Err(ContractError::VotingNotStarted);
         }
-        if now > proposal.end_time {
+        if now >= proposal.end_time {
             return Err(ContractError::VotingPeriodEnded);
         }
         if has_voted(&env, proposal_id, &voter) {
             return Err(ContractError::AlreadyVoted);
+        }
+
+        if get_restrict_admin_vote(&env) {
+            let admin = get_admin(&env)?;
+            if voter == admin && proposal.proposer == admin {
+                return Err(ContractError::AdminVoteRestricted);
+            }
         }
 
         let token_client = token::Client::new(&env, &get_voting_token(&env)?);
@@ -262,6 +285,9 @@ impl GovernanceContract {
     /// - [`ContractError::ProposalNotActive`] if the proposal is not in `Active` status.
     /// - [`ContractError::VotingStillOpen`] if the voting window has not yet closed.
     pub fn finalise(env: Env, proposal_id: u64) -> Result<(), ContractError> {
+        if is_paused(&env) {
+            return Err(ContractError::ContractPaused);
+        }
         let mut proposal = load_proposal(&env, proposal_id)?;
         if proposal.state != ProposalState::Active {
             return Err(ContractError::ProposalNotActive);
@@ -290,6 +316,9 @@ impl GovernanceContract {
     /// - [`ContractError::ProposalNotFound`] if `proposal_id` does not exist.
     /// - [`ContractError::ProposalNotPassed`] if the proposal has not passed.
     pub fn execute(env: Env, admin: Address, proposal_id: u64) -> Result<(), ContractError> {
+        if is_paused(&env) {
+            return Err(ContractError::ContractPaused);
+        }
         admin.require_auth();
         if get_admin(&env)? != admin {
             return Err(ContractError::NotAdmin);
@@ -311,6 +340,9 @@ impl GovernanceContract {
     /// - [`ContractError::ProposalNotFound`] if `proposal_id` does not exist.
     /// - [`ContractError::ProposalNotActive`] if the proposal is not in `Active` status.
     pub fn cancel(env: Env, admin: Address, proposal_id: u64) -> Result<(), ContractError> {
+        if is_paused(&env) {
+            return Err(ContractError::ContractPaused);
+        }
         admin.require_auth();
         if get_admin(&env)? != admin {
             return Err(ContractError::NotAdmin);
@@ -338,6 +370,9 @@ impl GovernanceContract {
         proposal_id: u64,
         new_quorum: i128,
     ) -> Result<(), ContractError> {
+        if is_paused(&env) {
+            return Err(ContractError::ContractPaused);
+        }
         admin.require_auth();
         if get_admin(&env)? != admin {
             return Err(ContractError::NotAdmin);
@@ -367,6 +402,9 @@ impl GovernanceContract {
         admin: Address,
         new_admin: Address,
     ) -> Result<(), ContractError> {
+        if is_paused(&env) {
+            return Err(ContractError::ContractPaused);
+        }
         admin.require_auth();
         if get_admin(&env)? != admin {
             return Err(ContractError::NotAdmin);
@@ -381,6 +419,48 @@ impl GovernanceContract {
         set_admin(&env, &new_admin);
         events::admin_transferred(&env, &admin, &new_admin);
         Ok(())
+    }
+
+    /// Pauses the contract, blocking all state-changing operations.
+    ///
+    /// Read-only functions (`get_proposal`, `get_vote`, `has_voted`, etc.) remain
+    /// available while paused. Only the admin may call this.
+    ///
+    /// # Errors
+    /// - [`ContractError::NotAdmin`] if `admin` does not match the stored admin.
+    pub fn pause(env: Env, admin: Address) -> Result<(), ContractError> {
+        admin.require_auth();
+        if get_admin(&env)? != admin {
+            return Err(ContractError::NotAdmin);
+        }
+        set_paused(&env, true);
+        events::contract_paused(&env, &admin);
+        Ok(())
+    }
+
+    /// Unpauses the contract, restoring all state-changing operations.
+    ///
+    /// Only the admin may call this.
+    ///
+    /// # Errors
+    /// - [`ContractError::NotAdmin`] if `admin` does not match the stored admin.
+    /// - [`ContractError::NotPaused`] if the contract is not currently paused.
+    pub fn unpause(env: Env, admin: Address) -> Result<(), ContractError> {
+        admin.require_auth();
+        if get_admin(&env)? != admin {
+            return Err(ContractError::NotAdmin);
+        }
+        if !is_paused(&env) {
+            return Err(ContractError::NotPaused);
+        }
+        set_paused(&env, false);
+        events::contract_unpaused(&env, &admin);
+        Ok(())
+    }
+
+    /// Returns whether the contract is currently paused.
+    pub fn paused(env: Env) -> bool {
+        is_paused(&env)
     }
 
     /// Returns the full state of a proposal.

@@ -281,7 +281,8 @@ fn test_transfer_admin_emits_event() {
     let events = env.events().all();
     assert!(events.iter().any(|(_, topics, data)| {
         topics == (symbol_short!("admxfer"),).into_val(&env)
-            && data == (admin.clone(), new_admin.clone()).into_val(&env)
+            && <(Address, Address)>::try_from_val(&env, &data).ok().as_ref()
+                == Some(&(admin.clone(), new_admin.clone()))
     }));
 }
 

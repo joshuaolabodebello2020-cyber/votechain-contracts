@@ -206,3 +206,23 @@ pub fn set_version(env: &Env, version: (u32, u32, u32)) {
 pub fn get_version(env: &Env) -> (u32, u32, u32) {
     env.storage().instance().get(&DataKey::Version).unwrap_or((0, 0, 0))
 }
+
+/// Stores whether admin is restricted from voting on their own proposals.
+pub fn set_restrict_admin_vote(env: &Env, v: bool) {
+    env.storage().instance().set(&DataKey::RestrictAdminVote, &v);
+}
+
+/// Returns whether admin vote restriction is enabled. Defaults to `false`.
+pub fn get_restrict_admin_vote(env: &Env) -> bool {
+    env.storage().instance().get(&DataKey::RestrictAdminVote).unwrap_or(false)
+}
+
+/// Sets the contract paused state.
+pub fn set_paused(env: &Env, paused: bool) {
+    env.storage().instance().set(&DataKey::Paused, &paused);
+}
+
+/// Returns `true` if the contract is currently paused.
+pub fn is_paused(env: &Env) -> bool {
+    env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+}

@@ -3,7 +3,6 @@
 use super::*;
 use soroban_sdk::{symbol_short, testutils::{Address as _, Events, Ledger}, Address, Env, IntoVal, String, TryFromVal};
 use crate::test_helpers::{setup_env, create_test_proposal, mint_and_vote};
-use crate::storage;
 
 // ── local helpers for tests that need a custom Env/client shape ───────────────
 
@@ -23,7 +22,7 @@ fn new_client(env: &Env) -> GovernanceContractClient<'static> {
 fn setup_passed_proposal(env: &Env, client: &GovernanceContractClient, admin: &Address) -> u64 {
     let voter = Address::generate(env);
     let token_id = setup_token(env, &voter);
-    client.initialize(admin, &token_id, &0_i128, &0_u64);
+    client.initialize(admin, &token_id, &0_i128, &0_u64, &false);
     let id = client.create_proposal(
         &voter,
         &String::from_str(env, "Prop"),
@@ -41,7 +40,7 @@ fn setup_passed_proposal(env: &Env, client: &GovernanceContractClient, admin: &A
 fn setup_active_proposal(env: &Env, client: &GovernanceContractClient, admin: &Address) -> u64 {
     let proposer = Address::generate(env);
     let token_id = setup_token(env, admin);
-    client.initialize(admin, &token_id, &0_i128, &0_u64);
+    client.initialize(admin, &token_id, &0_i128, &0_u64, &false);
     client.create_proposal(
         &proposer,
         &String::from_str(env, "Prop"),
@@ -71,7 +70,7 @@ fn test_initialize() {
     let tok = votechain_token::TokenContractClient::new(&env, &tok_id);
     tok.initialize(&admin, &10_000_000);
 
-    client.initialize(&admin, &tok_id, &0_i128, &0_u64);
+    client.initialize(&admin, &tok_id, &0_i128, &0_u64, &false);
 
     // After initialize: state must be Ready
     assert_eq!(client.get_state(), ContractState::Ready);
@@ -104,7 +103,7 @@ fn test_initialize_emits_event() {
     let tok = votechain_token::TokenContractClient::new(&env, &tok_id);
     tok.initialize(&admin, &10_000_000);
 
-    client.initialize(&admin, &tok_id, &0_i128, &0_u64);
+    client.initialize(&admin, &tok_id, &0_i128, &0_u64, &false);
 
     // The "init" event must have been published with admin as data
     let events = env.events().all();
@@ -297,7 +296,7 @@ fn test_cannot_vote_twice() {
 // ── TEST-013: access control negative tests ───────────────────────────────────
 
 #[test]
-#[should_panic(expected = "not admin")]
+#[should_panic(expected = "Error(Contract, #2)")]
 fn test_execute_non_admin_reverts() {
     let env = Env::default();
     env.mock_all_auths();
@@ -309,7 +308,7 @@ fn test_execute_non_admin_reverts() {
 }
 
 #[test]
-#[should_panic(expected = "not admin")]
+#[should_panic(expected = "Error(Contract, #2)")]
 fn test_execute_zero_address_reverts() {
     let env = Env::default();
     env.mock_all_auths();
@@ -321,7 +320,7 @@ fn test_execute_zero_address_reverts() {
 }
 
 #[test]
-#[should_panic(expected = "not admin")]
+#[should_panic(expected = "Error(Contract, #2)")]
 fn test_cancel_non_admin_reverts() {
     let env = Env::default();
     env.mock_all_auths();
@@ -333,7 +332,7 @@ fn test_cancel_non_admin_reverts() {
 }
 
 #[test]
-#[should_panic(expected = "not admin")]
+#[should_panic(expected = "Error(Contract, #2)")]
 fn test_cancel_zero_address_reverts() {
     let env = Env::default();
     env.mock_all_auths();
@@ -348,7 +347,7 @@ fn test_cancel_zero_address_reverts() {
 
 /// execute() on an Active proposal must revert — only Passed is valid.
 #[test]
-#[should_panic(expected = "not passed")]
+#[should_panic(expected = "Error(Contract, #12)")]
 fn test_execute_active_proposal_reverts() {
     let env = Env::default();
     env.mock_all_auths();
@@ -360,14 +359,14 @@ fn test_execute_active_proposal_reverts() {
 
 /// execute() on a Rejected proposal must revert.
 #[test]
-#[should_panic(expected = "not passed")]
+#[should_panic(expected = "Error(Contract, #12)")]
 fn test_execute_rejected_proposal_reverts() {
     let env = Env::default();
     env.mock_all_auths();
     let client = new_client(&env);
     let admin = Address::generate(&env);
     let token_id = setup_token(&env, &admin);
-    client.initialize(&admin, &token_id, &0_i128, &0_u64);
+    client.initialize(&admin, &token_id, &0_i128, &0_u64, &false);
     // Create a proposal that will be rejected (no votes, below quorum)
     let id = client.create_proposal(
         &admin,
@@ -384,7 +383,7 @@ fn test_execute_rejected_proposal_reverts() {
 
 /// execute() on a Cancelled proposal must revert.
 #[test]
-#[should_panic(expected = "not passed")]
+#[should_panic(expected = "Error(Contract, #12)")]
 fn test_execute_cancelled_proposal_reverts() {
     let env = Env::default();
     env.mock_all_auths();
@@ -397,7 +396,7 @@ fn test_execute_cancelled_proposal_reverts() {
 
 /// execute() on an already-Executed proposal must revert.
 #[test]
-#[should_panic(expected = "not passed")]
+#[should_panic(expected = "Error(Contract, #12)")]
 fn test_execute_already_executed_proposal_reverts() {
     let env = Env::default();
     env.mock_all_auths();
@@ -424,7 +423,7 @@ fn test_update_quorum_success() {
 }
 
 #[test]
-#[should_panic(expected = "not admin")]
+#[should_panic(expected = "Error(Contract, #2)")]
 fn test_update_quorum_non_admin_reverts() {
     let t = setup_env();
     let non_admin = Address::generate(&t.env);
@@ -632,7 +631,7 @@ fn test_vote_weight_matches_token_balance() {
 }
 
 #[test]
-#[should_panic(expected = "already voted")]
+#[should_panic(expected = "Error(Contract, #10)")]
 fn test_double_vote_same_choice_reverts() {
     let t = setup_env();
     let voter = Address::generate(&t.env);
@@ -642,7 +641,7 @@ fn test_double_vote_same_choice_reverts() {
 }
 
 #[test]
-#[should_panic(expected = "already voted")]
+#[should_panic(expected = "Error(Contract, #10)")]
 fn test_double_vote_different_choice_reverts() {
     let t = setup_env();
     let voter = Address::generate(&t.env);
@@ -652,7 +651,7 @@ fn test_double_vote_different_choice_reverts() {
 }
 
 #[test]
-#[should_panic(expected = "not active")]
+#[should_panic(expected = "Error(Contract, #7)")]
 fn test_vote_on_passed_proposal_reverts() {
     let t = setup_env();
     let voter = Address::generate(&t.env);
@@ -665,7 +664,7 @@ fn test_vote_on_passed_proposal_reverts() {
 }
 
 #[test]
-#[should_panic(expected = "not active")]
+#[should_panic(expected = "Error(Contract, #7)")]
 fn test_vote_on_rejected_proposal_reverts() {
     let t = setup_env();
     let voter = Address::generate(&t.env);
@@ -678,7 +677,7 @@ fn test_vote_on_rejected_proposal_reverts() {
 }
 
 #[test]
-#[should_panic(expected = "not active")]
+#[should_panic(expected = "Error(Contract, #7)")]
 fn test_vote_on_cancelled_proposal_reverts() {
     let t = setup_env();
     let voter = Address::generate(&t.env);
@@ -688,7 +687,7 @@ fn test_vote_on_cancelled_proposal_reverts() {
 }
 
 #[test]
-#[should_panic(expected = "not active")]
+#[should_panic(expected = "Error(Contract, #7)")]
 fn test_vote_on_executed_proposal_reverts() {
     let t = setup_env();
     let voter = Address::generate(&t.env);
@@ -702,7 +701,7 @@ fn test_vote_on_executed_proposal_reverts() {
 }
 
 #[test]
-#[should_panic(expected = "voting period ended")]
+#[should_panic(expected = "Error(Contract, #8)")]
 fn test_vote_after_end_time_reverts() {
     let t = setup_env();
     let voter = Address::generate(&t.env);
@@ -729,7 +728,7 @@ fn test_vote_at_exact_end_time_reverts() {
 }
 
 #[test]
-#[should_panic(expected = "no voting power")]
+#[should_panic(expected = "Error(Contract, #11)")]
 fn test_vote_with_zero_balance_reverts() {
     let t = setup_env();
     let voter = Address::generate(&t.env);
@@ -786,7 +785,7 @@ fn test_vote_tallies_all_three_types() {
 #[should_panic]
 fn test_reinit_by_original_admin_reverts() {
     let t = setup_env();
-    t.client.initialize(&t.admin, &t.token_id, &0_i128, &0_u64);
+    t.client.initialize(&t.admin, &t.token_id, &0_i128, &0_u64, &false);
 }
 
 /// Re-init by a new address must revert with AlreadyInitialized.
@@ -796,7 +795,7 @@ fn test_reinit_by_new_address_reverts() {
     let t = setup_env();
     let attacker = Address::generate(&t.env);
     let new_token = Address::generate(&t.env);
-    t.client.initialize(&attacker, &new_token, &0_i128, &0_u64);
+    t.client.initialize(&attacker, &new_token, &0_i128, &0_u64, &false);
 }
 
 /// Re-init by the zero address must revert with AlreadyInitialized.
@@ -805,7 +804,7 @@ fn test_reinit_by_new_address_reverts() {
 fn test_reinit_by_zero_address_reverts() {
     let t = setup_env();
     let zero = Address::from_str(&t.env, "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF");
-    t.client.initialize(&zero, &t.token_id, &0_i128, &0_u64);
+    t.client.initialize(&zero, &t.token_id, &0_i128, &0_u64, &false);
 }
 
 // ── end SEC-009 ───────────────────────────────────────────────────────────────
@@ -821,7 +820,7 @@ fn test_create_proposal_below_min_balance_reverts() {
     let admin = Address::generate(&env);
     let token_id = setup_token(&env, &admin);
     // require 500_000 tokens to propose
-    client.initialize(&admin, &token_id, &500_000_i128, &0_u64);
+    client.initialize(&admin, &token_id, &500_000_i128, &0_u64, &false);
 
     let proposer = Address::generate(&env);
     // proposer has 0 tokens — should panic
@@ -841,7 +840,7 @@ fn test_create_proposal_at_min_balance_accepted() {
     let client = new_client(&env);
     let admin = Address::generate(&env);
     let token_id = setup_token(&env, &admin);
-    client.initialize(&admin, &token_id, &500_000_i128, &0_u64);
+    client.initialize(&admin, &token_id, &500_000_i128, &0_u64, &false);
 
     let proposer = Address::generate(&env);
     let tok = votechain_token::TokenContractClient::new(&env, &token_id);
@@ -865,8 +864,10 @@ fn test_create_proposal_within_cooldown_reverts() {
     let client = new_client(&env);
     let admin = Address::generate(&env);
     let token_id = setup_token(&env, &admin);
+    // start at non-zero so the `last > 0` sentinel works
+    env.ledger().with_mut(|l| l.timestamp = 1_000);
     // 1 hour cooldown, no balance requirement
-    client.initialize(&admin, &token_id, &0_i128, &3600_u64);
+    client.initialize(&admin, &token_id, &0_i128, &3600_u64, &false);
 
     let proposer = Address::generate(&env);
     client.create_proposal(
@@ -874,9 +875,9 @@ fn test_create_proposal_within_cooldown_reverts() {
         &String::from_str(&env, "First"),
         &String::from_str(&env, "desc"),
         &100,
-        &3600,
+        &7200,
     );
-    // second proposal immediately — should panic
+    // second proposal immediately within cooldown — should panic
     client.create_proposal(
         &proposer,
         &String::from_str(&env, "Spam"),
@@ -893,7 +894,7 @@ fn test_create_proposal_after_cooldown_accepted() {
     let client = new_client(&env);
     let admin = Address::generate(&env);
     let token_id = setup_token(&env, &admin);
-    client.initialize(&admin, &token_id, &0_i128, &3600_u64);
+    client.initialize(&admin, &token_id, &0_i128, &3600_u64, &false);
 
     let proposer = Address::generate(&env);
     client.create_proposal(
@@ -1077,7 +1078,7 @@ fn test_transfer_admin_new_admin_can_execute() {
 
 /// Old admin cannot execute a proposal after transferring admin rights.
 #[test]
-#[should_panic(expected = "not admin")]
+#[should_panic(expected = "Error(Contract, #2)")]
 fn test_transfer_admin_old_admin_cannot_execute() {
     let t = setup_env();
     let new_admin = Address::generate(&t.env);
@@ -1090,7 +1091,7 @@ fn test_transfer_admin_old_admin_cannot_execute() {
 
 /// Old admin cannot cancel a proposal after transferring admin rights.
 #[test]
-#[should_panic(expected = "not admin")]
+#[should_panic(expected = "Error(Contract, #2)")]
 fn test_transfer_admin_old_admin_cannot_cancel() {
     let t = setup_env();
     let new_admin = Address::generate(&t.env);
@@ -1125,13 +1126,276 @@ fn test_transfer_admin_to_zero_address_reverts() {
 fn test_transfer_admin_emits_event() {
     let t = setup_env();
     let new_admin = Address::generate(&t.env);
-
-    let events_before = t.env.events().all().len();
     t.client.transfer_admin(&t.admin, &new_admin);
-    let events_after = t.env.events().all().len();
-
-    // At least one new event must have been emitted by transfer_admin
-    assert!(events_after > events_before, "expected admxfer event to be emitted");
+    let events = t.env.events().all();
+    assert!(
+        events.iter().any(|(_, topics, _)| {
+            topics == (symbol_short!("admxfer"),).into_val(&t.env)
+        }),
+        "expected admxfer event to be emitted"
+    );
 }
 
 // ── end TEST-008 ──────────────────────────────────────────────────────────────
+
+// ── SEC-016: admin vote restriction tests ─────────────────────────────────────
+
+/// When restrict_admin_vote is enabled, admin cannot vote on a proposal they created.
+#[test]
+#[should_panic(expected = "Error(Contract, #25)")]
+fn test_admin_cannot_vote_own_proposal_when_restricted() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let tok_id = env.register(votechain_token::TokenContract, ());
+    let tok = votechain_token::TokenContractClient::new(&env, &tok_id);
+    tok.initialize(&admin, &10_000_000);
+    let client = new_client(&env);
+    // enable restriction
+    client.initialize(&admin, &tok_id, &0_i128, &0_u64, &true);
+    let id = client.create_proposal(
+        &admin,
+        &String::from_str(&env, "Admin prop"),
+        &String::from_str(&env, "desc"),
+        &100,
+        &3600,
+    );
+    // admin tries to vote on their own proposal — should panic
+    client.cast_vote(&admin, &id, &Vote::Yes);
+}
+
+/// When restrict_admin_vote is disabled, admin can vote on their own proposal.
+#[test]
+fn test_admin_can_vote_own_proposal_when_not_restricted() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let tok_id = env.register(votechain_token::TokenContract, ());
+    let tok = votechain_token::TokenContractClient::new(&env, &tok_id);
+    tok.initialize(&admin, &10_000_000);
+    let client = new_client(&env);
+    // restriction disabled
+    client.initialize(&admin, &tok_id, &0_i128, &0_u64, &false);
+    let id = client.create_proposal(
+        &admin,
+        &String::from_str(&env, "Admin prop"),
+        &String::from_str(&env, "desc"),
+        &100,
+        &3600,
+    );
+    // admin votes on their own proposal — should succeed
+    client.cast_vote(&admin, &id, &Vote::Yes);
+    assert_eq!(client.get_proposal(&id).votes_yes, 10_000_000);
+}
+
+/// When restrict_admin_vote is enabled, a non-admin voter can still vote normally.
+#[test]
+fn test_non_admin_can_vote_when_admin_restricted() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let tok_id = env.register(votechain_token::TokenContract, ());
+    let tok = votechain_token::TokenContractClient::new(&env, &tok_id);
+    tok.initialize(&admin, &10_000_000);
+    let client = new_client(&env);
+    client.initialize(&admin, &tok_id, &0_i128, &0_u64, &true);
+    let proposer = Address::generate(&env);
+    let id = client.create_proposal(
+        &proposer,
+        &String::from_str(&env, "User prop"),
+        &String::from_str(&env, "desc"),
+        &100,
+        &3600,
+    );
+    let voter = Address::generate(&env);
+    tok.mint(&admin, &voter, &500_000_i128);
+    client.cast_vote(&voter, &id, &Vote::Yes);
+    assert_eq!(client.get_proposal(&id).votes_yes, 500_000);
+}
+
+// ── end SEC-016 ───────────────────────────────────────────────────────────────
+
+// ── SEC-018: emergency pause tests ────────────────────────────────────────────
+
+/// pause() by admin sets paused state and emits event.
+#[test]
+fn test_pause_sets_paused_state() {
+    let t = setup_env();
+    assert!(!t.client.paused());
+    t.client.pause(&t.admin);
+    assert!(t.client.paused());
+}
+
+/// unpause() by admin clears paused state and emits event.
+#[test]
+fn test_unpause_clears_paused_state() {
+    let t = setup_env();
+    t.client.pause(&t.admin);
+    assert!(t.client.paused());
+    t.client.unpause(&t.admin);
+    assert!(!t.client.paused());
+}
+
+/// pause() by non-admin must revert.
+#[test]
+#[should_panic(expected = "Error(Contract, #2)")]
+fn test_pause_non_admin_reverts() {
+    let t = setup_env();
+    let attacker = Address::generate(&t.env);
+    t.client.pause(&attacker);
+}
+
+/// unpause() by non-admin must revert.
+#[test]
+#[should_panic(expected = "Error(Contract, #2)")]
+fn test_unpause_non_admin_reverts() {
+    let t = setup_env();
+    t.client.pause(&t.admin);
+    let attacker = Address::generate(&t.env);
+    t.client.unpause(&attacker);
+}
+
+/// unpause() when not paused must revert.
+#[test]
+#[should_panic]
+fn test_unpause_when_not_paused_reverts() {
+    let t = setup_env();
+    t.client.unpause(&t.admin);
+}
+
+/// create_proposal reverts when paused.
+#[test]
+#[should_panic(expected = "Error(Contract, #26)")]
+fn test_create_proposal_reverts_when_paused() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    t.client.pause(&t.admin);
+    t.client.create_proposal(
+        &proposer,
+        &String::from_str(&t.env, "P"),
+        &String::from_str(&t.env, "d"),
+        &100,
+        &3600,
+    );
+}
+
+/// cast_vote reverts when paused.
+#[test]
+#[should_panic(expected = "Error(Contract, #26)")]
+fn test_cast_vote_reverts_when_paused() {
+    let t = setup_env();
+    let voter = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &voter);
+    let tok = votechain_token::TokenContractClient::new(&t.env, &t.token_id);
+    tok.mint(&t.admin, &voter, &1_000_000_i128);
+    t.client.pause(&t.admin);
+    t.client.cast_vote(&voter, &id, &Vote::Yes);
+}
+
+/// finalise reverts when paused.
+#[test]
+#[should_panic(expected = "Error(Contract, #26)")]
+fn test_finalise_reverts_when_paused() {
+    let t = setup_env();
+    let voter = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &voter);
+    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+    t.client.pause(&t.admin);
+    t.client.finalise(&id);
+}
+
+/// execute reverts when paused.
+#[test]
+#[should_panic(expected = "Error(Contract, #26)")]
+fn test_execute_reverts_when_paused() {
+    let t = setup_env();
+    let voter = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &voter);
+    let tok = votechain_token::TokenContractClient::new(&t.env, &t.token_id);
+    tok.mint(&t.admin, &voter, &1_000_000_i128);
+    t.client.cast_vote(&voter, &id, &Vote::Yes);
+    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+    t.client.finalise(&id);
+    t.client.pause(&t.admin);
+    t.client.execute(&t.admin, &id);
+}
+
+/// cancel reverts when paused.
+#[test]
+#[should_panic(expected = "Error(Contract, #26)")]
+fn test_cancel_reverts_when_paused() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &proposer);
+    t.client.pause(&t.admin);
+    t.client.cancel(&t.admin, &id);
+}
+
+/// update_quorum reverts when paused.
+#[test]
+#[should_panic(expected = "Error(Contract, #26)")]
+fn test_update_quorum_reverts_when_paused() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &proposer);
+    t.client.pause(&t.admin);
+    t.client.update_quorum(&t.admin, &id, &500);
+}
+
+/// transfer_admin reverts when paused.
+#[test]
+#[should_panic(expected = "Error(Contract, #26)")]
+fn test_transfer_admin_reverts_when_paused() {
+    let t = setup_env();
+    let new_admin = Address::generate(&t.env);
+    t.client.pause(&t.admin);
+    t.client.transfer_admin(&t.admin, &new_admin);
+}
+
+/// Read-only functions (get_proposal, get_vote, has_voted) remain available when paused.
+#[test]
+fn test_read_functions_available_when_paused() {
+    let t = setup_env();
+    let voter = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &voter);
+    t.client.pause(&t.admin);
+    // These should not panic
+    let _ = t.client.get_proposal(&id);
+    let _ = t.client.has_voted(&id, &voter);
+    let _ = t.client.get_vote(&id, &voter);
+    let _ = t.client.proposal_count();
+    let _ = t.client.get_version();
+    let _ = t.client.get_state();
+    let _ = t.client.paused();
+}
+
+/// pause emits a "paused" event.
+#[test]
+fn test_pause_emits_event() {
+    let t = setup_env();
+    t.client.pause(&t.admin);
+    let events = t.env.events().all();
+    assert!(
+        events.iter().any(|(_, topics, _)| {
+            topics == (symbol_short!("paused"),).into_val(&t.env)
+        }),
+        "expected paused event to be emitted"
+    );
+}
+
+/// unpause emits an "unpaused" event.
+#[test]
+fn test_unpause_emits_event() {
+    let t = setup_env();
+    t.client.pause(&t.admin);
+    t.client.unpause(&t.admin);
+    let events = t.env.events().all();
+    assert!(
+        events.iter().any(|(_, topics, _)| {
+            topics == (symbol_short!("unpaused"),).into_val(&t.env)
+        }),
+        "expected unpaused event to be emitted"
+    );
+}
+
+// ── end SEC-018 ───────────────────────────────────────────────────────────────
