@@ -75,11 +75,27 @@ pub fn quorum_updated(env: &Env, id: u64, new_quorum: i128) {
 
 /// Emits an `admxfer` event when admin rights are transferred.
 ///
-/// Topics: `("admxfer",)`  
+/// Topics: `("admxfer",)`
 /// Data: `(old_admin: Address, new_admin: Address)`
 pub fn admin_transferred(env: &Env, old_admin: &Address, new_admin: &Address) {
     env.events().publish(
         (symbol_short!("admxfer"),),
         (old_admin.clone(), new_admin.clone()),
     );
+}
+
+/// Emits a `paused` event when the contract is paused.
+///
+/// Topics: `("paused",)`
+/// Data: `admin: Address`
+pub fn contract_paused(env: &Env, admin: &Address) {
+    env.events().publish((symbol_short!("paused"),), admin.clone());
+}
+
+/// Emits an `unpaused` event when the contract is unpaused.
+///
+/// Topics: `("unpaused",)`
+/// Data: `admin: Address`
+pub fn contract_unpaused(env: &Env, admin: &Address) {
+    env.events().publish((symbol_short!("unpaused"),), admin.clone());
 }

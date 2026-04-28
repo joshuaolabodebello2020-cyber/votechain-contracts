@@ -49,6 +49,16 @@ pub enum ContractError {
     InvalidDurationRange = 21,
     /// 22 – Quorum exceeds the total token supply
     QuorumExceedsSupply = 22,
+    /// 23 – Voting period has not yet started
+    VotingNotStarted = 23,
+    /// 24 – New admin address is invalid (e.g. zero address)
+    InvalidNewAdmin = 24,
+    /// 25 – Admin is not permitted to vote on their own proposals
+    AdminVoteRestricted = 25,
+    /// 26 – Contract is paused; state-changing operations are blocked
+    ContractPaused = 26,
+    /// 27 – Contract is not paused
+    NotPaused = 27,
 }
 
 /// Lifecycle state of the governance contract itself.
@@ -154,6 +164,18 @@ pub enum DataKey {
     /// Minimum seconds a proposer must wait between consecutive proposals (instance storage).
     /// Key space: singleton — only one `ProposalCooldown` entry exists.
     ProposalCooldown,
+
+    /// Lifecycle state of the governance contract (instance storage).
+    /// Key space: singleton — only one `ContractState` entry exists.
+    ContractState,
+
+    /// Whether admin is restricted from voting on their own proposals (instance storage).
+    /// Key space: singleton — only one `RestrictAdminVote` entry exists.
+    RestrictAdminVote,
+
+    /// Whether the contract is currently paused (instance storage).
+    /// Key space: singleton — only one `Paused` entry exists.
+    Paused,
 
     /// Timestamp (Unix seconds) of `proposer`'s most recent proposal (persistent storage).
     /// Key space: one entry per unique proposer address.
