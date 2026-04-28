@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use super::*;
-use soroban_sdk::{testutils::{Address as _, Ledger}, Address, Env, String};
+use soroban_sdk::{symbol_short, testutils::{Address as _, Events, Ledger}, Address, Env, IntoVal, String, TryFromVal};
 use crate::test_helpers::{setup_env, create_test_proposal, mint_and_vote};
 
 // ── local helpers for tests that need a custom Env/client shape ───────────────
@@ -49,6 +49,74 @@ fn setup_active_proposal(env: &Env, client: &GovernanceContractClient, admin: &A
         &3600,
     )
 }
+
+// ── SC-001: initialize tests ──────────────────────────────────────────────────
+
+/// State is Uninitialized before initialize, Ready after; admin and token are
+/// stored; the Initialized event is emitted.
+#[test]
+fn test_initialize() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let gov_id = env.register(GovernanceContract, ());
+    let client = GovernanceContractClient::new(&env, &gov_id);
+
+    // Before initialize: state must be Uninitialized
+    assert_eq!(client.get_state(), ContractState::Uninitialized);
+
+    let admin = Address::generate(&env);
+    let tok_id = env.register(votechain_token::TokenContract, ());
+    let tok = votechain_token::TokenContractClient::new(&env, &tok_id);
+    tok.initialize(&admin, &10_000_000);
+
+    client.initialize(&admin, &tok_id, &0_i128, &0_u64);
+
+    // After initialize: state must be Ready
+    assert_eq!(client.get_state(), ContractState::Ready);
+
+    // Admin and voting token are retrievable (indirectly via an admin-only op)
+    // A cancel call with the correct admin succeeds only if admin was stored correctly.
+    let proposer = Address::generate(&env);
+    let id = client.create_proposal(
+        &proposer,
+        &String::from_str(&env, "Init test"),
+        &String::from_str(&env, "desc"),
+        &100,
+        &3600,
+    );
+    client.cancel(&admin, &id); // would revert with NotAdmin if admin wasn't stored
+    assert_eq!(client.get_proposal(&id).state, ProposalState::Cancelled);
+}
+
+/// initialize emits the "init" event with the admin address as data.
+#[test]
+fn test_initialize_emits_event() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let gov_id = env.register(GovernanceContract, ());
+    let client = GovernanceContractClient::new(&env, &gov_id);
+
+    let admin = Address::generate(&env);
+    let tok_id = env.register(votechain_token::TokenContract, ());
+    let tok = votechain_token::TokenContractClient::new(&env, &tok_id);
+    tok.initialize(&admin, &10_000_000);
+
+    client.initialize(&admin, &tok_id, &0_i128, &0_u64);
+
+    // The "init" event must have been published with admin as data
+    let events = env.events().all();
+    assert!(
+        events.iter().any(|(_, topics, data)| {
+            topics == (symbol_short!("init"),).into_val(&env)
+                && Address::try_from_val(&env, &data).ok().as_ref() == Some(&admin)
+        }),
+        "expected 'init' event with admin address as data"
+    );
+}
+
+// ── end SC-001 ────────────────────────────────────────────────────────────────
 
 // ── basic lifecycle ───────────────────────────────────────────────────────────
 
@@ -274,6 +342,72 @@ fn test_cancel_zero_address_reverts() {
     let zero = Address::from_str(&env, "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF");
     client.cancel(&zero, &id);
 }
+
+// ── SC-005: execute state-guard tests ────────────────────────────────────────
+
+/// execute() on an Active proposal must revert — only Passed is valid.
+#[test]
+#[should_panic(expected = "not passed")]
+fn test_execute_active_proposal_reverts() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let client = new_client(&env);
+    let admin = Address::generate(&env);
+    let id = setup_active_proposal(&env, &client, &admin);
+    client.execute(&admin, &id);
+}
+
+/// execute() on a Rejected proposal must revert.
+#[test]
+#[should_panic(expected = "not passed")]
+fn test_execute_rejected_proposal_reverts() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let client = new_client(&env);
+    let admin = Address::generate(&env);
+    let token_id = setup_token(&env, &admin);
+    client.initialize(&admin, &token_id, &0_i128, &0_u64);
+    // Create a proposal that will be rejected (no votes, below quorum)
+    let id = client.create_proposal(
+        &admin,
+        &String::from_str(&env, "Prop"),
+        &String::from_str(&env, "desc"),
+        &1_000_000,
+        &3600,
+    );
+    env.ledger().with_mut(|l| l.timestamp += 3601);
+    client.finalise(&id);
+    assert_eq!(client.get_proposal(&id).state, ProposalState::Rejected);
+    client.execute(&admin, &id);
+}
+
+/// execute() on a Cancelled proposal must revert.
+#[test]
+#[should_panic(expected = "not passed")]
+fn test_execute_cancelled_proposal_reverts() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let client = new_client(&env);
+    let admin = Address::generate(&env);
+    let id = setup_active_proposal(&env, &client, &admin);
+    client.cancel(&admin, &id);
+    client.execute(&admin, &id);
+}
+
+/// execute() on an already-Executed proposal must revert.
+#[test]
+#[should_panic(expected = "not passed")]
+fn test_execute_already_executed_proposal_reverts() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let client = new_client(&env);
+    let admin = Address::generate(&env);
+    let id = setup_passed_proposal(&env, &client, &admin);
+    client.execute(&admin, &id); // first execute — ok
+    client.execute(&admin, &id); // second execute — must revert
+}
+
+// ── end SC-005 ────────────────────────────────────────────────────────────────
 
 // ── end TEST-013 ──────────────────────────────────────────────────────────────
 

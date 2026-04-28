@@ -13,18 +13,17 @@ mod prop_tests;
 
 use soroban_sdk::{contract, contractclient, contractimpl, token, Address, Env, String};
 use storage::{
-    get_admin, get_last_proposal, get_min_proposal_balance, get_proposal_cooldown,
-    get_version, get_voting_token, has_voted, is_initialized, load_proposal, mark_voted,
-    next_id, save_proposal, set_admin, set_last_proposal, set_min_proposal_balance,
-    set_proposal_cooldown, set_version, set_voting_token, save_vote_record, get_vote_record,
+    get_admin, get_contract_state, get_last_proposal, get_min_proposal_balance,
+    get_proposal_cooldown, get_version, get_voter_snapshot, get_voting_token, has_voted,
+    is_initialized, load_proposal, mark_voted, next_id, save_proposal, save_vote_record,
+    save_voter_snapshot, set_admin, set_contract_state, set_last_proposal,
+    set_min_proposal_balance, set_proposal_cooldown, set_version, set_voting_token,
+    get_vote_record,
 };
-use types::{ContractError, DataKey, Proposal, ProposalState, Vote, VoteRecord};
+use types::{ContractError, ContractState, DataKey, Proposal, ProposalState, Vote, VoteRecord};
 
 const MAX_TITLE_LEN: u32 = 256;
 const MAX_DESC_LEN: u32 = 4096;
-
-const MAX_TITLE_LEN: u32 = 128;
-const MAX_DESC_LEN: u32 = 1024;
 const MIN_DURATION: u64 = 60;        // 1 minute
 const MAX_DURATION: u64 = 2_592_000; // 30 days
 
@@ -65,6 +64,7 @@ impl GovernanceContract {
             set_proposal_cooldown(&env, proposal_cooldown);
         }
         set_version(&env, (1, 0, 0));
+        set_contract_state(&env, &ContractState::Ready);
         events::contract_initialized(&env, &admin);
         Ok(())
     }
@@ -75,8 +75,8 @@ impl GovernanceContract {
     /// The numeric ID assigned to the new proposal.
     ///
     /// # Errors
-    /// - [`ContractError::InvalidTitle`] if `title` is empty or exceeds 128 characters.
-    /// - [`ContractError::InvalidDescription`] if `description` is empty or exceeds 1024 characters.
+    /// - [`ContractError::InvalidTitle`] if `title` is empty or exceeds 256 characters.
+    /// - [`ContractError::InvalidDescription`] if `description` is empty or exceeds 4096 characters.
     /// - [`ContractError::InvalidQuorum`] if `quorum` is zero or negative.
     /// - [`ContractError::QuorumExceedsSupply`] if `quorum` exceeds the total token supply.
     /// - [`ContractError::InvalidDurationRange`] if `duration` is outside [60, 2_592_000] seconds.
@@ -92,12 +92,12 @@ impl GovernanceContract {
     ) -> Result<u64, ContractError> {
         proposer.require_auth();
 
-        // Title: non-empty, max 128 chars
+        // Title: non-empty, max 256 chars
         let title_len = title.len();
         if title_len == 0 || title_len > MAX_TITLE_LEN {
             return Err(ContractError::InvalidTitle);
         }
-        // Description: non-empty, max 1024 chars
+        // Description: non-empty, max 4096 chars
         let desc_len = description.len();
         if desc_len == 0 || desc_len > MAX_DESC_LEN {
             return Err(ContractError::InvalidDescription);
@@ -109,12 +109,6 @@ impl GovernanceContract {
         // Duration: within [MIN_DURATION, MAX_DURATION]
         if duration < MIN_DURATION || duration > MAX_DURATION {
             return Err(ContractError::InvalidDurationRange);
-        }
-        if title.len() > MAX_TITLE_LEN {
-            return Err(ContractError::TitleTooLong);
-        }
-        if description.len() > MAX_DESC_LEN {
-            return Err(ContractError::DescriptionTooLong);
         }
 
         let token_client = token::Client::new(&env, &get_voting_token(&env)?);
@@ -244,6 +238,21 @@ impl GovernanceContract {
     pub fn get_vote(env: Env, proposal_id: u64, voter: Address) -> Option<VoteRecord> {
         get_vote_record(&env, proposal_id, &voter)
     }
+
+    /// Finalises a proposal after its voting period has ended.
+    ///
+    /// Computes the outcome using the following rules:
+    ///
+    /// ```text
+    /// total_votes = votes_yes + votes_no + votes_abstain
+    ///
+    /// Passed   if total_votes >= quorum AND votes_yes > votes_no
+    /// Rejected otherwise (quorum not met, or votes_yes <= votes_no)
+    /// ```
+    ///
+    /// Abstain votes count toward the quorum threshold but do not influence
+    /// the yes/no majority comparison. A tie (`votes_yes == votes_no`) resolves
+    /// as Rejected even when quorum is met.
     ///
     /// # Errors
     /// - [`ContractError::ProposalNotFound`] if `proposal_id` does not exist.
@@ -378,5 +387,14 @@ impl GovernanceContract {
     /// Returns the contract version as a `(major, minor, patch)` semver tuple.
     pub fn get_version(env: Env) -> (u32, u32, u32) {
         get_version(&env)
+    }
+
+    /// Returns the contract lifecycle state.
+    ///
+    /// - [`ContractState::Uninitialized`]: `initialize` has not yet been called.
+    /// - [`ContractState::Ready`]: `initialize` completed successfully; the
+    ///   contract is fully operational.
+    pub fn get_state(env: Env) -> ContractState {
+        get_contract_state(&env)
     }
 }

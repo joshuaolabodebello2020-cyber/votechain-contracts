@@ -1,5 +1,5 @@
 use soroban_sdk::{Env, Address};
-use crate::types::{ContractError, DataKey, Proposal, VoteRecord};
+use crate::types::{ContractError, ContractState, DataKey, Proposal, VoteRecord};
 
 /// Persists a proposal to contract storage, keyed by its ID.
 pub fn save_proposal(env: &Env, p: &Proposal) {
@@ -32,6 +32,22 @@ pub fn set_admin(env: &Env, admin: &Address) {
 /// Returns `true` if the contract has been initialised (admin key exists).
 pub fn is_initialized(env: &Env) -> bool {
     env.storage().instance().has(&DataKey::Admin)
+}
+
+/// Stores the contract lifecycle state in instance storage.
+pub fn set_contract_state(env: &Env, state: &ContractState) {
+    env.storage().instance().set(&DataKey::ContractState, state);
+}
+
+/// Returns the contract lifecycle state.
+///
+/// Defaults to [`ContractState::Uninitialized`] if the key has never been written
+/// (i.e. before the very first `initialize` call).
+pub fn get_contract_state(env: &Env) -> ContractState {
+    env.storage()
+        .instance()
+        .get(&DataKey::ContractState)
+        .unwrap_or(ContractState::Uninitialized)
 }
 
 /// Returns the stored admin address.
