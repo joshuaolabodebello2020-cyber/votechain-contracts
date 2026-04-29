@@ -1,0 +1,42 @@
+{
+  "name": "votechain-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "lint": "eslint "src/**/*.{ts,tsx}" --max-warnings 0",
+    "typecheck": "tsc --noEmit",
+    "size": "size-limit",
+    "start": "npm run dev"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@axe-core/react": "^4.6.0",
+    "@size-limit/file": "^6.1.0",
+    "@size-limit/preset-smallest": "^7.1.0",
+    "@size-limit/size-limit": "^7.1.0",
+    "@types/react": "^18.3.4",
+    "@types/react-dom": "^18.3.0",
+    "@typescript-eslint/eslint-plugin": "^6.10.0",
+    "@typescript-eslint/parser": "^6.10.0",
+    "@vitejs/plugin-react": "^4.7.1",
+    "eslint": "^8.57.0",
+    "eslint-plugin-jsx-a11y": "^6.8.1",
+    "eslint-plugin-react": "^7.34.0",
+    "eslint-plugin-react-hooks": "^4.9.0",
+    "typescript": "^5.6.2",
+    "vite": "^5.4.1"
+  },
+  "size-limit": [
+    {
+      "path": "dist/assets/index.*.js",
+      "limit": "200 KB"
+    }
+  ]
+}
