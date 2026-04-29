@@ -27,6 +27,17 @@ const MAX_DESC_LEN: u32 = 1024;
 const MIN_DURATION: u64 = 60;        // 1 minute
 const MAX_DURATION: u64 = 2_592_000; // 30 days
 
+// SEC-004: Stellar null/zero address used as the sentinel for invalid inputs.
+const ZERO_ADDRESS: &str = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF";
+
+// SEC-004: Rejects the Stellar zero/default address on any address parameter.
+fn require_non_zero_address(env: &Env, addr: &Address) -> Result<(), ContractError> {
+    if *addr == Address::from_str(env, ZERO_ADDRESS) {
+        return Err(ContractError::InvalidAddress);
+    }
+    Ok(())
+}
+
 /// Minimal client for querying the governance token's total supply.
 #[contractclient(name = "TokenSupplyClient")]
 pub trait TokenSupplyInterface {
@@ -48,6 +59,7 @@ impl GovernanceContract {
     ///
     /// # Errors
     /// - [`ContractError::AlreadyInitialized`] if the contract has already been initialised.
+    /// - [`ContractError::InvalidAddress`] if `admin` or `voting_token` is the zero address.
     pub fn initialize(
         env: Env,
         admin: Address,
@@ -56,10 +68,14 @@ impl GovernanceContract {
         proposal_cooldown: u64,
         restrict_admin_vote: bool,
     ) -> Result<(), ContractError> {
+        // SEC-005: auth is the first operation in every privileged function.
+        admin.require_auth();
+        // SEC-004: reject zero addresses before any state change.
+        require_non_zero_address(&env, &admin)?;
+        require_non_zero_address(&env, &voting_token)?;
         if is_initialized(&env) {
             return Err(ContractError::AlreadyInitialized);
         }
-        admin.require_auth();
         set_admin(&env, &admin);
         set_voting_token(&env, &voting_token);
         if min_proposal_balance > 0 {
@@ -81,6 +97,7 @@ impl GovernanceContract {
     /// The numeric ID assigned to the new proposal.
     ///
     /// # Errors
+    /// - [`ContractError::InvalidAddress`] if `proposer` is the zero address.
     /// - [`ContractError::InvalidTitle`] if `title` is empty or exceeds 256 characters.
     /// - [`ContractError::InvalidDescription`] if `description` is empty or exceeds 4096 characters.
     /// - [`ContractError::InvalidQuorum`] if `quorum` is zero or negative.
@@ -88,6 +105,7 @@ impl GovernanceContract {
     /// - [`ContractError::InvalidDurationRange`] if `duration` is outside [60, 2_592_000] seconds.
     /// - [`ContractError::InsufficientBalance`] if proposer balance is below minimum.
     /// - [`ContractError::ProposalCooldown`] if proposer is within cooldown period.
+    /// - [`ContractError::ProposalCountOverflow`] if the proposal ID counter would overflow.
     pub fn create_proposal(
         env: Env,
         proposer: Address,
@@ -96,10 +114,13 @@ impl GovernanceContract {
         quorum: i128,
         duration: u64,
     ) -> Result<u64, ContractError> {
+        // SEC-005: auth first.
+        proposer.require_auth();
+        // SEC-004: reject zero address.
+        require_non_zero_address(&env, &proposer)?;
         if is_paused(&env) {
             return Err(ContractError::ContractPaused);
         }
-        proposer.require_auth();
 
         // Title: non-empty, max 256 chars
         let title_len = title.len();
@@ -146,7 +167,8 @@ impl GovernanceContract {
         }
 
         let now = env.ledger().timestamp();
-        let id = next_id(&env);
+        // SEC-007: ID is generated contract-side only; checked_add prevents overflow.
+        let id = next_id(&env)?;
         let proposal = Proposal {
             id,
             proposer: proposer.clone(),
@@ -169,6 +191,7 @@ impl GovernanceContract {
     /// Casts a vote on an active proposal.
     ///
     /// # Errors
+    /// - [`ContractError::InvalidAddress`] if `voter` is the zero address.
     /// - [`ContractError::ProposalNotFound`] if `proposal_id` does not exist.
     /// - [`ContractError::ProposalNotActive`] if the proposal is not in `Active` status.
     /// - [`ContractError::VotingNotStarted`] if the current ledger timestamp is before `start_time`.
@@ -185,10 +208,13 @@ impl GovernanceContract {
         proposal_id: u64,
         vote: Vote,
     ) -> Result<(), ContractError> {
+        // SEC-005: auth first.
+        voter.require_auth();
+        // SEC-004: reject zero address.
+        require_non_zero_address(&env, &voter)?;
         if is_paused(&env) {
             return Err(ContractError::ContractPaused);
         }
-        voter.require_auth();
 
         let proposal = load_proposal(&env, proposal_id)?;
         if proposal.state != ProposalState::Active {
@@ -312,14 +338,18 @@ impl GovernanceContract {
     /// Marks a passed proposal as executed. Only the admin may call this.
     ///
     /// # Errors
+    /// - [`ContractError::InvalidAddress`] if `admin` is the zero address.
     /// - [`ContractError::NotAdmin`] if `admin` does not match the stored admin.
     /// - [`ContractError::ProposalNotFound`] if `proposal_id` does not exist.
     /// - [`ContractError::ProposalNotPassed`] if the proposal has not passed.
     pub fn execute(env: Env, admin: Address, proposal_id: u64) -> Result<(), ContractError> {
+        // SEC-005: auth first.
+        admin.require_auth();
+        // SEC-004: reject zero address.
+        require_non_zero_address(&env, &admin)?;
         if is_paused(&env) {
             return Err(ContractError::ContractPaused);
         }
-        admin.require_auth();
         if get_admin(&env)? != admin {
             return Err(ContractError::NotAdmin);
         }
@@ -336,14 +366,18 @@ impl GovernanceContract {
     /// Cancels an active proposal. Only the admin may cancel.
     ///
     /// # Errors
+    /// - [`ContractError::InvalidAddress`] if `admin` is the zero address.
     /// - [`ContractError::NotAdmin`] if `admin` does not match the stored admin.
     /// - [`ContractError::ProposalNotFound`] if `proposal_id` does not exist.
     /// - [`ContractError::ProposalNotActive`] if the proposal is not in `Active` status.
     pub fn cancel(env: Env, admin: Address, proposal_id: u64) -> Result<(), ContractError> {
+        // SEC-005: auth first.
+        admin.require_auth();
+        // SEC-004: reject zero address.
+        require_non_zero_address(&env, &admin)?;
         if is_paused(&env) {
             return Err(ContractError::ContractPaused);
         }
-        admin.require_auth();
         if get_admin(&env)? != admin {
             return Err(ContractError::NotAdmin);
         }
@@ -360,6 +394,7 @@ impl GovernanceContract {
     /// Updates the quorum threshold of an active proposal. Only the admin may call this.
     ///
     /// # Errors
+    /// - [`ContractError::InvalidAddress`] if `admin` is the zero address.
     /// - [`ContractError::NotAdmin`] if `admin` does not match the stored admin.
     /// - [`ContractError::InvalidQuorum`] if `new_quorum` is zero or negative.
     /// - [`ContractError::ProposalNotFound`] if `proposal_id` does not exist.
@@ -370,10 +405,13 @@ impl GovernanceContract {
         proposal_id: u64,
         new_quorum: i128,
     ) -> Result<(), ContractError> {
+        // SEC-005: auth first.
+        admin.require_auth();
+        // SEC-004: reject zero address.
+        require_non_zero_address(&env, &admin)?;
         if is_paused(&env) {
             return Err(ContractError::ContractPaused);
         }
-        admin.require_auth();
         if get_admin(&env)? != admin {
             return Err(ContractError::NotAdmin);
         }
@@ -395,26 +433,23 @@ impl GovernanceContract {
     /// The old admin loses all privileges immediately upon successful transfer.
     ///
     /// # Errors
+    /// - [`ContractError::InvalidAddress`] if `admin` or `new_admin` is the zero address.
     /// - [`ContractError::NotAdmin`] if `admin` does not match the stored admin.
-    /// - [`ContractError::InvalidNewAdmin`] if `new_admin` is the zero address.
     pub fn transfer_admin(
         env: Env,
         admin: Address,
         new_admin: Address,
     ) -> Result<(), ContractError> {
+        // SEC-005: auth first.
+        admin.require_auth();
+        // SEC-004: reject zero addresses for both parameters.
+        require_non_zero_address(&env, &admin)?;
+        require_non_zero_address(&env, &new_admin)?;
         if is_paused(&env) {
             return Err(ContractError::ContractPaused);
         }
-        admin.require_auth();
         if get_admin(&env)? != admin {
             return Err(ContractError::NotAdmin);
-        }
-        let zero = Address::from_str(
-            &env,
-            "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
-        );
-        if new_admin == zero {
-            return Err(ContractError::InvalidNewAdmin);
         }
         set_admin(&env, &new_admin);
         events::admin_transferred(&env, &admin, &new_admin);
@@ -427,9 +462,13 @@ impl GovernanceContract {
     /// available while paused. Only the admin may call this.
     ///
     /// # Errors
+    /// - [`ContractError::InvalidAddress`] if `admin` is the zero address.
     /// - [`ContractError::NotAdmin`] if `admin` does not match the stored admin.
     pub fn pause(env: Env, admin: Address) -> Result<(), ContractError> {
+        // SEC-005: auth first (already was first; zero check added for SEC-004).
         admin.require_auth();
+        // SEC-004: reject zero address.
+        require_non_zero_address(&env, &admin)?;
         if get_admin(&env)? != admin {
             return Err(ContractError::NotAdmin);
         }
@@ -443,10 +482,14 @@ impl GovernanceContract {
     /// Only the admin may call this.
     ///
     /// # Errors
+    /// - [`ContractError::InvalidAddress`] if `admin` is the zero address.
     /// - [`ContractError::NotAdmin`] if `admin` does not match the stored admin.
     /// - [`ContractError::NotPaused`] if the contract is not currently paused.
     pub fn unpause(env: Env, admin: Address) -> Result<(), ContractError> {
+        // SEC-005: auth first (already was first; zero check added for SEC-004).
         admin.require_auth();
+        // SEC-004: reject zero address.
+        require_non_zero_address(&env, &admin)?;
         if get_admin(&env)? != admin {
             return Err(ContractError::NotAdmin);
         }
@@ -485,12 +528,15 @@ impl GovernanceContract {
     /// `true` if the address has cast a vote, `false` otherwise.
     ///
     /// # Errors
+    /// - [`ContractError::InvalidAddress`] if `voter` is the zero address.
     /// - [`ContractError::ProposalNotFound`] if `proposal_id` does not exist.
     pub fn has_voted(
         env: Env,
         proposal_id: u64,
         voter: Address,
     ) -> Result<bool, ContractError> {
+        // SEC-004: reject zero address on read path too.
+        require_non_zero_address(&env, &voter)?;
         load_proposal(&env, proposal_id)?;
         Ok(has_voted(&env, proposal_id, &voter))
     }

@@ -17,6 +17,8 @@ pub enum ContractError {
     AllowanceExceeded = 5,
     /// 6 – New admin address is invalid (zero address)
     InvalidNewAdmin = 6,
+    /// 7 – Address parameter is the zero/default address
+    InvalidAddress = 7,
 }
 
 /// Storage key enum for the token contract.
@@ -26,7 +28,7 @@ pub enum ContractError {
 /// occupies a completely separate key space — two variants with the same
 /// payload can never collide.
 ///
-/// ## Key-space map
+/// ## Key-space map (SEC-006 collision analysis)
 ///
 /// | Variant                        | Storage tier | Description                              |
 /// |-------------------------------|--------------|------------------------------------------|
@@ -35,6 +37,14 @@ pub enum ContractError {
 /// | `TotalSupply`                 | Instance     | Aggregate token supply                   |
 /// | `Admin`                       | Instance     | Contract administrator address           |
 /// | `Version`                     | Instance     | Semver tuple `(major, minor, patch)`     |
+///
+/// ## Collision safety
+///
+/// Soroban encodes the enum discriminant as the first element of every XDR key.
+/// `Balance(Address)` and `Allowance(Address, Address)` both carry `Address`
+/// payloads, but their distinct discriminants ensure they can never alias.
+/// Singleton variants (`Admin`, `TotalSupply`, `Version`) have no payload and
+/// are unconditionally unique within this contract.
 #[contracttype]
 pub enum TokenDataKey {
     /// Per-address token balance (persistent storage).
