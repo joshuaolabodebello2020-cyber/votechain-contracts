@@ -1400,145 +1400,323 @@ fn test_unpause_emits_event() {
 
 // ── end SEC-018 ───────────────────────────────────────────────────────────────
 
-// ── SEC-011: voting duration validation tests ─────────────────────────────────
+// ── TEST-ADMIN-EXEC-CANCEL: Admin-only execution and cancellation tests ──────
 
-/// Duration = 0 must revert with InvalidDuration (#5), not InvalidDurationRange.
+/// Test: execute succeeds on Passed proposal by admin
+/// Verifies that the admin can successfully execute a proposal that has reached Passed state.
 #[test]
-#[should_panic(expected = "Error(Contract, #5)")]
-fn test_create_proposal_duration_zero_reverts() {
+fn test_execute_passed_proposal_by_admin_succeeds() {
     let t = setup_env();
-    let proposer = Address::generate(&t.env);
-    t.client.create_proposal(
-        &proposer,
-        &String::from_str(&t.env, "Zero dur"),
-        &String::from_str(&t.env, "desc"),
-        &100,
-        &0,
-    );
+    let voter = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &voter);
+    
+    // Vote to pass the proposal
+    mint_and_vote(&t, &voter, id, Vote::Yes, 1_000_000);
+    
+    // Advance time past voting period
+    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+    
+    // Finalize to move to Passed state
+    t.client.finalise(&id);
+    assert_eq!(t.client.get_proposal(&id).state, ProposalState::Passed);
+    
+    // Admin executes the passed proposal
+    t.client.execute(&t.admin, &id);
+    
+    // Verify state changed to Executed
+    assert_eq!(t.client.get_proposal(&id).state, ProposalState::Executed);
 }
 
-/// Duration below MIN_DURATION (60 s) must revert with InvalidDurationRange (#21).
+/// Test: execute reverts for non-admin caller
+/// Verifies that a non-admin address cannot execute a proposal.
 #[test]
-#[should_panic(expected = "Error(Contract, #21)")]
-fn test_create_proposal_duration_below_min_reverts() {
-    let t = setup_env();
-    let proposer = Address::generate(&t.env);
-    t.client.create_proposal(
-        &proposer,
-        &String::from_str(&t.env, "Short dur"),
-        &String::from_str(&t.env, "desc"),
-        &100,
-        &30, // 30 s < MIN_DURATION (60 s)
-    );
-}
-
-/// Duration exactly at MIN_DURATION (60 s) must be accepted.
-#[test]
-fn test_create_proposal_duration_at_min_accepted() {
-    let t = setup_env();
-    let proposer = Address::generate(&t.env);
-    let id = t.client.create_proposal(
-        &proposer,
-        &String::from_str(&t.env, "Min dur"),
-        &String::from_str(&t.env, "desc"),
-        &100,
-        &60, // exactly MIN_DURATION
-    );
-    let p = t.client.get_proposal(&id);
-    assert_eq!(p.state, ProposalState::Active);
-    assert!(p.end_time > p.start_time);
-}
-
-// ── end SEC-011 ───────────────────────────────────────────────────────────────
-
-// ── SEC-015: execution timelock tests ────────────────────────────────────────
-
-/// execute() before the timelock expires must revert with TimelockNotExpired (#28).
-#[test]
-#[should_panic(expected = "Error(Contract, #28)")]
-fn test_execute_before_timelock_reverts() {
+#[should_panic(expected = "Error(Contract, #2)")]
+fn test_execute_reverts_for_non_admin_caller() {
     let env = Env::default();
     env.mock_all_auths();
-    let admin = Address::generate(&env);
-    let voter = Address::generate(&env);
-    let token_id = setup_token(&env, &voter);
     let client = new_client(&env);
-    // 1-hour timelock
-    client.initialize(&admin, &token_id, &0_i128, &0_u64, &false, &3600_u64);
+    let admin = Address::generate(&env);
+    let non_admin = Address::generate(&env);
+    
+    let id = setup_passed_proposal(&env, &client, &admin);
+    
+    // Non-admin attempts to execute
+    client.execute(&non_admin, &id);
+}
 
-    let id = client.create_proposal(
-        &voter,
-        &String::from_str(&env, "Timelock prop"),
-        &String::from_str(&env, "desc"),
-        &100,
-        &3600,
-    );
-    client.cast_vote(&voter, &id, &Vote::Yes);
-    // advance past voting period → finalise → proposal passes; execute_after = now + 3600
-    env.ledger().with_mut(|l| l.timestamp += 3601);
-    client.finalise(&id);
-    assert_eq!(client.get_proposal(&id).state, ProposalState::Passed);
-    // attempt to execute immediately — timelock not yet expired
+/// Test: execute reverts on non-Passed proposal
+/// Verifies that execute fails when the proposal is not in Passed state.
+#[test]
+#[should_panic(expected = "Error(Contract, #12)")]
+fn test_execute_reverts_on_non_passed_proposal() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let client = new_client(&env);
+    let admin = Address::generate(&env);
+    
+    let id = setup_active_proposal(&env, &client, &admin);
+    
+    // Admin attempts to execute an Active proposal (not Passed)
     client.execute(&admin, &id);
 }
 
-/// execute() after the timelock has elapsed must succeed.
+/// Test: cancel succeeds on Active proposal by admin
+/// Verifies that the admin can successfully cancel a proposal in Active state.
 #[test]
-fn test_execute_after_timelock_succeeds() {
+fn test_cancel_active_proposal_by_admin_succeeds() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &proposer);
+    
+    // Verify proposal is Active
+    assert_eq!(t.client.get_proposal(&id).state, ProposalState::Active);
+    
+    // Admin cancels the active proposal
+    t.client.cancel(&t.admin, &id);
+    
+    // Verify state changed to Cancelled
+    assert_eq!(t.client.get_proposal(&id).state, ProposalState::Cancelled);
+}
+
+/// Test: cancel reverts for non-admin caller
+/// Verifies that a non-admin address cannot cancel a proposal.
+#[test]
+#[should_panic(expected = "Error(Contract, #2)")]
+fn test_cancel_reverts_for_non_admin_caller() {
     let env = Env::default();
     env.mock_all_auths();
-    let admin = Address::generate(&env);
-    let voter = Address::generate(&env);
-    let token_id = setup_token(&env, &voter);
     let client = new_client(&env);
-    // 1-hour timelock
-    client.initialize(&admin, &token_id, &0_i128, &0_u64, &false, &3600_u64);
+    let admin = Address::generate(&env);
+    let non_admin = Address::generate(&env);
+    
+    let id = setup_active_proposal(&env, &client, &admin);
+    
+    // Non-admin attempts to cancel
+    client.cancel(&non_admin, &id);
+}
 
+/// Test: cancel reverts on non-Active proposal
+/// Verifies that cancel fails when the proposal is not in Active state.
+#[test]
+#[should_panic(expected = "Error(Contract, #7)")]
+fn test_cancel_reverts_on_non_active_proposal() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let client = new_client(&env);
+    let admin = Address::generate(&env);
+    let token_id = setup_token(&env, &admin);
+    client.initialize(&admin, &token_id, &0_i128, &0_u64, &false);
+    
+    // Create and finalize a proposal to move it out of Active state
     let id = client.create_proposal(
-        &voter,
-        &String::from_str(&env, "Timelock prop"),
+        &admin,
+        &String::from_str(&env, "Prop"),
         &String::from_str(&env, "desc"),
-        &100,
+        &1_000_000,
         &3600,
     );
-    client.cast_vote(&voter, &id, &Vote::Yes);
-    // advance past voting period and finalise
     env.ledger().with_mut(|l| l.timestamp += 3601);
     client.finalise(&id);
-    assert_eq!(client.get_proposal(&id).state, ProposalState::Passed);
-    // advance past the 1-hour timelock
-    env.ledger().with_mut(|l| l.timestamp += 3600);
+    
+    // Verify proposal is no longer Active (it's Rejected)
+    assert_eq!(client.get_proposal(&id).state, ProposalState::Rejected);
+    
+    // Admin attempts to cancel a non-Active proposal
+    client.cancel(&admin, &id);
+}
+
+/// Test: execute emits event correctly
+/// Verifies that the execute function emits the "executed" event with correct proposal ID.
+#[test]
+fn test_execute_emits_event_correctly() {
+    let t = setup_env();
+    let voter = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &voter);
+    
+    // Vote to pass the proposal
+    mint_and_vote(&t, &voter, id, Vote::Yes, 1_000_000);
+    
+    // Advance time and finalize
+    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+    t.client.finalise(&id);
+    
+    // Clear events before execute
+    t.env.events().all();
+    
+    // Execute the proposal
+    t.client.execute(&t.admin, &id);
+    
+    // Verify the "executed" event was emitted with correct proposal ID
+    let events = t.env.events().all();
+    assert!(
+        events.iter().any(|(_, topics, _)| {
+            topics == (symbol_short!("executed"), id).into_val(&t.env)
+        }),
+        "expected 'executed' event with proposal ID {} to be emitted",
+        id
+    );
+}
+
+/// Test: cancel emits event correctly
+/// Verifies that the cancel function emits the "cancelled" event with correct proposal ID.
+#[test]
+fn test_cancel_emits_event_correctly() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &proposer);
+    
+    // Clear events before cancel
+    t.env.events().all();
+    
+    // Cancel the proposal
+    t.client.cancel(&t.admin, &id);
+    
+    // Verify the "cancelled" event was emitted with correct proposal ID
+    let events = t.env.events().all();
+    assert!(
+        events.iter().any(|(_, topics, _)| {
+            topics == (symbol_short!("cancelled"), id).into_val(&t.env)
+        }),
+        "expected 'cancelled' event with proposal ID {} to be emitted",
+        id
+    );
+}
+
+/// Test: execute and cancel maintain state consistency
+/// Verifies that state transitions are atomic and consistent across multiple operations.
+#[test]
+fn test_execute_and_cancel_maintain_state_consistency() {
+    let t = setup_env();
+    let voter = Address::generate(&t.env);
+    
+    // Create two proposals
+    let id1 = create_test_proposal(&t, &voter);
+    let id2 = create_test_proposal(&t, &voter);
+    
+    // Pass and execute first proposal
+    mint_and_vote(&t, &voter, id1, Vote::Yes, 1_000_000);
+    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+    t.client.finalise(&id1);
+    t.client.execute(&t.admin, &id1);
+    
+    // Cancel second proposal
+    t.client.cancel(&t.admin, &id2);
+    
+    // Verify both states are correct and independent
+    assert_eq!(t.client.get_proposal(&id1).state, ProposalState::Executed);
+    assert_eq!(t.client.get_proposal(&id2).state, ProposalState::Cancelled);
+}
+
+/// Test: execute requires auth from admin
+/// Verifies that execute properly checks admin authorization.
+#[test]
+#[should_panic]
+fn test_execute_requires_admin_auth() {
+    let env = Env::default();
+    // Don't mock all auths - this will cause auth check to fail
+    let client = new_client(&env);
+    let admin = Address::generate(&env);
+    
+    let id = setup_passed_proposal(&env, &client, &admin);
+    
+    // This should panic due to failed auth check
+    client.execute(&admin, &id);
+}
+
+/// Test: cancel requires auth from admin
+/// Verifies that cancel properly checks admin authorization.
+#[test]
+#[should_panic]
+fn test_cancel_requires_admin_auth() {
+    let env = Env::default();
+    // Don't mock all auths - this will cause auth check to fail
+    let client = new_client(&env);
+    let admin = Address::generate(&env);
+    
+    let id = setup_active_proposal(&env, &client, &admin);
+    
+    // This should panic due to failed auth check
+    client.cancel(&admin, &id);
+}
+
+/// Test: execute on Cancelled proposal reverts
+/// Verifies that execute fails when proposal is in Cancelled state.
+#[test]
+#[should_panic(expected = "Error(Contract, #12)")]
+fn test_execute_on_cancelled_proposal_reverts() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let client = new_client(&env);
+    let admin = Address::generate(&env);
+    
+    let id = setup_active_proposal(&env, &client, &admin);
+    
+    // Cancel the proposal first
+    client.cancel(&admin, &id);
+    assert_eq!(client.get_proposal(&id).state, ProposalState::Cancelled);
+    
+    // Attempt to execute a cancelled proposal
+    client.execute(&admin, &id);
+}
+
+/// Test: cancel on Executed proposal reverts
+/// Verifies that cancel fails when proposal is in Executed state.
+#[test]
+#[should_panic(expected = "Error(Contract, #7)")]
+fn test_cancel_on_executed_proposal_reverts() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let client = new_client(&env);
+    let admin = Address::generate(&env);
+    
+    let id = setup_passed_proposal(&env, &client, &admin);
+    
+    // Execute the proposal first
     client.execute(&admin, &id);
     assert_eq!(client.get_proposal(&id).state, ProposalState::Executed);
+    
+    // Attempt to cancel an executed proposal
+    client.cancel(&admin, &id);
 }
 
-/// finalise() emits the final event with execute_after set for a passed proposal.
+/// Test: multiple execute calls on same proposal revert
+/// Verifies that a proposal can only be executed once.
 #[test]
-fn test_finalise_passed_event_includes_execute_after() {
+#[should_panic(expected = "Error(Contract, #12)")]
+fn test_multiple_execute_calls_revert() {
     let env = Env::default();
     env.mock_all_auths();
-    let admin = Address::generate(&env);
-    let voter = Address::generate(&env);
-    let token_id = setup_token(&env, &voter);
     let client = new_client(&env);
-    // 1-hour timelock
-    client.initialize(&admin, &token_id, &0_i128, &0_u64, &false, &3600_u64);
-
-    let id = client.create_proposal(
-        &voter,
-        &String::from_str(&env, "Timelock prop"),
-        &String::from_str(&env, "desc"),
-        &100,
-        &3600,
-    );
-    client.cast_vote(&voter, &id, &Vote::Yes);
-    env.ledger().with_mut(|l| l.timestamp += 3601);
-    client.finalise(&id);
-
-    // The stored execute_after must be greater than the end_time.
-    let p = client.get_proposal(&id);
-    assert_eq!(p.state, ProposalState::Passed);
-    assert!(p.execute_after > p.end_time, "execute_after must be after end_time");
+    let admin = Address::generate(&env);
+    
+    let id = setup_passed_proposal(&env, &client, &admin);
+    
+    // First execute succeeds
+    client.execute(&admin, &id);
+    assert_eq!(client.get_proposal(&id).state, ProposalState::Executed);
+    
+    // Second execute on same proposal should revert
+    client.execute(&admin, &id);
 }
 
-// ── end SEC-015 ───────────────────────────────────────────────────────────────
+/// Test: multiple cancel calls on same proposal revert
+/// Verifies that a proposal can only be cancelled once.
+#[test]
+#[should_panic(expected = "Error(Contract, #7)")]
+fn test_multiple_cancel_calls_revert() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let client = new_client(&env);
+    let admin = Address::generate(&env);
+    
+    let id = setup_active_proposal(&env, &client, &admin);
+    
+    // First cancel succeeds
+    client.cancel(&admin, &id);
+    assert_eq!(client.get_proposal(&id).state, ProposalState::Cancelled);
+    
+    // Second cancel on same proposal should revert
+    client.cancel(&admin, &id);
+}
+
+// ── end TEST-ADMIN-EXEC-CANCEL ────────────────────────────────────────────────

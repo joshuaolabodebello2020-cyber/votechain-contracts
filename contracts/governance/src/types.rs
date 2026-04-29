@@ -59,8 +59,10 @@ pub enum ContractError {
     ContractPaused = 26,
     /// 27 – Contract is not paused
     NotPaused = 27,
-    /// 28 – Timelock period has not yet elapsed; proposal cannot be executed yet
-    TimelockNotExpired = 28,
+    /// 28 – Address parameter is the zero/default address
+    InvalidAddress = 28,
+    /// 29 – Proposal ID counter overflowed (u64::MAX reached)
+    ProposalCountOverflow = 29,
 }
 
 /// Lifecycle state of the governance contract itself.
@@ -120,21 +122,37 @@ pub struct Proposal {
 /// occupies a completely separate key space — two variants with the same
 /// payload can never collide.
 ///
-/// ## Key-space map
+/// ## Key-space map (SEC-006 collision analysis)
 ///
-/// | Variant                          | Storage tier | Description                                        |
-/// |----------------------------------|--------------|---------------------------------------------------|
-/// | `Proposal(u64)`                  | Persistent   | Full proposal struct, keyed by proposal ID         |
-/// | `ProposalCount`                  | Instance     | Monotonic counter used to assign proposal IDs      |
-/// | `HasVoted(u64, Address)`         | Persistent   | Boolean flag: has this voter voted on this proposal|
-/// | `VoteRecord(u64, Address)`       | Persistent   | Detailed vote record (type + weight) per voter     |
-/// | `VoterSnapshot(u64, Address)`    | Persistent   | Token-balance snapshot captured at vote time       |
-/// | `LastProposal(Address)`          | Persistent   | Timestamp of a proposer's most recent proposal     |
-/// | `Admin`                          | Instance     | Contract administrator address                     |
-/// | `VotingToken`                    | Instance     | Governance token contract address                  |
-/// | `MinProposalBalance`             | Instance     | Minimum token balance required to create a proposal|
-/// | `ProposalCooldown`               | Instance     | Seconds a proposer must wait between proposals     |
-/// | `Version`                        | Instance     | Semver tuple `(major, minor, patch)`               |
+/// | Variant                          | Storage tier | Description                                         |
+/// |----------------------------------|--------------|-----------------------------------------------------|
+/// | `Proposal(u64)`                  | Persistent   | Full proposal struct, keyed by proposal ID          |
+/// | `ProposalCount`                  | Instance     | Monotonic counter used to assign proposal IDs       |
+/// | `HasVoted(u64, Address)`         | Persistent   | Boolean flag: has this voter voted on this proposal |
+/// | `VoteRecord(u64, Address)`       | Persistent   | Detailed vote record (type + weight) per voter      |
+/// | `VoterSnapshot(u64, Address)`    | Persistent   | Token-balance snapshot captured at vote time        |
+/// | `LastProposal(Address)`          | Persistent   | Timestamp of a proposer's most recent proposal      |
+/// | `Admin`                          | Instance     | Contract administrator address                      |
+/// | `VotingToken`                    | Instance     | Governance token contract address                   |
+/// | `MinProposalBalance`             | Instance     | Minimum token balance required to create a proposal |
+/// | `ProposalCooldown`               | Instance     | Seconds a proposer must wait between proposals      |
+/// | `ContractState`                  | Instance     | Lifecycle state (Uninitialized / Ready)             |
+/// | `RestrictAdminVote`              | Instance     | Whether admin vote on own proposals is blocked      |
+/// | `Paused`                         | Instance     | Whether the contract is currently paused            |
+/// | `Version`                        | Instance     | Semver tuple `(major, minor, patch)`                |
+///
+/// ## Collision safety
+///
+/// Soroban serialises each `DataKey` variant by encoding the enum discriminant
+/// **before** any payload into the XDR key.  This means:
+///
+/// - `HasVoted(id, addr)`, `VoteRecord(id, addr)`, and `VoterSnapshot(id, addr)`
+///   share the same payload shape `(u64, Address)` but have distinct discriminants,
+///   so they can never alias each other regardless of the argument values.
+/// - Singleton variants (`Admin`, `VotingToken`, `ProposalCount`, …) have no
+///   payload, so their keys are fixed and globally unique within this contract.
+/// - No two distinct variants can produce the same serialised key because the
+///   discriminant is always the first element of the encoding.
 #[contracttype]
 pub enum DataKey {
     /// Full [`Proposal`] struct, keyed by proposal ID (persistent storage).
