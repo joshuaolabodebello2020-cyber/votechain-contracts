@@ -25,8 +25,6 @@ use types::{ContractError, ContractState, DataKey, Proposal, ProposalState, Vote
 
 const MAX_TITLE_LEN: u32 = 128;
 const MAX_DESC_LEN: u32 = 1024;
-const MIN_DURATION: u64 = 60;        // 1 minute
-const MAX_DURATION: u64 = 2_592_000; // 30 days
 
 // SEC-004: Stellar null/zero address used as the sentinel for invalid inputs.
 const ZERO_ADDRESS: &str = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF";
@@ -55,6 +53,8 @@ impl GovernanceContract {
     /// Must be called exactly once before any other function.
     ///
     /// # Parameters
+    /// - `min_duration`: minimum allowed voting duration in seconds (e.g., 3600 for 1 hour)
+    /// - `max_duration`: maximum allowed voting duration in seconds (e.g., 2592000 for 30 days)
     /// - `restrict_admin_vote`: when `true`, the admin address cannot cast votes on proposals
     ///   they created, preventing a conflict of interest.
     /// - `timelock_duration`: mandatory delay in seconds between a proposal passing and it
@@ -69,6 +69,8 @@ impl GovernanceContract {
         voting_token: Address,
         min_proposal_balance: i128,
         proposal_cooldown: u64,
+        min_duration: u64,
+        max_duration: u64,
         restrict_admin_vote: bool,
         timelock_duration: u64,
     ) -> Result<(), ContractError> {
@@ -88,6 +90,8 @@ impl GovernanceContract {
         if proposal_cooldown > 0 {
             set_proposal_cooldown(&env, proposal_cooldown);
         }
+        set_min_duration(&env, min_duration);
+        set_max_duration(&env, max_duration);
         set_restrict_admin_vote(&env, restrict_admin_vote);
         if timelock_duration > 0 {
             set_timelock_duration(&env, timelock_duration);
@@ -109,7 +113,7 @@ impl GovernanceContract {
     /// - [`ContractError::InvalidDescription`] if `description` is empty or exceeds 4096 characters.
     /// - [`ContractError::InvalidQuorum`] if `quorum` is zero or negative.
     /// - [`ContractError::QuorumExceedsSupply`] if `quorum` exceeds the total token supply.
-    /// - [`ContractError::InvalidDurationRange`] if `duration` is outside [60, 2_592_000] seconds.
+    /// - [`ContractError::InvalidDurationRange`] if `duration` is outside the configured [min_duration, max_duration] range.
     /// - [`ContractError::InsufficientBalance`] if proposer balance is below minimum.
     /// - [`ContractError::ProposalCooldown`] if proposer is within cooldown period.
     /// - [`ContractError::ProposalCountOverflow`] if the proposal ID counter would overflow.

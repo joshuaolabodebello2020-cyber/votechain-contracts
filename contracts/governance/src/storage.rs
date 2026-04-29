@@ -10,7 +10,7 @@
 //!
 //! Storage tiers in use:
 //! - **Instance** – singleton config values (`Admin`, `VotingToken`,
-//!   `ProposalCount`, `MinProposalBalance`, `ProposalCooldown`, `Version`).
+//!   `ProposalCount`, `MinProposalBalance`, `ProposalCooldown`, `MinDuration`, `MaxDuration`, `Version`).
 //!   Shares the contract instance TTL; cheap to access.
 //! - **Persistent** – proposal data and per-voter records (`Proposal`,
 //!   `HasVoted`, `VoteRecord`, `VoterSnapshot`, `LastProposal`).
@@ -247,4 +247,20 @@ pub fn set_paused(env: &Env, paused: bool) {
 /// Returns `true` if the contract is currently paused.
 pub fn is_paused(env: &Env) -> bool {
     env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+}
+
+pub fn set_min_duration(env: &Env, v: u64) {
+    env.storage().instance().set(&DataKey::MinDuration, &v);
+}
+
+pub fn get_min_duration(env: &Env) -> u64 {
+    env.storage().instance().get(&DataKey::MinDuration).unwrap_or(60)
+}
+
+pub fn set_max_duration(env: &Env, v: u64) {
+    env.storage().instance().set(&DataKey::MaxDuration, &v);
+}
+
+pub fn get_max_duration(env: &Env) -> u64 {
+    env.storage().instance().get(&DataKey::MaxDuration).unwrap_or(2_592_000)
 }

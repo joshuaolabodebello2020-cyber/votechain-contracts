@@ -103,3 +103,11 @@ pub fn contract_paused(env: &Env, admin: &Address) {
 pub fn contract_unpaused(env: &Env, admin: &Address) {
     env.events().publish((symbol_short!("unpaused"),), admin.clone());
 }
+
+/// Emits a `durationupdate` event when voting duration limits are updated.
+///
+/// Topics: `("durationupdate",)`
+/// Data: `(min_duration: u64, max_duration: u64)`
+pub fn duration_limits_updated(env: &Env, min_duration: u64, max_duration: u64) {
+    env.events().publish((symbol_short!("durationupdate"),), (min_duration, max_duration));
+}
