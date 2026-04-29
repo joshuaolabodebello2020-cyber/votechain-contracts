@@ -20,10 +20,14 @@ interface Props {
   proposals: Proposal[];
 }
 
+type StateFilter = 'All' | ProposalState;
+
+type SortKey = (typeof sortOptions)[number]['value'];
+
 export default function ProposalList({ proposals }: Props) {
   const [searchText, setSearchText] = useState('');
-  const [stateFilter, setStateFilter] = useState<'All' | ProposalState>('All');
-  const [sortKey, setSortKey] = useState<(typeof sortOptions)[number]['value']>('newest');
+  const [stateFilter, setStateFilter] = useState<StateFilter>('All');
+  const [sortKey, setSortKey] = useState<SortKey>('newest');
 
   const filtered = useMemo(() => {
     const normalizedSearch = searchText.trim().toLowerCase();
@@ -70,7 +74,10 @@ export default function ProposalList({ proposals }: Props) {
         </label>
         <label>
           State
-          <select value={stateFilter} onChange={(event) => setStateFilter(event.target.value as any)}>
+          <select
+            value={stateFilter}
+            onChange={(event) => setStateFilter(event.target.value as StateFilter)}
+          >
             <option value="All">All</option>
             <option value="Active">Active</option>
             <option value="Passed">Passed</option>
@@ -81,7 +88,7 @@ export default function ProposalList({ proposals }: Props) {
         </label>
         <label>
           Sort by
-          <select value={sortKey} onChange={(event) => setSortKey(event.target.value as any)}>
+          <select value={sortKey} onChange={(event) => setSortKey(event.target.value as SortKey)}>
             {sortOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}

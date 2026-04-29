@@ -6,6 +6,8 @@ interface Props {
   proposals: Proposal[];
 }
 
+type StateFilter = 'All' | ProposalState;
+
 function statusClass(state: ProposalState) {
   return `status-chip status-${state.toLowerCase()}`;
 }
@@ -18,7 +20,7 @@ export default function VoteHistory({ proposals }: Props) {
   const [address, setAddress] = useState('GCFX4Q...');
   const [fromDate, setFromDate] = useState('2025-01-01');
   const [toDate, setToDate] = useState('2026-12-31');
-  const [stateFilter, setStateFilter] = useState<'All' | ProposalState>('All');
+  const [stateFilter, setStateFilter] = useState<StateFilter>('All');
 
   const votes = useMemo(() => {
     const normalizedAddress = address.trim().toLowerCase();
@@ -84,7 +86,7 @@ export default function VoteHistory({ proposals }: Props) {
         </label>
         <label>
           Proposal state
-          <select value={stateFilter} onChange={(event) => setStateFilter(event.target.value as any)}>
+          <select value={stateFilter} onChange={(event) => setStateFilter(event.target.value as StateFilter)}>
             <option value="All">All</option>
             <option value="Active">Active</option>
             <option value="Passed">Passed</option>
