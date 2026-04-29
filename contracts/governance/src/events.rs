@@ -43,10 +43,14 @@ pub fn vote_cast(env: &Env, id: u64, voter: &Address, vote: &Vote, weight: i128)
 
 /// Emits a `final` event when a proposal is finalised (Passed or Rejected).
 ///
-/// Topics: `("final", id)`  
-/// Data: `state: ProposalState`
-pub fn proposal_finalised(env: &Env, id: u64, state: &ProposalState) {
-    env.events().publish((symbol_short!("final"), id), state.clone());
+/// Topics: `("final", id)`
+/// Data: `(state: ProposalState, execute_after: u64)`
+///
+/// `execute_after` is the earliest Unix timestamp at which the proposal may be
+/// executed (non-zero only when `state == Passed`).  Consumers can use this to
+/// schedule an execution call without querying the proposal struct separately.
+pub fn proposal_finalised(env: &Env, id: u64, state: &ProposalState, execute_after: u64) {
+    env.events().publish((symbol_short!("final"), id), (state.clone(), execute_after));
 }
 
 /// Emits an `executed` event when a passed proposal is executed.

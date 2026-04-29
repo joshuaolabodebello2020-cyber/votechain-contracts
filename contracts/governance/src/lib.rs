@@ -14,11 +14,12 @@ mod prop_tests;
 use soroban_sdk::{contract, contractclient, contractimpl, token, Address, Env, String};
 use storage::{
     get_admin, get_contract_state, get_last_proposal, get_min_proposal_balance,
-    get_proposal_cooldown, get_restrict_admin_vote, get_version, get_voter_snapshot,
-    get_voting_token, has_voted, is_initialized, is_paused, load_proposal, mark_voted, next_id,
-    save_proposal, save_vote_record, save_voter_snapshot, set_admin, set_contract_state,
-    set_last_proposal, set_min_proposal_balance, set_paused, set_proposal_cooldown,
-    set_restrict_admin_vote, set_version, set_voting_token, get_vote_record,
+    get_proposal_cooldown, get_restrict_admin_vote, get_timelock_duration, get_version,
+    get_voter_snapshot, get_voting_token, has_voted, is_initialized, is_paused, load_proposal,
+    mark_voted, next_id, save_proposal, save_vote_record, save_voter_snapshot, set_admin,
+    set_contract_state, set_last_proposal, set_min_proposal_balance, set_paused,
+    set_proposal_cooldown, set_restrict_admin_vote, set_timelock_duration, set_version,
+    set_voting_token, get_vote_record,
 };
 use types::{ContractError, ContractState, DataKey, Proposal, ProposalState, Vote, VoteRecord};
 
@@ -56,6 +57,8 @@ impl GovernanceContract {
     /// # Parameters
     /// - `restrict_admin_vote`: when `true`, the admin address cannot cast votes on proposals
     ///   they created, preventing a conflict of interest.
+    /// - `timelock_duration`: mandatory delay in seconds between a proposal passing and it
+    ///   becoming executable. Use `0` to disable the timelock.
     ///
     /// # Errors
     /// - [`ContractError::AlreadyInitialized`] if the contract has already been initialised.
@@ -67,6 +70,7 @@ impl GovernanceContract {
         min_proposal_balance: i128,
         proposal_cooldown: u64,
         restrict_admin_vote: bool,
+        timelock_duration: u64,
     ) -> Result<(), ContractError> {
         // SEC-005: auth is the first operation in every privileged function.
         admin.require_auth();
@@ -85,6 +89,9 @@ impl GovernanceContract {
             set_proposal_cooldown(&env, proposal_cooldown);
         }
         set_restrict_admin_vote(&env, restrict_admin_vote);
+        if timelock_duration > 0 {
+            set_timelock_duration(&env, timelock_duration);
+        }
         set_version(&env, (1, 0, 0));
         set_contract_state(&env, &ContractState::Ready);
         events::contract_initialized(&env, &admin);
@@ -136,6 +143,11 @@ impl GovernanceContract {
         if quorum <= 0 {
             return Err(ContractError::InvalidQuorum);
         }
+        // Duration: zero is explicitly rejected before the range check so callers
+        // receive InvalidDuration (not InvalidDurationRange) for the zero case.
+        if duration == 0 {
+            return Err(ContractError::InvalidDuration);
+        }
         // Duration: within [MIN_DURATION, MAX_DURATION]
         if duration < MIN_DURATION || duration > MAX_DURATION {
             return Err(ContractError::InvalidDurationRange);
@@ -181,6 +193,7 @@ impl GovernanceContract {
             start_time: now,
             end_time: now + duration,
             state: ProposalState::Active,
+            execute_after: 0,
         };
         save_proposal(&env, &proposal);
         set_last_proposal(&env, &proposer, now);
@@ -318,20 +331,22 @@ impl GovernanceContract {
         if proposal.state != ProposalState::Active {
             return Err(ContractError::ProposalNotActive);
         }
-        if env.ledger().timestamp() <= proposal.end_time {
+        let now = env.ledger().timestamp();
+        if now <= proposal.end_time {
             return Err(ContractError::VotingStillOpen);
         }
 
         let total = proposal.votes_yes + proposal.votes_no + proposal.votes_abstain;
-        proposal.state =
-            if total >= proposal.quorum && proposal.votes_yes > proposal.votes_no {
-                ProposalState::Passed
-            } else {
-                ProposalState::Rejected
-            };
+        if total >= proposal.quorum && proposal.votes_yes > proposal.votes_no {
+            let timelock = get_timelock_duration(&env);
+            proposal.execute_after = now + timelock;
+            proposal.state = ProposalState::Passed;
+        } else {
+            proposal.state = ProposalState::Rejected;
+        }
 
         save_proposal(&env, &proposal);
-        events::proposal_finalised(&env, proposal_id, &proposal.state);
+        events::proposal_finalised(&env, proposal_id, &proposal.state, proposal.execute_after);
         Ok(())
     }
 
@@ -356,6 +371,9 @@ impl GovernanceContract {
         let mut proposal = load_proposal(&env, proposal_id)?;
         if proposal.state != ProposalState::Passed {
             return Err(ContractError::ProposalNotPassed);
+        }
+        if env.ledger().timestamp() < proposal.execute_after {
+            return Err(ContractError::TimelockNotExpired);
         }
         proposal.state = ProposalState::Executed;
         save_proposal(&env, &proposal);

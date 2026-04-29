@@ -229,6 +229,16 @@ pub fn get_restrict_admin_vote(env: &Env) -> bool {
     env.storage().instance().get(&DataKey::RestrictAdminVote).unwrap_or(false)
 }
 
+/// Stores the mandatory delay (seconds) a passed proposal must wait before it can be executed.
+pub fn set_timelock_duration(env: &Env, v: u64) {
+    env.storage().instance().set(&DataKey::TimelockDuration, &v);
+}
+
+/// Returns the configured timelock duration in seconds. Defaults to 0 (no delay).
+pub fn get_timelock_duration(env: &Env) -> u64 {
+    env.storage().instance().get(&DataKey::TimelockDuration).unwrap_or(0)
+}
+
 /// Sets the contract paused state.
 pub fn set_paused(env: &Env, paused: bool) {
     env.storage().instance().set(&DataKey::Paused, &paused);
