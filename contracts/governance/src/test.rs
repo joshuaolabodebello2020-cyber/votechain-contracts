@@ -1399,3 +1399,190 @@ fn test_unpause_emits_event() {
 }
 
 // ── end SEC-018 ───────────────────────────────────────────────────────────────
+
+
+// ── list_proposals pagination tests ───────────────────────────────────────────
+
+#[test]
+fn test_list_proposals_empty() {
+    let t = setup_env();
+    let proposals = t.client.list_proposals(&0, &10);
+    assert_eq!(proposals.len(), 0);
+}
+
+#[test]
+fn test_list_proposals_single_proposal() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &proposer);
+    
+    let proposals = t.client.list_proposals(&0, &10);
+    assert_eq!(proposals.len(), 1);
+    assert_eq!(proposals.get(0).unwrap().id, id);
+}
+
+#[test]
+fn test_list_proposals_multiple_proposals() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    let id1 = create_test_proposal(&t, &proposer);
+    let id2 = create_test_proposal(&t, &proposer);
+    let id3 = create_test_proposal(&t, &proposer);
+    
+    let proposals = t.client.list_proposals(&0, &10);
+    assert_eq!(proposals.len(), 3);
+    assert_eq!(proposals.get(0).unwrap().id, id1);
+    assert_eq!(proposals.get(1).unwrap().id, id2);
+    assert_eq!(proposals.get(2).unwrap().id, id3);
+}
+
+#[test]
+fn test_list_proposals_offset() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    let id1 = create_test_proposal(&t, &proposer);
+    let id2 = create_test_proposal(&t, &proposer);
+    let id3 = create_test_proposal(&t, &proposer);
+    
+    // Offset 1: skip first proposal
+    let proposals = t.client.list_proposals(&1, &10);
+    assert_eq!(proposals.len(), 2);
+    assert_eq!(proposals.get(0).unwrap().id, id2);
+    assert_eq!(proposals.get(1).unwrap().id, id3);
+    
+    // Offset 2: skip first two proposals
+    let proposals = t.client.list_proposals(&2, &10);
+    assert_eq!(proposals.len(), 1);
+    assert_eq!(proposals.get(0).unwrap().id, id3);
+}
+
+#[test]
+fn test_list_proposals_limit() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    let id1 = create_test_proposal(&t, &proposer);
+    let id2 = create_test_proposal(&t, &proposer);
+    let id3 = create_test_proposal(&t, &proposer);
+    
+    // Limit 1: return only first proposal
+    let proposals = t.client.list_proposals(&0, &1);
+    assert_eq!(proposals.len(), 1);
+    assert_eq!(proposals.get(0).unwrap().id, id1);
+    
+    // Limit 2: return first two proposals
+    let proposals = t.client.list_proposals(&0, &2);
+    assert_eq!(proposals.len(), 2);
+    assert_eq!(proposals.get(0).unwrap().id, id1);
+    assert_eq!(proposals.get(1).unwrap().id, id2);
+}
+
+#[test]
+fn test_list_proposals_offset_and_limit() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    let id1 = create_test_proposal(&t, &proposer);
+    let id2 = create_test_proposal(&t, &proposer);
+    let id3 = create_test_proposal(&t, &proposer);
+    let id4 = create_test_proposal(&t, &proposer);
+    let id5 = create_test_proposal(&t, &proposer);
+    
+    // Offset 1, limit 2: skip first, return next 2
+    let proposals = t.client.list_proposals(&1, &2);
+    assert_eq!(proposals.len(), 2);
+    assert_eq!(proposals.get(0).unwrap().id, id2);
+    assert_eq!(proposals.get(1).unwrap().id, id3);
+    
+    // Offset 3, limit 2: skip first 3, return next 2
+    let proposals = t.client.list_proposals(&3, &2);
+    assert_eq!(proposals.len(), 2);
+    assert_eq!(proposals.get(0).unwrap().id, id4);
+    assert_eq!(proposals.get(1).unwrap().id, id5);
+}
+
+#[test]
+fn test_list_proposals_offset_exceeds_total() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    let _id1 = create_test_proposal(&t, &proposer);
+    let _id2 = create_test_proposal(&t, &proposer);
+    
+    // Offset 5 exceeds total count of 2
+    let proposals = t.client.list_proposals(&5, &10);
+    assert_eq!(proposals.len(), 0);
+}
+
+#[test]
+fn test_list_proposals_limit_capped_at_50() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    
+    // Create 60 proposals
+    for _ in 0..60 {
+        create_test_proposal(&t, &proposer);
+    }
+    
+    // Request limit 100, should be capped at 50
+    let proposals = t.client.list_proposals(&0, &100);
+    assert_eq!(proposals.len(), 50);
+    
+    // Request limit 50, should return exactly 50
+    let proposals = t.client.list_proposals(&0, &50);
+    assert_eq!(proposals.len(), 50);
+    
+    // Request limit 51, should be capped at 50
+    let proposals = t.client.list_proposals(&0, &51);
+    assert_eq!(proposals.len(), 50);
+}
+
+#[test]
+fn test_list_proposals_preserves_proposal_data() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    let id = t.client.create_proposal(
+        &proposer,
+        &String::from_str(&t.env, "Test Title"),
+        &String::from_str(&t.env, "Test Description"),
+        &500,
+        &3600,
+    );
+    
+    let proposals = t.client.list_proposals(&0, &10);
+    assert_eq!(proposals.len(), 1);
+    let p = proposals.get(0).unwrap();
+    assert_eq!(p.id, id);
+    assert_eq!(p.title, String::from_str(&t.env, "Test Title"));
+    assert_eq!(p.description, String::from_str(&t.env, "Test Description"));
+    assert_eq!(p.quorum, 500);
+    assert_eq!(p.proposer, proposer);
+    assert_eq!(p.state, ProposalState::Active);
+}
+
+#[test]
+fn test_list_proposals_with_different_states() {
+    let t = setup_env();
+    let voter = Address::generate(&t.env);
+    
+    let active_id = create_test_proposal(&t, &voter);
+    let passed_id = create_test_proposal(&t, &voter);
+    let rejected_id = create_test_proposal(&t, &voter);
+    let cancelled_id = create_test_proposal(&t, &voter);
+    
+    // Vote and finalize some proposals
+    mint_and_vote(&t, &voter, passed_id, Vote::Yes, 1_000_000);
+    t.client.cancel(&t.admin, &cancelled_id);
+    
+    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+    t.client.finalise(&passed_id);
+    t.client.finalise(&rejected_id);
+    
+    // List all proposals
+    let proposals = t.client.list_proposals(&0, &10);
+    assert_eq!(proposals.len(), 4);
+    
+    assert_eq!(proposals.get(0).unwrap().state, ProposalState::Active);
+    assert_eq!(proposals.get(1).unwrap().state, ProposalState::Passed);
+    assert_eq!(proposals.get(2).unwrap().state, ProposalState::Rejected);
+    assert_eq!(proposals.get(3).unwrap().state, ProposalState::Cancelled);
+}
+
+// ── end list_proposals pagination tests ───────────────────────────────────────

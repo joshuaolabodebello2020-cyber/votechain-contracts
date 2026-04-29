@@ -508,4 +508,53 @@ impl GovernanceContract {
     pub fn get_state(env: Env) -> ContractState {
         get_contract_state(&env)
     }
+
+    /// Lists proposals with offset/limit pagination.
+    ///
+    /// Returns a vector of proposals starting at the given offset, up to the limit.
+    /// Proposals are returned in ascending order by ID.
+    ///
+    /// # Parameters
+    /// - `offset`: number of proposals to skip (0-indexed)
+    /// - `limit`: maximum number of proposals to return (capped at 50)
+    ///
+    /// # Returns
+    /// A vector of `Proposal` structs. Returns an empty vector if `offset` exceeds
+    /// the total number of proposals.
+    ///
+    /// # Behavior
+    /// - If `limit` exceeds 50, it is capped at 50.
+    /// - Proposals are fetched sequentially by ID starting from `offset + 1`.
+    /// - If a proposal ID does not exist (gap in sequence), it is skipped.
+    pub fn list_proposals(env: Env, offset: u64, limit: u64) -> soroban_sdk::Vec<Proposal> {
+        const MAX_LIMIT: u64 = 50;
+
+        let total = env.storage()
+            .instance()
+            .get(&DataKey::ProposalCount)
+            .unwrap_or(0);
+
+        // Return empty vector if offset exceeds total count
+        if offset >= total {
+            return soroban_sdk::Vec::new(&env);
+        }
+
+        // Cap limit at MAX_LIMIT
+        let effective_limit = if limit > MAX_LIMIT { MAX_LIMIT } else { limit };
+
+        // Calculate the range of proposal IDs to fetch
+        let start_id = offset + 1;
+        let end_id = (offset + effective_limit).min(total);
+
+        let mut proposals = soroban_sdk::Vec::new(&env);
+
+        // Iterate through proposal IDs and collect those that exist
+        for id in start_id..=end_id {
+            if let Ok(proposal) = load_proposal(&env, id) {
+                proposals.push_back(proposal);
+            }
+        }
+
+        proposals
+    }
 }
