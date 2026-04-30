@@ -7,6 +7,7 @@ Thank you for contributing! VoteChain is an open-source governance protocol buil
 ## Table of Contents
 
 - [Getting Started](#getting-started)
+- [Branch Protection Rules](#branch-protection-rules)
 - [Branching Strategy](#branching-strategy)
 - [Commit Messages](#commit-messages)
 - [Development Workflow](#development-workflow)
@@ -33,6 +34,53 @@ For a fully reproducible environment without a local Rust installation, use Dock
 ```bash
 docker compose run --rm dev make test
 ```
+
+---
+
+## Branch Protection Rules
+
+The `main` branch is protected. These rules are enforced via GitHub branch protection settings and cannot be bypassed by any contributor, including maintainers.
+
+### Enforced rules
+
+| Rule | Setting |
+| ---- | ------- |
+| Require CI to pass before merge | ✅ Enabled — all status checks must be green |
+| Require pull request before merging | ✅ Enabled — direct pushes to `main` are blocked |
+| Required approving reviews | **1** — at least one maintainer approval is required |
+| Dismiss stale reviews on new push | ✅ Enabled — approval is invalidated when new commits are pushed |
+| Force pushes | ❌ Disabled — history rewriting on `main` is not allowed |
+| Branch deletions | ❌ Disabled — `main` cannot be deleted |
+
+### Required status checks
+
+The following CI jobs must pass before a PR can be merged:
+
+- `test` — full test suite (`make test`)
+- `fmt-check` — formatting check (`make fmt-check`)
+- `lint` — Clippy warnings-as-errors (`make lint`)
+- `audit` — dependency vulnerability scan (`cargo audit`)
+
+### Configuring branch protection (maintainers only)
+
+To apply or update these rules on GitHub:
+
+1. Go to **Settings → Branches** in the repository.
+2. Under **Branch protection rules**, click **Add rule** (or edit the existing `main` rule).
+3. Set **Branch name pattern** to `main`.
+4. Enable the following options:
+   - ✅ **Require a pull request before merging**
+     - Set **Required approvals** to `1`
+     - ✅ **Dismiss stale pull request approvals when new commits are pushed**
+   - ✅ **Require status checks to pass before merging**
+     - ✅ **Require branches to be up to date before merging**
+     - Add the status checks: `test`, `fmt-check`, `lint`, `audit`
+   - ✅ **Do not allow bypassing the above settings**
+   - ❌ Leave **Allow force pushes** unchecked
+   - ❌ Leave **Allow deletions** unchecked
+5. Click **Save changes**.
+
+> **Note:** These settings apply to all contributors including administrators. If you need to make an emergency hotfix directly to `main`, temporarily disable the rule, apply the fix, then re-enable it and document the exception in the PR or commit message.
 
 ---
 
