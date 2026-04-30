@@ -551,6 +551,77 @@ fn test_has_voted_invalid_proposal_id_reverts() {
 }
 
 #[test]
+#[should_panic]
+fn test_get_proposal_invalid_id_reverts() {
+    let t = setup_env();
+    t.client.get_proposal(&999);
+}
+
+#[test]
+fn test_get_proposal_returns_correct_lifecycle_states() {
+    let t = setup_env();
+    let voter = Address::generate(&t.env);
+
+    let active_id = create_test_proposal(&t, &voter);
+    assert_eq!(t.client.get_proposal(&active_id).state, ProposalState::Active);
+
+    let cancelled_id = create_test_proposal(&t, &voter);
+    t.client.cancel(&t.admin, &cancelled_id);
+    assert_eq!(t.client.get_proposal(&cancelled_id).state, ProposalState::Cancelled);
+
+    let rejected_id = create_test_proposal(&t, &voter);
+    mint_and_vote(&t, &voter, rejected_id, Vote::No, 1_000_000);
+    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+    t.client.finalise(&rejected_id);
+    assert_eq!(t.client.get_proposal(&rejected_id).state, ProposalState::Rejected);
+
+    let passed_id = create_test_proposal(&t, &voter);
+    mint_and_vote(&t, &voter, passed_id, Vote::Yes, 1_000_000);
+    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+    t.client.finalise(&passed_id);
+    assert_eq!(t.client.get_proposal(&passed_id).state, ProposalState::Passed);
+
+    let executed_id = create_test_proposal(&t, &voter);
+    mint_and_vote(&t, &voter, executed_id, Vote::Yes, 1_000_000);
+    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+    t.client.finalise(&executed_id);
+    t.client.execute(&t.admin, &executed_id);
+    assert_eq!(t.client.get_proposal(&executed_id).state, ProposalState::Executed);
+}
+
+#[test]
+fn test_has_voted_returns_false_before_and_true_after_voting() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    let voter = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &proposer);
+
+    assert!(!t.client.has_voted(&id, &voter));
+    mint_and_vote(&t, &voter, id, Vote::Yes, 1_000_000);
+    assert!(t.client.has_voted(&id, &voter));
+}
+
+#[test]
+fn test_proposal_count_increments_correctly() {
+    let t = setup_env();
+    assert_eq!(t.client.proposal_count(), 0);
+
+    let proposer = Address::generate(&t.env);
+    let id1 = create_test_proposal(&t, &proposer);
+    assert_eq!(t.client.proposal_count(), 1);
+
+    let id2 = create_test_proposal(&t, &proposer);
+    assert_eq!(t.client.proposal_count(), 2);
+
+    let id3 = create_test_proposal(&t, &proposer);
+    assert_eq!(t.client.proposal_count(), 3);
+
+    assert_eq!(id1, 1);
+    assert_eq!(id2, 2);
+    assert_eq!(id3, 3);
+}
+
+#[test]
 fn test_has_voted_returns_false_for_non_voter() {
     let t = setup_env();
     let proposer = Address::generate(&t.env);
