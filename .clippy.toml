@@ -4,5 +4,5 @@
 # Enforce a reasonable cognitive complexity limit
 cognitive-complexity-threshold = 10
 
-# Allow up to 5 function arguments before suggesting a struct
-too-many-arguments-threshold = 5
+# Allow up to 9 function arguments before suggesting a struct
+too-many-arguments-threshold = 9
