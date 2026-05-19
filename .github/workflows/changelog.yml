@@ -124,4 +124,5 @@ EOF
             exit 0
           fi
           git commit -m "chore: update CHANGELOG for ${TAG} [skip ci]"
-          git push origin main || echo "Push blocked by branch protection — changelog commit skipped."
+          # Push to main; if branch protection blocks it, skip gracefully.
+          git push origin HEAD:main || echo "Push skipped (branch protection active)."
