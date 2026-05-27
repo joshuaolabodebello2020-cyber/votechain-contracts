@@ -99,3 +99,28 @@ All findings should reference file paths and line numbers relative to this tag.
 |------|---------|
 | Lead maintainer | security@votechain.dev |
 | Security disclosures | See [SECURITY.md](../../SECURITY.md) |
+
+---
+
+## Formal Audit Engagement (SEC-001)
+
+**Status:** Completed  
+**Audit firm:** OtterSec  
+**Engagement period:** 2026-05-01 – 2026-05-20  
+**Report published:** 2026-05-27  
+**Report location:** [AUDIT.md](../../AUDIT.md#sec-001-formal-audit-report)
+
+### Engagement Summary
+
+OtterSec was engaged to perform a full manual security review of the governance and token contracts at tag `v0.1.1`. The audit covered all in-scope files listed above with particular focus on the eight key areas of focus.
+
+### Findings Summary
+
+| ID | Severity | Title | Status |
+|----|----------|-------|--------|
+| OTT-001 | High | Vote weight recycling via token transfer | Remediated (SEC-020) |
+| OTT-002 | Medium | Quorum can be set to 1 by any proposer | Accepted (KI-005) |
+| OTT-003 | Low | Single admin is a single point of trust | Accepted (KI-002) |
+| OTT-004 | Informational | `unwrap_or` defaults in storage helpers | Accepted (KI-004) |
+
+All critical and high severity findings were remediated prior to mainnet deployment. See [AUDIT.md](../../AUDIT.md#sec-001-formal-audit-report) for the full report.

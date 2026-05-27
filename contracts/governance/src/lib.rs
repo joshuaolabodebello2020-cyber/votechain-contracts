@@ -45,6 +45,30 @@ const MAX_DESC_LEN: u32 = 1024;
 // SEC-004: Stellar null/zero address used as the sentinel for invalid inputs.
 const ZERO_ADDRESS: &str = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF";
 
+// SEC-003: Maximum buffer size for byte-level string validation (matches MAX_DESC_LEN).
+const MAX_VALIDATE_BUF: usize = 1024;
+
+/// SEC-003: Validates that a Soroban `String` contains only printable UTF-8 bytes.
+///
+/// Rejects any byte that is a C0 control character (< 0x20), a null byte (0x00),
+/// or the DEL character (0x7F). This prevents injection of control sequences that
+/// could corrupt off-chain indexers or log parsers.
+///
+/// # Errors
+/// Returns `err` if any byte in `s` fails the printable-ASCII check.
+fn validate_string(s: &String, err: ContractError) -> Result<(), ContractError> {
+    let len = s.len() as usize;
+    // Stack buffer — len is already bounded by the caller's length check.
+    let mut buf = [0u8; MAX_VALIDATE_BUF];
+    s.copy_into_slice(&mut buf[..len]);
+    for &b in &buf[..len] {
+        if b < 0x20 || b == 0x7F {
+            return Err(err);
+        }
+    }
+    Ok(())
+}
+
 // SEC-004: Rejects the Stellar zero/default address on any address parameter.
 fn require_non_zero_address(env: &Env, addr: &Address) -> Result<(), ContractError> {
     if *addr == Address::from_str(env, ZERO_ADDRESS) {
@@ -149,16 +173,18 @@ impl GovernanceContract {
             return Err(ContractError::ContractPaused);
         }
 
-        // Title: non-empty, max 256 chars
+        // Title: non-empty, max 128 chars, printable bytes only (SEC-003)
         let title_len = title.len();
         if title_len == 0 || title_len > MAX_TITLE_LEN {
             return Err(ContractError::InvalidTitle);
         }
-        // Description: non-empty, max 4096 chars
+        validate_string(&title, ContractError::InvalidTitle)?;
+        // Description: non-empty, max 1024 chars, printable bytes only (SEC-003)
         let desc_len = description.len();
         if desc_len == 0 || desc_len > MAX_DESC_LEN {
             return Err(ContractError::InvalidDescription);
         }
+        validate_string(&description, ContractError::InvalidDescription)?;
         // Quorum: > 0
         if quorum <= 0 {
             return Err(ContractError::InvalidQuorum);

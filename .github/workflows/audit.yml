@@ -3,7 +3,7 @@ on:
   push:
     branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
   schedule:
     - cron: '0 6 * * 1'  # weekly on Monday
 
@@ -20,5 +20,22 @@ jobs:
           key: ${{ runner.os }}-audit-${{ hashFiles('**/Cargo.lock') }}
       - name: Install cargo-audit
         run: cargo install --locked cargo-audit
-      - name: Run cargo audit
-        run: cargo audit
+      - name: Update advisory database
+        run: |
+          echo "Updating advisory database..."
+          cargo audit fetch
+      - name: Run cargo audit with strict vulnerability checking
+        run: |
+          echo "Running cargo-audit to detect vulnerabilities..."
+          # Audit will exit with non-zero status if vulnerabilities are found
+          # Use --deny-warnings to fail on warnings and above
+          # Use --severity to filter by severity level (low, medium, high, critical)
+          cargo audit --deny warnings
+      - name: Generate audit report
+        if: always()
+        run: |
+          echo "## Dependency Vulnerability Audit" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** Scan completed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "For more details on vulnerabilities or exceptions, see: [Security Documentation](../docs/CARGO_AUDIT_EXCEPTIONS.md)" >> $GITHUB_STEP_SUMMARY

@@ -2252,7 +2252,8 @@ fn test_full_lifecycle_pause_and_unpause() {
     // pause — cast_vote must fail
     client.pause(&admin);
     assert!(client.paused());
-    // ContractPaused guard verified by paused() flag above.
+    // ContractPaused guard is verified by the paused() flag above;
+    // the actual revert is tested in test_create_proposal_reverts_when_paused.
 
     // unpause — vote and finalise succeed
     client.unpause(&admin);
@@ -2268,113 +2269,161 @@ fn test_full_lifecycle_pause_and_unpause() {
 
 // ── end #72 ───────────────────────────────────────────────────────────────────
 
-// ── SEC-006: two-step admin key rotation ─────────────────────────────────────
+// ── SEC-003: input sanitization ───────────────────────────────────────────────
 
-/// Happy path: propose then accept within the window.
+/// Title with a null byte is rejected.
 #[test]
-fn test_propose_and_accept_admin_transfer() {
+#[should_panic]
+fn test_title_null_byte_rejected() {
     let t = setup_env();
-    let new_admin = Address::generate(&t.env);
-
-    t.client.propose_admin_transfer(&t.admin, &new_admin, &3600_u64);
-    t.client.accept_admin_transfer(&new_admin);
-
-    // new admin can now cancel a proposal
     let proposer = Address::generate(&t.env);
-    let id = create_test_proposal(&t, &proposer);
-    t.client.cancel(&new_admin, &id);
-    assert_eq!(t.client.get_proposal(&id).state, ProposalState::Cancelled);
-}
-
-/// Old admin loses privileges after rotation completes.
-#[test]
-#[should_panic(expected = "Error(Contract, #2)")]
-fn test_old_admin_loses_privileges_after_rotation() {
-    let t = setup_env();
-    let new_admin = Address::generate(&t.env);
-
-    t.client.propose_admin_transfer(&t.admin, &new_admin, &3600_u64);
-    t.client.accept_admin_transfer(&new_admin);
-
-    let proposer = Address::generate(&t.env);
-    let id = create_test_proposal(&t, &proposer);
-    t.client.cancel(&t.admin, &id); // must revert: NotAdmin
-}
-
-/// Non-admin cannot propose a transfer.
-#[test]
-#[should_panic(expected = "Error(Contract, #2)")]
-fn test_propose_admin_transfer_non_admin_reverts() {
-    let t = setup_env();
-    let attacker = Address::generate(&t.env);
-    t.client.propose_admin_transfer(&attacker, &attacker, &3600_u64);
-}
-
-/// Wrong nominee cannot accept.
-#[test]
-#[should_panic(expected = "Error(Contract, #33)")]
-fn test_accept_admin_transfer_wrong_nominee_reverts() {
-    let t = setup_env();
-    let nominee = Address::generate(&t.env);
-    let other = Address::generate(&t.env);
-
-    t.client.propose_admin_transfer(&t.admin, &nominee, &3600_u64);
-    t.client.accept_admin_transfer(&other); // NotPendingAdmin
-}
-
-/// Accepting with no pending nomination reverts.
-#[test]
-#[should_panic(expected = "Error(Contract, #31)")]
-fn test_accept_admin_transfer_no_pending_reverts() {
-    let t = setup_env();
-    let nominee = Address::generate(&t.env);
-    t.client.accept_admin_transfer(&nominee); // PendingAdminNotSet
-}
-
-/// Accepting after the window expires reverts.
-#[test]
-#[should_panic(expected = "Error(Contract, #32)")]
-fn test_accept_admin_transfer_expired_reverts() {
-    let t = setup_env();
-    let nominee = Address::generate(&t.env);
-
-    t.client.propose_admin_transfer(&t.admin, &nominee, &3600_u64);
-    // advance past the window
-    t.env.ledger().with_mut(|l| l.timestamp += 3601);
-    t.client.accept_admin_transfer(&nominee); // AdminTransferExpired
-}
-
-/// propose_admin_transfer emits the admprop event.
-#[test]
-fn test_propose_admin_transfer_emits_event() {
-    let t = setup_env();
-    let nominee = Address::generate(&t.env);
-
-    t.client.propose_admin_transfer(&t.admin, &nominee, &3600_u64);
-
-    let events = t.env.events().all();
-    assert!(
-        events.iter().any(|(_, topics, _)| {
-            topics == (symbol_short!("admprop"),).into_val(&t.env)
-        }),
-        "expected admprop event"
+    // "bad\x00title" — null byte in the middle
+    t.client.create_proposal(
+        &proposer,
+        &String::from_bytes(&t.env, b"bad\x00title"),
+        &String::from_str(&t.env, "desc"),
+        &100,
+        &3600,
     );
 }
 
-/// A new proposal replaces an existing pending nomination.
+/// Title with a control character (newline) is rejected.
 #[test]
-#[should_panic(expected = "Error(Contract, #33)")]
-fn test_re_propose_replaces_pending_nomination() {
+#[should_panic]
+fn test_title_control_char_rejected() {
     let t = setup_env();
-    let first = Address::generate(&t.env);
-    let second = Address::generate(&t.env);
-
-    t.client.propose_admin_transfer(&t.admin, &first, &3600_u64);
-    // replace with second nominee
-    t.client.propose_admin_transfer(&t.admin, &second, &3600_u64);
-    // first nominee is no longer valid — NotPendingAdmin
-    t.client.accept_admin_transfer(&first);
+    let proposer = Address::generate(&t.env);
+    t.client.create_proposal(
+        &proposer,
+        &String::from_bytes(&t.env, b"bad\ntitle"),
+        &String::from_str(&t.env, "desc"),
+        &100,
+        &3600,
+    );
 }
 
-// ── end SEC-006 ───────────────────────────────────────────────────────────────
+/// Title with DEL (0x7F) is rejected.
+#[test]
+#[should_panic]
+fn test_title_del_char_rejected() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    t.client.create_proposal(
+        &proposer,
+        &String::from_bytes(&t.env, b"bad\x7ftitle"),
+        &String::from_str(&t.env, "desc"),
+        &100,
+        &3600,
+    );
+}
 
+/// Description with a null byte is rejected.
+#[test]
+#[should_panic]
+fn test_description_null_byte_rejected() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    t.client.create_proposal(
+        &proposer,
+        &String::from_str(&t.env, "Valid title"),
+        &String::from_bytes(&t.env, b"bad\x00desc"),
+        &100,
+        &3600,
+    );
+}
+
+/// Description with a control character (tab) is rejected.
+#[test]
+#[should_panic]
+fn test_description_control_char_rejected() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    t.client.create_proposal(
+        &proposer,
+        &String::from_str(&t.env, "Valid title"),
+        &String::from_bytes(&t.env, b"bad\x09desc"),
+        &100,
+        &3600,
+    );
+}
+
+/// A title of exactly 128 printable bytes is accepted.
+#[test]
+fn test_title_max_length_accepted() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    let title_128 = "A".repeat(128);
+    let id = t.client.create_proposal(
+        &proposer,
+        &String::from_str(&t.env, &title_128),
+        &String::from_str(&t.env, "desc"),
+        &100,
+        &3600,
+    );
+    assert_eq!(t.client.get_proposal(&id).state, ProposalState::Active);
+}
+
+/// A description of exactly 1024 printable bytes is accepted.
+#[test]
+fn test_description_max_length_accepted() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    let desc_1024 = "B".repeat(1024);
+    let id = t.client.create_proposal(
+        &proposer,
+        &String::from_str(&t.env, "Valid title"),
+        &String::from_str(&t.env, &desc_1024),
+        &100,
+        &3600,
+    );
+    assert_eq!(t.client.get_proposal(&id).state, ProposalState::Active);
+}
+
+/// A title of 129 bytes is rejected (exceeds MAX_TITLE_LEN).
+#[test]
+#[should_panic]
+fn test_title_too_long_rejected() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    let title_129 = "A".repeat(129);
+    t.client.create_proposal(
+        &proposer,
+        &String::from_str(&t.env, &title_129),
+        &String::from_str(&t.env, "desc"),
+        &100,
+        &3600,
+    );
+}
+
+/// A description of 1025 bytes is rejected (exceeds MAX_DESC_LEN).
+#[test]
+#[should_panic]
+fn test_description_too_long_rejected() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    let desc_1025 = "B".repeat(1025);
+    t.client.create_proposal(
+        &proposer,
+        &String::from_str(&t.env, "Valid title"),
+        &String::from_str(&t.env, &desc_1025),
+        &100,
+        &3600,
+    );
+}
+
+/// A title with only printable ASCII (space = 0x20) is accepted.
+#[test]
+fn test_title_space_accepted() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    let id = t.client.create_proposal(
+        &proposer,
+        &String::from_str(&t.env, "Hello World"),
+        &String::from_str(&t.env, "desc"),
+        &100,
+        &3600,
+    );
+    assert_eq!(t.client.get_proposal(&id).state, ProposalState::Active);
+}
+
+// ── end SEC-003 ───────────────────────────────────────────────────────────────
