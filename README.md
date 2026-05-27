@@ -1482,7 +1482,7 @@ We welcome contributions from the community. Please see [CONTRIBUTING.md](CONTRI
 - **[Upgrading](docs/upgrading.md)** — Contract upgrade procedures
 - **[Errors](docs/errors.md)** — Complete error reference
 - **[FAQ](docs/faq.md)** — Frequently asked questions
-- **[Roadmap](docs/roadmap.md)** — Future features and improvements
+- **[Roadmap](docs/roadmap.md)** — Public product milestones, release goals, and quarterly review cadence
 
 ### Architecture Decision Records
 
