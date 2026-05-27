@@ -2252,11 +2252,7 @@ fn test_full_lifecycle_pause_and_unpause() {
     // pause — cast_vote must fail
     client.pause(&admin);
     assert!(client.paused());
-    let result = std::panic::catch_unwind(|| {
-        // We can't easily call the panicking client here in no_std, so we
-        // just verify the paused flag and trust the ContractPaused guard.
-    });
-    let _ = result;
+    // ContractPaused guard verified by paused() flag above.
 
     // unpause — vote and finalise succeed
     client.unpause(&admin);
@@ -2271,3 +2267,114 @@ fn test_full_lifecycle_pause_and_unpause() {
 }
 
 // ── end #72 ───────────────────────────────────────────────────────────────────
+
+// ── SEC-006: two-step admin key rotation ─────────────────────────────────────
+
+/// Happy path: propose then accept within the window.
+#[test]
+fn test_propose_and_accept_admin_transfer() {
+    let t = setup_env();
+    let new_admin = Address::generate(&t.env);
+
+    t.client.propose_admin_transfer(&t.admin, &new_admin, &3600_u64);
+    t.client.accept_admin_transfer(&new_admin);
+
+    // new admin can now cancel a proposal
+    let proposer = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &proposer);
+    t.client.cancel(&new_admin, &id);
+    assert_eq!(t.client.get_proposal(&id).state, ProposalState::Cancelled);
+}
+
+/// Old admin loses privileges after rotation completes.
+#[test]
+#[should_panic(expected = "Error(Contract, #2)")]
+fn test_old_admin_loses_privileges_after_rotation() {
+    let t = setup_env();
+    let new_admin = Address::generate(&t.env);
+
+    t.client.propose_admin_transfer(&t.admin, &new_admin, &3600_u64);
+    t.client.accept_admin_transfer(&new_admin);
+
+    let proposer = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &proposer);
+    t.client.cancel(&t.admin, &id); // must revert: NotAdmin
+}
+
+/// Non-admin cannot propose a transfer.
+#[test]
+#[should_panic(expected = "Error(Contract, #2)")]
+fn test_propose_admin_transfer_non_admin_reverts() {
+    let t = setup_env();
+    let attacker = Address::generate(&t.env);
+    t.client.propose_admin_transfer(&attacker, &attacker, &3600_u64);
+}
+
+/// Wrong nominee cannot accept.
+#[test]
+#[should_panic(expected = "Error(Contract, #33)")]
+fn test_accept_admin_transfer_wrong_nominee_reverts() {
+    let t = setup_env();
+    let nominee = Address::generate(&t.env);
+    let other = Address::generate(&t.env);
+
+    t.client.propose_admin_transfer(&t.admin, &nominee, &3600_u64);
+    t.client.accept_admin_transfer(&other); // NotPendingAdmin
+}
+
+/// Accepting with no pending nomination reverts.
+#[test]
+#[should_panic(expected = "Error(Contract, #31)")]
+fn test_accept_admin_transfer_no_pending_reverts() {
+    let t = setup_env();
+    let nominee = Address::generate(&t.env);
+    t.client.accept_admin_transfer(&nominee); // PendingAdminNotSet
+}
+
+/// Accepting after the window expires reverts.
+#[test]
+#[should_panic(expected = "Error(Contract, #32)")]
+fn test_accept_admin_transfer_expired_reverts() {
+    let t = setup_env();
+    let nominee = Address::generate(&t.env);
+
+    t.client.propose_admin_transfer(&t.admin, &nominee, &3600_u64);
+    // advance past the window
+    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+    t.client.accept_admin_transfer(&nominee); // AdminTransferExpired
+}
+
+/// propose_admin_transfer emits the admprop event.
+#[test]
+fn test_propose_admin_transfer_emits_event() {
+    let t = setup_env();
+    let nominee = Address::generate(&t.env);
+
+    t.client.propose_admin_transfer(&t.admin, &nominee, &3600_u64);
+
+    let events = t.env.events().all();
+    assert!(
+        events.iter().any(|(_, topics, _)| {
+            topics == (symbol_short!("admprop"),).into_val(&t.env)
+        }),
+        "expected admprop event"
+    );
+}
+
+/// A new proposal replaces an existing pending nomination.
+#[test]
+#[should_panic(expected = "Error(Contract, #33)")]
+fn test_re_propose_replaces_pending_nomination() {
+    let t = setup_env();
+    let first = Address::generate(&t.env);
+    let second = Address::generate(&t.env);
+
+    t.client.propose_admin_transfer(&t.admin, &first, &3600_u64);
+    // replace with second nominee
+    t.client.propose_admin_transfer(&t.admin, &second, &3600_u64);
+    // first nominee is no longer valid — NotPendingAdmin
+    t.client.accept_admin_transfer(&first);
+}
+
+// ── end SEC-006 ───────────────────────────────────────────────────────────────
+

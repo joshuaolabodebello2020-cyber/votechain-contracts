@@ -278,3 +278,29 @@ pub fn set_max_duration(env: &Env, v: u64) {
 pub fn get_max_duration(env: &Env) -> u64 {
     env.storage().instance().get(&DataKey::MaxDuration).unwrap_or(2_592_000)
 }
+
+/// Stores the pending admin address nominated for rotation.
+pub fn set_pending_admin(env: &Env, addr: &Address) {
+    env.storage().instance().set(&DataKey::PendingAdmin, addr);
+}
+
+/// Returns the pending admin address, if any.
+pub fn get_pending_admin(env: &Env) -> Option<Address> {
+    env.storage().instance().get(&DataKey::PendingAdmin)
+}
+
+/// Clears the pending admin nomination.
+pub fn clear_pending_admin(env: &Env) {
+    env.storage().instance().remove(&DataKey::PendingAdmin);
+    env.storage().instance().remove(&DataKey::AdminTransferExpiry);
+}
+
+/// Stores the expiry timestamp for the pending admin nomination.
+pub fn set_admin_transfer_expiry(env: &Env, ts: u64) {
+    env.storage().instance().set(&DataKey::AdminTransferExpiry, &ts);
+}
+
+/// Returns the expiry timestamp for the pending admin nomination.
+pub fn get_admin_transfer_expiry(env: &Env) -> u64 {
+    env.storage().instance().get(&DataKey::AdminTransferExpiry).unwrap_or(0)
+}

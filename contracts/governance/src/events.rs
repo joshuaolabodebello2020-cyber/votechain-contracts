@@ -102,6 +102,17 @@ pub fn admin_transferred(env: &Env, old_admin: &Address, new_admin: &Address) {
     );
 }
 
+/// Emits an `admpropose` event when a two-step admin rotation is proposed.
+///
+/// Topics: `("admpropose",)`
+/// Data: `(current_admin: Address, nominee: Address, expiry: u64)`
+pub fn admin_transfer_proposed(env: &Env, admin: &Address, nominee: &Address, expiry: u64) {
+    env.events().publish(
+        (symbol_short!("admprop"),),
+        (admin.clone(), nominee.clone(), expiry),
+    );
+}
+
 /// Emits a `paused` event when the contract is paused.
 ///
 /// Topics: `("paused",)`
