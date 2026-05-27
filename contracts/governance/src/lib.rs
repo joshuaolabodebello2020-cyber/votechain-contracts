@@ -34,6 +34,8 @@ use storage::{
     set_contract_state, set_last_proposal, set_min_duration, set_max_duration,
     set_min_proposal_balance, set_paused, set_proposal_cooldown, set_restrict_admin_vote,
     set_timelock_duration, set_version, set_voting_token, get_vote_record, get_max_duration,
+    set_pending_admin, get_pending_admin, clear_pending_admin,
+    set_admin_transfer_expiry, get_admin_transfer_expiry,
 };
 use types::{ContractError, ContractState, DataKey, Proposal, ProposalState, Vote, VoteRecord};
 
@@ -517,6 +519,71 @@ impl GovernanceContract {
         }
         set_admin(&env, &new_admin);
         events::admin_transferred(&env, &admin, &new_admin);
+        Ok(())
+    }
+
+    /// SEC-006: Proposes a two-step admin key rotation.
+    ///
+    /// Nominates `new_admin` with an acceptance window of `window_secs` seconds
+    /// (default 48 h when 0).  The admin key is NOT transferred until the nominee
+    /// calls [`accept_admin_transfer`] within the window.
+    ///
+    /// # Errors
+    /// - [`ContractError::InvalidAddress`] if either address is the zero address.
+    /// - [`ContractError::NotAdmin`] if `admin` does not match the stored admin.
+    /// - [`ContractError::ContractPaused`] if the contract is paused.
+    pub fn propose_admin_transfer(
+        env: Env,
+        admin: Address,
+        new_admin: Address,
+        window_secs: u64,
+    ) -> Result<(), ContractError> {
+        admin.require_auth();
+        require_non_zero_address(&env, &admin)?;
+        require_non_zero_address(&env, &new_admin)?;
+        if is_paused(&env) {
+            return Err(ContractError::ContractPaused);
+        }
+        if get_admin(&env)? != admin {
+            return Err(ContractError::NotAdmin);
+        }
+        let window = if window_secs == 0 { 172_800 } else { window_secs }; // default 48 h
+        let expiry = env.ledger().timestamp() + window;
+        set_pending_admin(&env, &new_admin);
+        set_admin_transfer_expiry(&env, expiry);
+        events::admin_transfer_proposed(&env, &admin, &new_admin, expiry);
+        Ok(())
+    }
+
+    /// SEC-006: Accepts a pending admin key rotation.
+    ///
+    /// Must be called by the nominated address before the acceptance window expires.
+    /// On success the caller becomes the new admin and the nomination is cleared.
+    ///
+    /// # Errors
+    /// - [`ContractError::InvalidAddress`] if `new_admin` is the zero address.
+    /// - [`ContractError::PendingAdminNotSet`] if no nomination is outstanding.
+    /// - [`ContractError::NotPendingAdmin`] if `new_admin` is not the nominated address.
+    /// - [`ContractError::AdminTransferExpired`] if the acceptance window has passed.
+    /// - [`ContractError::ContractPaused`] if the contract is paused.
+    pub fn accept_admin_transfer(env: Env, new_admin: Address) -> Result<(), ContractError> {
+        new_admin.require_auth();
+        require_non_zero_address(&env, &new_admin)?;
+        if is_paused(&env) {
+            return Err(ContractError::ContractPaused);
+        }
+        let pending = get_pending_admin(&env).ok_or(ContractError::PendingAdminNotSet)?;
+        if pending != new_admin {
+            return Err(ContractError::NotPendingAdmin);
+        }
+        if env.ledger().timestamp() > get_admin_transfer_expiry(&env) {
+            clear_pending_admin(&env);
+            return Err(ContractError::AdminTransferExpired);
+        }
+        let old_admin = get_admin(&env)?;
+        set_admin(&env, &new_admin);
+        clear_pending_admin(&env);
+        events::admin_transferred(&env, &old_admin, &new_admin);
         Ok(())
     }
 
