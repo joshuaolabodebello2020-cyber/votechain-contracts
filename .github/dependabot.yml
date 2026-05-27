@@ -4,6 +4,16 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    # Allow PRs to be opened automatically for patches and minor updates
+    open-pull-requests-limit: 10
+    # Optionally, you can add reviewers or labels here
+    # reviewers: ["team"]
+version: 2
+updates:
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
     open-pull-requests-limit: 5
     assignees:
       - "@Vera3289"
