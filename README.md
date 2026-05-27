@@ -158,8 +158,32 @@ Proposal reaches terminal state
 ### Prerequisites
 
 - Rust 1.75+ with `wasm32-unknown-unknown` target
-- Stellar CLI (optional, for deployment)
+- Stellar CLI **21.6.0** (pinned — see [Upgrading Stellar CLI](#upgrading-stellar-cli))
 - Docker & Docker Compose (optional, for reproducible environment)
+
+### Installing Stellar CLI
+
+```bash
+cargo install --locked stellar-cli@21.6.0 --features opt
+```
+
+Verify the installed version:
+
+```bash
+stellar --version   # must print 21.6.0
+# or
+make check-stellar-cli
+```
+
+### Upgrading Stellar CLI
+
+To upgrade to a new pinned version:
+
+1. Update `STELLAR_CLI_VERSION` in `Makefile`
+2. Update `STELLAR_CLI_VERSION` env var in `.github/workflows/ci.yml`
+3. Update the version in this README
+4. Run `make check-stellar-cli` to verify
+5. Commit all three files together
 
 ### Installation & Testing
 
