@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { Proposal, ProposalState } from '../types';
 import { generateProposalCsv, downloadCsv } from '../utils/csv';
+import { useDebounce } from '../hooks/useDebounce';
 
 const sortOptions = [
   { value: 'newest', label: 'Newest' },
@@ -19,6 +20,20 @@ function statusClass(state: ProposalState) {
   return `status-chip status-${state.toLowerCase()}`;
 }
 
+/** Wraps matched substrings in <mark> for highlighting */
+function Highlight({ text, term }: { text: string; term: string }) {
+  if (!term) return <>{text}</>;
+  const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  const parts = text.split(regex);
+  return (
+    <>
+      {parts.map((part, i) =>
+        regex.test(part) ? <mark key={i}>{part}</mark> : part
+      )}
+    </>
+  );
+}
+
 interface Props {
   proposals: Proposal[];
 }
@@ -32,8 +47,10 @@ export default function ProposalList({ proposals }: Props) {
   const [stateFilter, setStateFilter] = useState<StateFilter>('All');
   const [sortKey, setSortKey] = useState<SortKey>('newest');
 
+  const debouncedSearch = useDebounce(searchText, 300);
+
   const filtered = useMemo(() => {
-    const normalizedSearch = searchText.trim().toLowerCase();
+    const normalizedSearch = debouncedSearch.trim().toLowerCase();
     return proposals
       .filter((proposal) => {
         const matchesText = [proposal.title, proposal.description].some((value) =>
@@ -54,7 +71,7 @@ export default function ProposalList({ proposals }: Props) {
         }
         return a.endAt.localeCompare(b.endAt);
       });
-  }, [proposals, searchText, stateFilter, sortKey]);
+  }, [proposals, debouncedSearch, stateFilter, sortKey]);
 
   /** Handle arrow-key navigation on the state filter tab list */
   function handleTabKeyDown(e: React.KeyboardEvent<HTMLButtonElement>, index: number) {
@@ -73,11 +90,12 @@ export default function ProposalList({ proposals }: Props) {
     }
     e.preventDefault();
     setStateFilter(tabs[next] as StateFilter);
-    // Move DOM focus to the newly selected tab
     const tabList = (e.currentTarget.closest('[role="tablist"]') as HTMLElement | null);
     const buttons = tabList?.querySelectorAll<HTMLButtonElement>('[role="tab"]');
     buttons?.[next]?.focus();
   }
+
+  const highlightTerm = debouncedSearch.trim();
 
   return (
     <section aria-labelledby="proposal-list-heading" className="card">
@@ -91,6 +109,7 @@ export default function ProposalList({ proposals }: Props) {
           onClick={() => downloadCsv(generateProposalCsv(filtered), 'proposals.csv')}
           disabled={filtered.length === 0}
           aria-disabled={filtered.length === 0}
+          aria-label="Export filtered proposals as CSV"
         >
           Export CSV
         </button>
@@ -159,7 +178,7 @@ export default function ProposalList({ proposals }: Props) {
             {filtered.map((proposal) => (
               <tr key={proposal.id}>
                 <td>{proposal.id}</td>
-                <td>{proposal.title}</td>
+                <td><Highlight text={proposal.title} term={highlightTerm} /></td>
                 <td>
                   <span className={statusClass(proposal.state)}>{labelForState(proposal.state)}</span>
                 </td>
@@ -171,7 +190,11 @@ export default function ProposalList({ proposals }: Props) {
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7}>No proposals match your search and filter criteria.</td>
+                <td colSpan={7}>
+                  {debouncedSearch.trim()
+                    ? `No proposals match "${debouncedSearch.trim()}".`
+                    : 'No proposals match your filter criteria.'}
+                </td>
               </tr>
             )}
           </tbody>
