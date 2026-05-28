@@ -56,19 +56,35 @@
 
       <!-- Filter / search bar -->
       <section class="toolbar" aria-label="Filter proposals">
-        <div class="search-wrap">
-          <label for="search-input" class="sr-only">Search proposals</label>
-          <svg class="search-icon" aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <circle cx="6.5" cy="6.5" r="5" stroke="currentColor" stroke-width="1.5"/>
-            <path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-          <input
-            id="search-input"
-            type="search"
-            placeholder="Search proposals…"
-            aria-label="Search proposals"
-            autocomplete="off"
-          />
+        <div class="toolbar-panel">
+          <div class="search-wrap">
+            <label for="search-input" class="sr-only">Search proposals</label>
+            <svg class="search-icon" aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <circle cx="6.5" cy="6.5" r="5" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            <input
+              id="search-input"
+              type="search"
+              placeholder="Search proposals…"
+              aria-label="Search proposals"
+              autocomplete="off"
+            />
+          </div>
+
+          <div class="toolbar-actions">
+            <label class="page-size-label">
+              Show
+              <select id="page-size-select" aria-label="Proposals per page">
+                <option value="5">5</option>
+                <option value="10" selected>10</option>
+                <option value="20">20</option>
+                <option value="50">50</option>
+              </select>
+              per page
+            </label>
+            <button id="create-proposal-btn" type="button">Create proposal</button>
+          </div>
         </div>
 
         <div class="filter-wrap" role="group" aria-label="Filter by status">
@@ -119,6 +135,8 @@
 
     </div>
   </main>
+
+  <div id="toast-container" class="toast-container" aria-live="assertive" aria-atomic="true"></div>
 
   <footer class="site-footer" role="contentinfo">
     <div class="container">
