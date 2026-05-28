@@ -1,5 +1,6 @@
 import React from "react";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import Navbar from "./components/Navbar";
 
 // Placeholder page components — replace with real implementations
 const ProposalList = React.lazy(() => import("./pages/ProposalList"));
@@ -13,6 +14,8 @@ export default function App() {
       <a href="#main-content" className="skip-link">
         Skip to main content
       </a>
+
+      <Navbar />
 
       <main id="main-content">
         <ErrorBoundary section="ProposalList">
