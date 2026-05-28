@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { Proposal, ProposalState, VoteRecord } from '../types';
-import { generateCsv } from '../utils/csv';
+import { generateCsv, downloadCsv } from '../utils/csv';
 
 interface Props {
   proposals: Proposal[];
@@ -40,15 +40,7 @@ export default function VoteHistory({ proposals }: Props) {
 
   const exportVotes = () => {
     const csv = generateCsv(votes.map((item) => item.vote));
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `vote-history-${address.replace(/\W/g, '_') || 'unknown'}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    downloadCsv(csv, `vote-history-${address.replace(/\W/g, '_') || 'unknown'}.csv`);
   };
 
   return (

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { Proposal, ProposalState } from '../types';
+import { generateProposalCsv, downloadCsv } from '../utils/csv';
 
 const sortOptions = [
   { value: 'newest', label: 'Newest' },
@@ -60,6 +61,14 @@ export default function ProposalList({ proposals }: Props) {
           <h2 id="proposal-list-heading">Proposal listing</h2>
           <p>Search proposals by title or description, filter by state, and sort results instantly.</p>
         </div>
+        <button
+          type="button"
+          onClick={() => downloadCsv(generateProposalCsv(filtered), 'proposals.csv')}
+          disabled={filtered.length === 0}
+          aria-disabled={filtered.length === 0}
+        >
+          Export CSV
+        </button>
       </div>
       <div className="grid">
         <label>
