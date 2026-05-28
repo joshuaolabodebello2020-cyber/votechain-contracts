@@ -671,8 +671,7 @@ impl GovernanceContract {
     }
 
     /// Lists proposals with offset/limit pagination.
-    pub fn list_proposals(env: Env, offset: u64, limit: u64) -> soroban_sdk::Vec<Proposal> {
-        const MAX_LIMIT: u64 = 50;
+    pub fn list_proposals(env: Env, offset: u64, limit: u64) -> soroban_sdk::Vec<Proposal> {        const MAX_LIMIT: u64 = 50;
 
         let total = env.storage()
             .instance()
@@ -695,5 +694,35 @@ impl GovernanceContract {
         }
 
         proposals
+    }
+
+    /// Upgrades the contract to a new semantic version.
+    ///
+    /// Validates that the target version is strictly greater than the current
+    /// version (major, minor, patch lexicographic order) to prevent downgrades.
+    /// Only the admin may call this.
+    ///
+    /// # Errors
+    /// - [`ContractError::InvalidAddress`] if `admin` is the zero address.
+    /// - [`ContractError::NotAdmin`] if `admin` does not match the stored admin.
+    /// - [`ContractError::DowngradeNotAllowed`] if `new_version` is not strictly
+    ///   greater than the current version.
+    pub fn upgrade(
+        env: Env,
+        admin: Address,
+        new_version: (u32, u32, u32),
+    ) -> Result<(), ContractError> {
+        admin.require_auth();
+        require_non_zero_address(&env, &admin)?;
+        if get_admin(&env)? != admin {
+            return Err(ContractError::NotAdmin);
+        }
+        let current = get_version(&env);
+        if new_version <= current {
+            return Err(ContractError::DowngradeNotAllowed);
+        }
+        set_version(&env, new_version);
+        events::contract_upgraded(&env, current, new_version);
+        Ok(())
     }
 }

@@ -2427,3 +2427,46 @@ fn test_title_space_accepted() {
 }
 
 // ── end SEC-003 ───────────────────────────────────────────────────────────────
+
+// ── SC-001: upgrade tests ─────────────────────────────────────────────────────
+
+/// Admin can upgrade to a strictly higher version; event is emitted.
+#[test]
+fn test_upgrade_success() {
+    let t = setup_env();
+    assert_eq!(t.client.get_version(), (1, 0, 0));
+    t.client.upgrade(&t.admin, &(1, 1, 0));
+    assert_eq!(t.client.get_version(), (1, 1, 0));
+
+    let events = t.env.events().all();
+    let last = events.last().unwrap();
+    assert_eq!(last.0, symbol_short!("upgraded"));
+}
+
+/// Downgrade (lower version) is rejected.
+#[test]
+fn test_upgrade_rejects_downgrade() {
+    let t = setup_env();
+    t.client.upgrade(&t.admin, &(2, 0, 0));
+    let result = t.client.try_upgrade(&t.admin, &(1, 9, 9));
+    assert_eq!(result, Err(Ok(ContractError::DowngradeNotAllowed)));
+}
+
+/// Same version is rejected (not strictly greater).
+#[test]
+fn test_upgrade_rejects_same_version() {
+    let t = setup_env();
+    let result = t.client.try_upgrade(&t.admin, &(1, 0, 0));
+    assert_eq!(result, Err(Ok(ContractError::DowngradeNotAllowed)));
+}
+
+/// Non-admin cannot upgrade.
+#[test]
+fn test_upgrade_requires_admin() {
+    let t = setup_env();
+    let non_admin = Address::generate(&t.env);
+    let result = t.client.try_upgrade(&non_admin, &(2, 0, 0));
+    assert_eq!(result, Err(Ok(ContractError::NotAdmin)));
+}
+
+// ── end SC-001 ────────────────────────────────────────────────────────────────

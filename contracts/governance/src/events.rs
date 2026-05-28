@@ -128,3 +128,11 @@ pub fn contract_paused(env: &Env, admin: &Address) {
 pub fn contract_unpaused(env: &Env, admin: &Address) {
     env.events().publish((symbol_short!("unpaused"),), admin.clone());
 }
+
+/// Emits an `upgraded` event when the contract version is upgraded.
+///
+/// Topics: `("upgraded",)`
+/// Data: `(old_version: (u32, u32, u32), new_version: (u32, u32, u32))`
+pub fn contract_upgraded(env: &Env, old_version: (u32, u32, u32), new_version: (u32, u32, u32)) {
+    env.events().publish((symbol_short!("upgraded"),), (old_version, new_version));
+}

@@ -85,6 +85,8 @@ pub enum ContractError {
     AdminTransferExpired = 32,
     /// 33 – Caller is not the pending admin
     NotPendingAdmin = 33,
+    /// 34 – Target version is lower than or equal to the current version (downgrade rejected)
+    DowngradeNotAllowed = 34,
 }
 
 /// Lifecycle state of the governance contract itself.
