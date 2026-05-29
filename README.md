@@ -158,8 +158,32 @@ Proposal reaches terminal state
 ### Prerequisites
 
 - Rust 1.75+ with `wasm32-unknown-unknown` target
-- Stellar CLI (optional, for deployment)
+- Stellar CLI **21.6.0** (pinned — see [Upgrading Stellar CLI](#upgrading-stellar-cli))
 - Docker & Docker Compose (optional, for reproducible environment)
+
+### Installing Stellar CLI
+
+```bash
+cargo install --locked stellar-cli@21.6.0 --features opt
+```
+
+Verify the installed version:
+
+```bash
+stellar --version   # must print 21.6.0
+# or
+make check-stellar-cli
+```
+
+### Upgrading Stellar CLI
+
+To upgrade to a new pinned version:
+
+1. Update `STELLAR_CLI_VERSION` in `Makefile`
+2. Update `STELLAR_CLI_VERSION` env var in `.github/workflows/ci.yml`
+3. Update the version in this README
+4. Run `make check-stellar-cli` to verify
+5. Commit all three files together
 
 ### Installation & Testing
 
@@ -903,6 +927,12 @@ See [docs/examples/rust.md](docs/examples/rust.md) for more detailed examples.
 
 ### JavaScript/TypeScript Integration
 
+Install the packaged SDK for the easiest JavaScript/TypeScript integration:
+
+```bash
+npm install @votechain/sdk
+```
+
 Complete JavaScript examples for integrating VoteChain into web applications:
 
 ```javascript
@@ -1458,7 +1488,7 @@ We welcome contributions from the community. Please see [CONTRIBUTING.md](CONTRI
 - **[Upgrading](docs/upgrading.md)** — Contract upgrade procedures
 - **[Errors](docs/errors.md)** — Complete error reference
 - **[FAQ](docs/faq.md)** — Frequently asked questions
-- **[Roadmap](docs/roadmap.md)** — Future features and improvements
+- **[Roadmap](docs/roadmap.md)** — Public product milestones, release goals, and quarterly review cadence
 
 ### Architecture Decision Records
 

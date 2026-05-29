@@ -8,6 +8,47 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
+  /* Default: Light Mode */
+  --color-bg:           #f5f7fb;
+  --color-surface:      #ffffff;
+  --color-surface-2:    #eef2f6;
+  --color-border:       #e2e8f0;
+  --color-text:         #1e293b;
+  --color-text-muted:   #64748b;
+  --color-primary:      #3b82f6;
+  --color-primary-dark: #2563eb;
+  --color-focus:        #3b82f6;
+
+  /* State badge colours — meet 4.5:1 on light surface */
+  --badge-active-bg:    #ecfdf5;
+  --badge-active-fg:    #065f46;
+  --badge-passed-bg:    #eff6ff;
+  --badge-passed-fg:    #1e40af;
+  --badge-rejected-bg:  #fef2f2;
+  --badge-rejected-fg:  #991b1b;
+  --badge-executed-bg:  #f5f3ff;
+  --badge-executed-fg:  #5b21b6;
+  --badge-cancelled-bg: #f9fafb;
+  --badge-cancelled-fg: #374151;
+
+  /* Chart / Progress Bar colors */
+  --color-vote-yes:     #10b981;
+  --color-vote-no:      #ef4444;
+  --color-vote-abstain: #9ca3af;
+  --color-countdown:    #059669;
+  --color-countdown-soon:#d97706;
+
+  --radius-sm:  6px;
+  --radius-md:  10px;
+  --radius-lg:  14px;
+  --shadow-card: 0 4px 20px rgba(0,0,0,.05);
+
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
+}
+
+html.dark {
+  /* Dark Mode Overrides */
   --color-bg:           #0f1117;
   --color-surface:      #1a1d27;
   --color-surface-2:    #22263a;
@@ -18,7 +59,7 @@
   --color-primary-dark: #4a6fe8;
   --color-focus:        #6c8fff;
 
-  /* State badge colours — all meet 4.5:1 on --color-surface */
+  /* State badge colours — meet 4.5:1 on dark surface */
   --badge-active-bg:    #0d3b2e;
   --badge-active-fg:    #4ade80;
   --badge-passed-bg:    #0d2b4a;
@@ -30,13 +71,14 @@
   --badge-cancelled-bg: #2a2a2a;
   --badge-cancelled-fg: #9ca3af;
 
-  --radius-sm:  6px;
-  --radius-md:  10px;
-  --radius-lg:  14px;
-  --shadow-card: 0 2px 12px rgba(0,0,0,.35);
+  /* Chart / Progress Bar colors */
+  --color-vote-yes:     #4ade80;
+  --color-vote-no:      #f87171;
+  --color-vote-abstain: #8b90b0;
+  --color-countdown:    #4ade80;
+  --color-countdown-soon:#fbbf24;
 
-  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
+  --shadow-card: 0 2px 12px rgba(0,0,0,.35);
 }
 
 html { font-size: 16px; scroll-behavior: smooth; }
@@ -111,6 +153,44 @@ main { flex: 1; padding: 2rem 0 4rem; }
   gap: 1rem;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.theme-toggle {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .15s, color .15s, border-color .15s, transform .15s;
+}
+.theme-toggle:hover {
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  border-color: var(--color-primary);
+  transform: scale(1.05);
+}
+.theme-toggle:active {
+  transform: scale(0.95);
+}
+.theme-toggle-icon {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2;
+  transition: transform .2s ease-in-out;
+}
+.theme-toggle:hover .theme-toggle-icon {
+  transform: rotate(15deg);
+}
+
 .logo {
   display: flex;
   align-items: center;
@@ -152,10 +232,45 @@ main { flex: 1; padding: 2rem 0 4rem; }
   margin-bottom: 1.5rem;
 }
 
-.search-wrap {
-  position: relative;
-  flex: 1;
-  min-width: 200px;
+.toolbar-panel {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.page-size-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  color: var(--color-text);
+}
+
+.page-size-label select {
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+#search-input {
+  width: 100%;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  font-size: .9rem;
+  padding: .55rem .75rem .55rem 2.25rem;
+  transition: border-color .15s;
 }
 .search-icon {
   position: absolute;
@@ -293,9 +408,9 @@ main { flex: 1; padding: 2rem 0 4rem; }
   background: var(--color-surface-2);
   margin-bottom: .5rem;
 }
-.vote-bar-yes     { background: var(--badge-active-fg); }
-.vote-bar-no      { background: var(--badge-rejected-fg); }
-.vote-bar-abstain { background: var(--color-text-muted); }
+.vote-bar-yes     { background: var(--color-vote-yes); }
+.vote-bar-no      { background: var(--color-vote-no); }
+.vote-bar-abstain { background: var(--color-vote-abstain); }
 
 .vote-counts {
   display: flex;
@@ -314,10 +429,28 @@ main { flex: 1; padding: 2rem 0 4rem; }
   border-radius: 50%;
   flex-shrink: 0;
 }
-.dot-yes     { background: var(--badge-active-fg); }
-.dot-no      { background: var(--badge-rejected-fg); }
-.dot-abstain { background: var(--color-text-muted); }
+.dot-yes     { background: var(--color-vote-yes); }
+.dot-no      { background: var(--color-vote-no); }
+.dot-abstain { background: var(--color-vote-abstain); }
 .vote-count-item strong { color: var(--color-text); }
+
+.action-btn {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 0.85rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+
+.action-btn:hover,
+.action-btn:focus-visible {
+  background: var(--color-surface);
+  border-color: var(--color-primary);
+  outline: none;
+}
 
 /* ── Card footer ──────────────────────────────────────────── */
 .card-footer {
@@ -354,10 +487,10 @@ main { flex: 1; padding: 2rem 0 4rem; }
   align-items: center;
   gap: .4rem;
   font-weight: 500;
-  color: var(--badge-active-fg);
+  color: var(--color-countdown);
 }
 .countdown svg { flex-shrink: 0; }
-.countdown.ending-soon { color: #fbbf24; } /* amber — still ≥ 4.5:1 on dark bg */
+.countdown.ending-soon { color: var(--color-countdown-soon); }
 
 /* ── Quorum indicator ─────────────────────────────────────── */
 .quorum-info {
@@ -412,6 +545,86 @@ main { flex: 1; padding: 2rem 0 4rem; }
   color: var(--color-text-muted);
   min-width: 80px;
   text-align: center;
+}
+
+.toast-container {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: flex-end;
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  width: min(360px, 100vw - 2rem);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 1rem 1rem 0.75rem;
+}
+
+.toast-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.toast-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.toast-body {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  word-break: break-word;
+}
+
+.toast-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.toast-status.pending { background: rgba(251, 191, 36, 0.18); color: #fbbf24; }
+.toast-status.confirmed { background: rgba(34,197,94,0.18); color: #22c55e; }
+.toast-status.failed { background: rgba(239,68,68,0.18); color: #ef4444; }
+
+.toast-actions {
+  margin-top: 0.75rem;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.toast button {
+  border: none;
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.toast button:hover,
+.toast button:focus-visible {
+  background: var(--color-surface);
+  outline: 3px solid rgba(56, 189, 248, 0.5);
 }
 
 /* ── Footer ───────────────────────────────────────────────── */

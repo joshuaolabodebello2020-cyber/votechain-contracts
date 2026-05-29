@@ -1,0 +1,30 @@
+# Cargo Audit Configuration
+# 
+# This file documents known vulnerabilities that have been reviewed and accepted
+# as exceptions. Each exception must include:
+# - The advisory ID (RUSTSEC-YYYY-XXXX)
+# - Justification for the exception
+# - Date added
+# - Review status
+
+[advisories]
+# Example exception format (uncomment and modify as needed):
+# 
+# [[advisories.vulnerabilities]]
+# id = "RUSTSEC-2024-XXXXX"
+# reason = "Advisory reason and justification for accepting the risk"
+# expires = "2024-12-31"  # Optional: set expiration date for re-review
+
+# Current exceptions:
+# None at this time. All detected vulnerabilities must be addressed or justified here.
+
+[security]
+# Fail the audit if any vulnerabilities are found
+deny_warnings = true
+
+# Report on all severity levels, but only fail on high/critical
+report_level = "low"
+
+[audit]
+# Fetch the latest advisory database
+fetch_on_startup = true

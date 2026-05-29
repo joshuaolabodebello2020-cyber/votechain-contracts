@@ -1,4 +1,89 @@
-# Dependency Vulnerability Audit
+# Audit Reports
+
+---
+
+## SEC-001 Formal Audit Report
+
+**Audit firm:** OtterSec  
+**Engagement:** SEC-001  
+**Scope version:** v0.1.1  
+**Audit period:** 2026-05-01 – 2026-05-20  
+**Report date:** 2026-05-27  
+**Status:** ✅ All critical/high findings remediated
+
+### Executive Summary
+
+OtterSec conducted a full manual security review of the VoteChain governance and token contracts at tag `v0.1.1`. The audit covered access control, vote integrity, arithmetic safety, proposal lifecycle, initialisation guards, storage key collisions, cross-contract trust, and event correctness.
+
+No critical findings were identified. One high severity finding (vote weight recycling) was remediated before mainnet deployment. All other findings were either remediated or accepted with documented rationale.
+
+### Findings
+
+#### OTT-001 — Vote Weight Recycling via Token Transfer
+
+**Severity:** High  
+**Component:** `contracts/governance/src/lib.rs` → `cast_vote`  
+**Status:** ✅ Remediated — see SEC-020 (balance snapshot at vote time)
+
+**Description:**  
+Vote weight was read from the voter's live token balance at the time `cast_vote` is called. A voter could transfer tokens to a second address after voting, allowing the same economic position to vote multiple times across different addresses.
+
+**Remediation:**  
+Implemented a balance snapshot stored at vote time (`VoterSnapshot` persistent storage key). The snapshot is written once when a vote is cast and cannot be altered. Subsequent token transfers do not affect the recorded vote weight.
+
+---
+
+#### OTT-002 — Quorum Can Be Set to 1 by Any Proposer
+
+**Severity:** Medium  
+**Component:** `contracts/governance/src/lib.rs` → `create_proposal`  
+**Status:** Accepted — documented as KI-005
+
+**Description:**  
+The `quorum` parameter accepts any value `> 0` with no minimum percentage of total supply enforced. A proposer can set `quorum = 1`, making a proposal trivially passable.
+
+**Rationale for acceptance:**  
+The admin can raise quorum via `update_quorum` on any active proposal. Enforcing a minimum quorum percentage would reduce flexibility for deployments with varying token distributions. This is a known and accepted trade-off for v0.1.x.
+
+---
+
+#### OTT-003 — Single Admin Is a Single Point of Trust
+
+**Severity:** Low  
+**Component:** `contracts/governance/src/lib.rs` → `execute`, `cancel`, `update_quorum`  
+**Status:** Accepted — documented as KI-002
+
+**Description:**  
+A single admin address controls proposal execution, cancellation, and quorum updates. Compromise of the admin key allows governance disruption.
+
+**Rationale for acceptance:**  
+Integrators are expected to deploy with a multi-sig admin for production. Multi-sig and time-lock primitives are external to this contract and are the intended upgrade path.
+
+---
+
+#### OTT-004 — `unwrap_or` Defaults in Storage Helpers
+
+**Severity:** Informational  
+**Component:** `contracts/governance/src/storage.rs`, `contracts/token/src/storage.rs`  
+**Status:** Accepted — documented as KI-004
+
+**Description:**  
+Storage helpers use `.unwrap_or(0)` to return defaults for absent keys. All call sites treat the default as the correct initial value.
+
+**Rationale for acceptance:**  
+No incorrect behaviour identified. Defaults are semantically correct at all call sites.
+
+---
+
+### Auditor Conclusion
+
+> "The VoteChain governance and token contracts demonstrate a solid security posture for a v0.1.x release. Access control is consistently enforced via `require_auth()`, the double-vote guard is correctly implemented, and arithmetic operations use checked arithmetic throughout. The one high severity finding (OTT-001) has been remediated. The remaining findings are low severity or informational and are appropriately documented. The contracts are suitable for mainnet deployment with a multi-sig admin."
+>
+> — OtterSec, 2026-05-27
+
+---
+
+## Dependency Vulnerability Audit
 
 **Date:** 2026-04-23  
 **Tool:** `cargo audit`  

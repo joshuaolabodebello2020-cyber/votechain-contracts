@@ -102,6 +102,17 @@ pub fn admin_transferred(env: &Env, old_admin: &Address, new_admin: &Address) {
     );
 }
 
+/// Emits an `admpropose` event when a two-step admin rotation is proposed.
+///
+/// Topics: `("admpropose",)`
+/// Data: `(current_admin: Address, nominee: Address, expiry: u64)`
+pub fn admin_transfer_proposed(env: &Env, admin: &Address, nominee: &Address, expiry: u64) {
+    env.events().publish(
+        (symbol_short!("admprop"),),
+        (admin.clone(), nominee.clone(), expiry),
+    );
+}
+
 /// Emits a `paused` event when the contract is paused.
 ///
 /// Topics: `("paused",)`
@@ -118,10 +129,10 @@ pub fn contract_unpaused(env: &Env, admin: &Address) {
     env.events().publish((symbol_short!("unpaused"),), admin.clone());
 }
 
-/// Emits a `migrated` event when an on-upgrade storage migration completes.
+/// Emits an `upgraded` event when the contract version is upgraded.
 ///
-/// Topics: `("migrated",)`
-/// Data: `(old_version: (u32,u32,u32), new_version: (u32,u32,u32))`
-pub fn migration_completed(env: &Env, old_version: (u32, u32, u32), new_version: (u32, u32, u32)) {
-    env.events().publish((symbol_short!("migrated"),), (old_version, new_version));
+/// Topics: `("upgraded",)`
+/// Data: `(old_version: (u32, u32, u32), new_version: (u32, u32, u32))`
+pub fn contract_upgraded(env: &Env, old_version: (u32, u32, u32), new_version: (u32, u32, u32)) {
+    env.events().publish((symbol_short!("upgraded"),), (old_version, new_version));
 }

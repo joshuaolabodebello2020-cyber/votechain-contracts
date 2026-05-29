@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { Proposal, ProposalState } from '../types';
+import { generateProposalCsv, downloadCsv } from '../utils/csv';
+import { useDebounce } from '../hooks/useDebounce';
 
 const sortOptions = [
   { value: 'newest', label: 'Newest' },
@@ -8,12 +10,28 @@ const sortOptions = [
   { value: 'ending', label: 'Ending soon' }
 ] as const;
 
+const STATE_FILTERS = ['All', 'Active', 'Passed', 'Rejected', 'Executed', 'Cancelled'] as const;
+
 function labelForState(state: ProposalState) {
   return state;
 }
 
 function statusClass(state: ProposalState) {
   return `status-chip status-${state.toLowerCase()}`;
+}
+
+/** Wraps matched substrings in <mark> for highlighting */
+function Highlight({ text, term }: { text: string; term: string }) {
+  if (!term) return <>{text}</>;
+  const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  const parts = text.split(regex);
+  return (
+    <>
+      {parts.map((part, i) =>
+        regex.test(part) ? <mark key={i}>{part}</mark> : part
+      )}
+    </>
+  );
 }
 
 interface Props {
@@ -29,8 +47,10 @@ export default function ProposalList({ proposals }: Props) {
   const [stateFilter, setStateFilter] = useState<StateFilter>('All');
   const [sortKey, setSortKey] = useState<SortKey>('newest');
 
+  const debouncedSearch = useDebounce(searchText, 300);
+
   const filtered = useMemo(() => {
-    const normalizedSearch = searchText.trim().toLowerCase();
+    const normalizedSearch = debouncedSearch.trim().toLowerCase();
     return proposals
       .filter((proposal) => {
         const matchesText = [proposal.title, proposal.description].some((value) =>
@@ -51,7 +71,31 @@ export default function ProposalList({ proposals }: Props) {
         }
         return a.endAt.localeCompare(b.endAt);
       });
-  }, [proposals, searchText, stateFilter, sortKey]);
+  }, [proposals, debouncedSearch, stateFilter, sortKey]);
+
+  /** Handle arrow-key navigation on the state filter tab list */
+  function handleTabKeyDown(e: React.KeyboardEvent<HTMLButtonElement>, index: number) {
+    const tabs = STATE_FILTERS;
+    let next = index;
+    if (e.key === 'ArrowRight') {
+      next = (index + 1) % tabs.length;
+    } else if (e.key === 'ArrowLeft') {
+      next = (index - 1 + tabs.length) % tabs.length;
+    } else if (e.key === 'Home') {
+      next = 0;
+    } else if (e.key === 'End') {
+      next = tabs.length - 1;
+    } else {
+      return;
+    }
+    e.preventDefault();
+    setStateFilter(tabs[next] as StateFilter);
+    const tabList = (e.currentTarget.closest('[role="tablist"]') as HTMLElement | null);
+    const buttons = tabList?.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+    buttons?.[next]?.focus();
+  }
+
+  const highlightTerm = debouncedSearch.trim();
 
   return (
     <section aria-labelledby="proposal-list-heading" className="card">
@@ -60,6 +104,15 @@ export default function ProposalList({ proposals }: Props) {
           <h2 id="proposal-list-heading">Proposal listing</h2>
           <p>Search proposals by title or description, filter by state, and sort results instantly.</p>
         </div>
+        <button
+          type="button"
+          onClick={() => downloadCsv(generateProposalCsv(filtered), 'proposals.csv')}
+          disabled={filtered.length === 0}
+          aria-disabled={filtered.length === 0}
+          aria-label="Export filtered proposals as CSV"
+        >
+          Export CSV
+        </button>
       </div>
       <div className="grid">
         <label>
@@ -73,20 +126,6 @@ export default function ProposalList({ proposals }: Props) {
           />
         </label>
         <label>
-          State
-          <select
-            value={stateFilter}
-            onChange={(event) => setStateFilter(event.target.value as StateFilter)}
-          >
-            <option value="All">All</option>
-            <option value="Active">Active</option>
-            <option value="Passed">Passed</option>
-            <option value="Rejected">Rejected</option>
-            <option value="Executed">Executed</option>
-            <option value="Cancelled">Cancelled</option>
-          </select>
-        </label>
-        <label>
           Sort by
           <select value={sortKey} onChange={(event) => setSortKey(event.target.value as SortKey)}>
             {sortOptions.map((option) => (
@@ -97,7 +136,31 @@ export default function ProposalList({ proposals }: Props) {
           </select>
         </label>
       </div>
-      <div className="table-wrapper" aria-live="polite">
+
+      {/* State filter as accessible tab list (WCAG 2.1 SC 2.1.1) */}
+      <div
+        role="tablist"
+        aria-label="Filter proposals by state"
+        className="nav-buttons"
+        style={{ marginTop: '1rem' }}
+      >
+        {STATE_FILTERS.map((state, index) => (
+          <button
+            key={state}
+            role="tab"
+            type="button"
+            aria-selected={stateFilter === state}
+            tabIndex={stateFilter === state ? 0 : -1}
+            className={stateFilter === state ? 'active-tab' : ''}
+            onClick={() => setStateFilter(state as StateFilter)}
+            onKeyDown={(e) => handleTabKeyDown(e, index)}
+          >
+            {state}
+          </button>
+        ))}
+      </div>
+
+      <div className="table-wrapper" aria-live="polite" aria-atomic="true">
         <table>
           <caption className="visually-hidden">Filtered and sorted proposal listing</caption>
           <thead>
@@ -115,7 +178,7 @@ export default function ProposalList({ proposals }: Props) {
             {filtered.map((proposal) => (
               <tr key={proposal.id}>
                 <td>{proposal.id}</td>
-                <td>{proposal.title}</td>
+                <td><Highlight text={proposal.title} term={highlightTerm} /></td>
                 <td>
                   <span className={statusClass(proposal.state)}>{labelForState(proposal.state)}</span>
                 </td>
@@ -127,7 +190,11 @@ export default function ProposalList({ proposals }: Props) {
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7}>No proposals match your search and filter criteria.</td>
+                <td colSpan={7}>
+                  {debouncedSearch.trim()
+                    ? `No proposals match "${debouncedSearch.trim()}".`
+                    : 'No proposals match your filter criteria.'}
+                </td>
               </tr>
             )}
           </tbody>

@@ -34,6 +34,8 @@ use storage::{
     set_contract_state, set_last_proposal, set_min_duration, set_max_duration,
     set_min_proposal_balance, set_paused, set_proposal_cooldown, set_restrict_admin_vote,
     set_timelock_duration, set_version, set_voting_token, get_vote_record, get_max_duration,
+    set_pending_admin, get_pending_admin, clear_pending_admin,
+    set_admin_transfer_expiry, get_admin_transfer_expiry,
 };
 use types::{ContractError, ContractState, DataKey, Proposal, ProposalState, Vote, VoteRecord};
 
@@ -42,6 +44,30 @@ const MAX_DESC_LEN: u32 = 1024;
 
 // SEC-004: Stellar null/zero address used as the sentinel for invalid inputs.
 const ZERO_ADDRESS: &str = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF";
+
+// SEC-003: Maximum buffer size for byte-level string validation (matches MAX_DESC_LEN).
+const MAX_VALIDATE_BUF: usize = 1024;
+
+/// SEC-003: Validates that a Soroban `String` contains only printable UTF-8 bytes.
+///
+/// Rejects any byte that is a C0 control character (< 0x20), a null byte (0x00),
+/// or the DEL character (0x7F). This prevents injection of control sequences that
+/// could corrupt off-chain indexers or log parsers.
+///
+/// # Errors
+/// Returns `err` if any byte in `s` fails the printable-ASCII check.
+fn validate_string(s: &String, err: ContractError) -> Result<(), ContractError> {
+    let len = s.len() as usize;
+    // Stack buffer — len is already bounded by the caller's length check.
+    let mut buf = [0u8; MAX_VALIDATE_BUF];
+    s.copy_into_slice(&mut buf[..len]);
+    for &b in &buf[..len] {
+        if b < 0x20 || b == 0x7F {
+            return Err(err);
+        }
+    }
+    Ok(())
+}
 
 // SEC-004: Rejects the Stellar zero/default address on any address parameter.
 fn require_non_zero_address(env: &Env, addr: &Address) -> Result<(), ContractError> {
@@ -147,16 +173,18 @@ impl GovernanceContract {
             return Err(ContractError::ContractPaused);
         }
 
-        // Title: non-empty, max 256 chars
+        // Title: non-empty, max 128 chars, printable bytes only (SEC-003)
         let title_len = title.len();
         if title_len == 0 || title_len > MAX_TITLE_LEN {
             return Err(ContractError::InvalidTitle);
         }
-        // Description: non-empty, max 4096 chars
+        validate_string(&title, ContractError::InvalidTitle)?;
+        // Description: non-empty, max 1024 chars, printable bytes only (SEC-003)
         let desc_len = description.len();
         if desc_len == 0 || desc_len > MAX_DESC_LEN {
             return Err(ContractError::InvalidDescription);
         }
+        validate_string(&description, ContractError::InvalidDescription)?;
         // Quorum: > 0
         if quorum <= 0 {
             return Err(ContractError::InvalidQuorum);
@@ -494,6 +522,71 @@ impl GovernanceContract {
         Ok(())
     }
 
+    /// SEC-006: Proposes a two-step admin key rotation.
+    ///
+    /// Nominates `new_admin` with an acceptance window of `window_secs` seconds
+    /// (default 48 h when 0).  The admin key is NOT transferred until the nominee
+    /// calls [`accept_admin_transfer`] within the window.
+    ///
+    /// # Errors
+    /// - [`ContractError::InvalidAddress`] if either address is the zero address.
+    /// - [`ContractError::NotAdmin`] if `admin` does not match the stored admin.
+    /// - [`ContractError::ContractPaused`] if the contract is paused.
+    pub fn propose_admin_transfer(
+        env: Env,
+        admin: Address,
+        new_admin: Address,
+        window_secs: u64,
+    ) -> Result<(), ContractError> {
+        admin.require_auth();
+        require_non_zero_address(&env, &admin)?;
+        require_non_zero_address(&env, &new_admin)?;
+        if is_paused(&env) {
+            return Err(ContractError::ContractPaused);
+        }
+        if get_admin(&env)? != admin {
+            return Err(ContractError::NotAdmin);
+        }
+        let window = if window_secs == 0 { 172_800 } else { window_secs }; // default 48 h
+        let expiry = env.ledger().timestamp() + window;
+        set_pending_admin(&env, &new_admin);
+        set_admin_transfer_expiry(&env, expiry);
+        events::admin_transfer_proposed(&env, &admin, &new_admin, expiry);
+        Ok(())
+    }
+
+    /// SEC-006: Accepts a pending admin key rotation.
+    ///
+    /// Must be called by the nominated address before the acceptance window expires.
+    /// On success the caller becomes the new admin and the nomination is cleared.
+    ///
+    /// # Errors
+    /// - [`ContractError::InvalidAddress`] if `new_admin` is the zero address.
+    /// - [`ContractError::PendingAdminNotSet`] if no nomination is outstanding.
+    /// - [`ContractError::NotPendingAdmin`] if `new_admin` is not the nominated address.
+    /// - [`ContractError::AdminTransferExpired`] if the acceptance window has passed.
+    /// - [`ContractError::ContractPaused`] if the contract is paused.
+    pub fn accept_admin_transfer(env: Env, new_admin: Address) -> Result<(), ContractError> {
+        new_admin.require_auth();
+        require_non_zero_address(&env, &new_admin)?;
+        if is_paused(&env) {
+            return Err(ContractError::ContractPaused);
+        }
+        let pending = get_pending_admin(&env).ok_or(ContractError::PendingAdminNotSet)?;
+        if pending != new_admin {
+            return Err(ContractError::NotPendingAdmin);
+        }
+        if env.ledger().timestamp() > get_admin_transfer_expiry(&env) {
+            clear_pending_admin(&env);
+            return Err(ContractError::AdminTransferExpired);
+        }
+        let old_admin = get_admin(&env)?;
+        set_admin(&env, &new_admin);
+        clear_pending_admin(&env);
+        events::admin_transferred(&env, &old_admin, &new_admin);
+        Ok(())
+    }
+
     /// Pauses the contract, blocking all state-changing operations.
     ///
     /// Read-only functions (`get_proposal`, `get_vote`, `has_voted`, etc.) remain
@@ -612,8 +705,7 @@ impl GovernanceContract {
     }
 
     /// Lists proposals with offset/limit pagination.
-    pub fn list_proposals(env: Env, offset: u64, limit: u64) -> soroban_sdk::Vec<Proposal> {
-        const MAX_LIMIT: u64 = 50;
+    pub fn list_proposals(env: Env, offset: u64, limit: u64) -> soroban_sdk::Vec<Proposal> {        const MAX_LIMIT: u64 = 50;
 
         let total = env.storage()
             .instance()
@@ -636,5 +728,35 @@ impl GovernanceContract {
         }
 
         proposals
+    }
+
+    /// Upgrades the contract to a new semantic version.
+    ///
+    /// Validates that the target version is strictly greater than the current
+    /// version (major, minor, patch lexicographic order) to prevent downgrades.
+    /// Only the admin may call this.
+    ///
+    /// # Errors
+    /// - [`ContractError::InvalidAddress`] if `admin` is the zero address.
+    /// - [`ContractError::NotAdmin`] if `admin` does not match the stored admin.
+    /// - [`ContractError::DowngradeNotAllowed`] if `new_version` is not strictly
+    ///   greater than the current version.
+    pub fn upgrade(
+        env: Env,
+        admin: Address,
+        new_version: (u32, u32, u32),
+    ) -> Result<(), ContractError> {
+        admin.require_auth();
+        require_non_zero_address(&env, &admin)?;
+        if get_admin(&env)? != admin {
+            return Err(ContractError::NotAdmin);
+        }
+        let current = get_version(&env);
+        if new_version <= current {
+            return Err(ContractError::DowngradeNotAllowed);
+        }
+        set_version(&env, new_version);
+        events::contract_upgraded(&env, current, new_version);
+        Ok(())
     }
 }

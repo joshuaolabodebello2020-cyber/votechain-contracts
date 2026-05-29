@@ -40,7 +40,7 @@ export class ErrorBoundary extends Component<Props, State> {
               ? `The "${this.props.section}" section failed to load.`
               : "An unexpected error occurred."}
           </p>
-          <button onClick={this.handleRetry}>Try again</button>
+          <button onClick={this.handleRetry} aria-label="Retry loading this section">Try again</button>
         </div>
       );
     }

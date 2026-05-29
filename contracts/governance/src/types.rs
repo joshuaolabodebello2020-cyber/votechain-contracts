@@ -79,8 +79,14 @@ pub enum ContractError {
     ProposalCountOverflow = 29,
     /// 30 – Timelock period has not yet expired
     TimelockNotExpired = 30,
-    /// 31 – Migration failed due to unexpected/invalid storage layout
-    MigrationFailed = 31,
+    /// 31 – No pending admin transfer has been proposed
+    PendingAdminNotSet = 31,
+    /// 32 – The admin transfer window has expired; propose again
+    AdminTransferExpired = 32,
+    /// 33 – Caller is not the pending admin
+    NotPendingAdmin = 33,
+    /// 34 – Target version is lower than or equal to the current version (downgrade rejected)
+    DowngradeNotAllowed = 34,
 }
 
 /// Lifecycle state of the governance contract itself.
@@ -242,6 +248,13 @@ pub enum DataKey {
     /// Maximum allowed voting duration in seconds (instance storage).
     /// Key space: singleton — only one `MaxDuration` entry exists.
     MaxDuration,
+
+    /// Address nominated to become the next admin (instance storage).
+    /// Set by `propose_admin_transfer`; cleared on acceptance or expiry.
+    PendingAdmin,
+
+    /// Unix timestamp after which the pending admin nomination expires (instance storage).
+    AdminTransferExpiry,
 }
 
 #[contracttype]
