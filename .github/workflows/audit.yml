@@ -1,0 +1,41 @@
+name: Security Audit
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    - cron: '0 6 * * 1'  # weekly on Monday
+
+jobs:
+  audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-audit-${{ hashFiles('**/Cargo.lock') }}
+      - name: Install cargo-audit
+        run: cargo install --locked cargo-audit
+      - name: Update advisory database
+        run: |
+          echo "Updating advisory database..."
+          cargo audit fetch
+      - name: Run cargo audit with strict vulnerability checking
+        run: |
+          echo "Running cargo-audit to detect vulnerabilities..."
+          # Audit will exit with non-zero status if vulnerabilities are found
+          # Use --deny-warnings to fail on warnings and above
+          # Use --severity to filter by severity level (low, medium, high, critical)
+          cargo audit --deny warnings
+      - name: Generate audit report
+        if: always()
+        run: |
+          echo "## Dependency Vulnerability Audit" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** Scan completed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "For more details on vulnerabilities or exceptions, see: [Security Documentation](../docs/CARGO_AUDIT_EXCEPTIONS.md)" >> $GITHUB_STEP_SUMMARY

@@ -1,9 +1,83 @@
-use soroban_sdk::{contracttype, Address};
+// Copyright 2024 VoteChain Contributors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
+use soroban_sdk::{contracterror, contracttype, Address};
+
+/// All revert conditions for the token contract.
+#[contracterror]
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[repr(u32)]
+pub enum ContractError {
+    /// 1 – Admin address is not set
+    AdminNotSet = 1,
+    /// 2 – Caller is not the admin
+    NotAdmin = 2,
+    /// 3 – Transfer/mint/burn amount must be positive
+    InvalidAmount = 3,
+    /// 4 – Sender has insufficient balance
+    InsufficientBalance = 4,
+    /// 5 – Spender allowance is insufficient
+    AllowanceExceeded = 5,
+    /// 6 – New admin address is invalid (zero address)
+    InvalidNewAdmin = 6,
+    /// 7 – Address parameter is the zero/default address
+    InvalidAddress = 7,
+}
+
+/// Storage key enum for the token contract.
+///
+/// Every storage entry is keyed by a variant of this enum.  Because Soroban
+/// serialises the variant discriminant as part of the XDR key, each variant
+/// occupies a completely separate key space — two variants with the same
+/// payload can never collide.
+///
+/// ## Key-space map (SEC-006 collision analysis)
+///
+/// | Variant                        | Storage tier | Description                              |
+/// |-------------------------------|--------------|------------------------------------------|
+/// | `Balance(Address)`            | Persistent   | Per-address token balance                |
+/// | `Allowance(Address, Address)` | Temporary    | Spender allowance granted by owner       |
+/// | `TotalSupply`                 | Instance     | Aggregate token supply                   |
+/// | `Admin`                       | Instance     | Contract administrator address           |
+/// | `Version`                     | Instance     | Semver tuple `(major, minor, patch)`     |
+///
+/// ## Collision safety
+///
+/// Soroban encodes the enum discriminant as the first element of every XDR key.
+/// `Balance(Address)` and `Allowance(Address, Address)` both carry `Address`
+/// payloads, but their distinct discriminants ensure they can never alias.
+/// Singleton variants (`Admin`, `TotalSupply`, `Version`) have no payload and
+/// are unconditionally unique within this contract.
 #[contracttype]
 pub enum TokenDataKey {
+    /// Per-address token balance (persistent storage).
+    /// Key space: one entry per unique holder address.
     Balance(Address),
+
+    /// Spender allowance granted by `owner` to `spender` (temporary storage).
+    /// Key space: one entry per `(owner, spender)` pair; expires with the ledger.
     Allowance(Address, Address),
+
+    /// Aggregate token supply across all holders (instance storage).
+    /// Key space: singleton — only one `TotalSupply` entry exists.
     TotalSupply,
+
+    /// Contract administrator address (instance storage).
+    /// Key space: singleton — only one `Admin` entry exists.
     Admin,
+
+    /// Contract version stored as a `(major, minor, patch)` semver tuple (instance storage).
+    /// Key space: singleton — only one `Version` entry exists.
+    Version,
 }
