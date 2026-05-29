@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- ADR-007: document vote delegation design decision (deferred). ([#273](https://github.com/Vera3289/votechain-contracts/issues/273))
+
 ## [0.1.0] - 2026-04-27
 
 ### Added

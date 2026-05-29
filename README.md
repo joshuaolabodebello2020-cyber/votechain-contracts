@@ -254,7 +254,8 @@ votechain-contracts/
 │   │   ├── ADR-003-live-balance-over-snapshot.md
 │   │   ├── ADR-004-three-way-vote.md
 │   │   ├── ADR-005-on-chain-events.md
-│   │   └── ADR-006-instance-vs-persistent-storage.md
+│   │   ├── ADR-006-instance-vs-persistent-storage.md
+│   │   └── ADR-007-vote-delegation.md
 │   ├── security/
 │   │   ├── threat-model.md
 │   │   ├── known-issues.md
@@ -1498,6 +1499,7 @@ We welcome contributions from the community. Please see [CONTRIBUTING.md](CONTRI
 - **[ADR-004](docs/adr/ADR-004-three-way-vote.md)** — Three-way voting
 - **[ADR-005](docs/adr/ADR-005-on-chain-events.md)** — On-chain events
 - **[ADR-006](docs/adr/ADR-006-instance-vs-persistent-storage.md)** — Storage tier optimization
+- **[ADR-007](docs/adr/ADR-007-vote-delegation.md)** — Vote delegation (deferred)
 
 ### Examples
 
