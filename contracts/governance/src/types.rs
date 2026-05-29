@@ -79,6 +79,8 @@ pub enum ContractError {
     ProposalCountOverflow = 29,
     /// 30 – Timelock period has not yet expired
     TimelockNotExpired = 30,
+    /// 31 – Migration failed due to unexpected/invalid storage layout
+    MigrationFailed = 31,
 }
 
 /// Lifecycle state of the governance contract itself.

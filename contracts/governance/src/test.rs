@@ -208,6 +208,61 @@ fn test_cancel_proposal() {
     assert_eq!(t.client.get_proposal(&id).state, ProposalState::Cancelled);
 }
 
+#[test]
+fn test_migrate_updates_version_and_emits_event() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let gov_id = env.register(GovernanceContract, ());
+    let client = GovernanceContractClient::new(&env, &gov_id);
+
+    let admin = Address::generate(&env);
+    let tok_id = env.register(votechain_token::TokenContract, ());
+    let tok = votechain_token::TokenContractClient::new(&env, &tok_id);
+    tok.initialize(&admin, &10_000_000);
+
+    // initialize sets version to 1.0.0
+    client.initialize(&admin, &tok_id, &0_i128, &0_u64, &60_u64, &2_592_000_u64, &false, &0_u64);
+
+    // perform migration
+    client.migrate(&admin);
+
+    // version must be bumped to 2.0.0
+    assert_eq!(client.get_version(), (2, 0, 0));
+
+    // 'migrated' event must be present
+    let events = env.events().all();
+    assert!(events.iter().any(|(_, topics, _)| {
+        topics == (symbol_short!("migrated"),).into_val(&env)
+    }));
+}
+
+#[test]
+fn test_migrate_is_idempotent() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let gov_id = env.register(GovernanceContract, ());
+    let client = GovernanceContractClient::new(&env, &gov_id);
+
+    let admin = Address::generate(&env);
+    let tok_id = env.register(votechain_token::TokenContract, ());
+    let tok = votechain_token::TokenContractClient::new(&env, &tok_id);
+    tok.initialize(&admin, &10_000_000);
+
+    client.initialize(&admin, &tok_id, &0_i128, &0_u64, &60_u64, &2_592_000_u64, &false, &0_u64);
+
+    // first migration emits event
+    client.migrate(&admin);
+    let after_first = env.events().all().len();
+
+    // second migration should be a noop and not emit another migrated event
+    client.migrate(&admin);
+    let after_second = env.events().all().len();
+
+    assert_eq!(after_first, after_second);
+}
+
 // ── TEST-009: concurrent proposal scenario tests ──────────────────────────────
 
 #[test]

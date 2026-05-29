@@ -577,6 +577,40 @@ impl GovernanceContract {
         get_contract_state(&env)
     }
 
+    /// Performs a one-time migration of on-chain storage from v1 -> v2.
+    ///
+    /// Callable by the admin after upgrading contract code. Validates that
+    /// the previously-deployed storage layout is present before performing
+    /// the migration. Safe to call multiple times (idempotent).
+    pub fn migrate(env: Env, admin: Address) -> Result<(), ContractError> {
+        // auth first
+        admin.require_auth();
+        require_non_zero_address(&env, &admin)?;
+        if get_admin(&env)? != admin {
+            return Err(ContractError::NotAdmin);
+        }
+
+        let old_version = get_version(&env);
+        // Already migrated or newer: noop
+        if old_version >= (2, 0, 0) {
+            return Ok(());
+        }
+
+        // Basic validation: ensure the old storage has the proposal counter key.
+        if !env.storage().instance().has(&DataKey::ProposalCount) {
+            return Err(ContractError::MigrationFailed);
+        }
+
+        // Place migration logic here. Currently no structural key renames are
+        // necessary; this is the canonical place to transform any values that
+        // need reshaping between versions.
+
+        // Bump version to v2.0.0 and emit event.
+        set_version(&env, (2, 0, 0));
+        events::migration_completed(&env, old_version, (2, 0, 0));
+        Ok(())
+    }
+
     /// Lists proposals with offset/limit pagination.
     pub fn list_proposals(env: Env, offset: u64, limit: u64) -> soroban_sdk::Vec<Proposal> {
         const MAX_LIMIT: u64 = 50;
