@@ -1,0 +1,33 @@
+name: Testnet Monitoring
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  monitor:
+    name: Monitor Testnet Contracts
+    runs-on: ubuntu-latest
+
+    env:
+      RPC_URL: https://soroban-testnet.stellar.org
+      NETWORK_PASSPHRASE: Test SDF Network ; September 2015
+      TTL_THRESHOLD: 1000
+      GOVERNANCE_CONTRACT_ID: ${{ secrets.TESTNET_GOVERNANCE_CONTRACT_ID }}
+      TOKEN_CONTRACT_ID: ${{ secrets.TESTNET_TOKEN_CONTRACT_ID }}
+      SLACK_WEBHOOK_URL: ${{ secrets.TESTNET_MONITOR_SLACK_WEBHOOK_URL }}
+      ALERT_EMAIL: ${{ secrets.TESTNET_MONITOR_ALERT_EMAIL }}
+      SENDGRID_API_KEY: ${{ secrets.TESTNET_MONITOR_SENDGRID_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Stellar CLI
+        run: |
+          cargo install --locked stellar-cli --features opt
+
+      - name: Run testnet monitor
+        run: |
+          chmod +x scripts/testnet-monitor.sh
+          scripts/testnet-monitor.sh
