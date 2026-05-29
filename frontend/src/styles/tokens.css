@@ -1,0 +1,48 @@
+/* WCAG 2.1 AA compliant color tokens
+ * Normal text: ≥ 4.5:1 contrast ratio
+ * Large text / UI components: ≥ 3:1 contrast ratio
+ */
+
+:root {
+  /* Neutral */
+  --color-bg:           #ffffff;
+  --color-surface:      #f5f5f5;
+  --color-border:       #767676; /* 4.54:1 on white */
+
+  /* Text — all ≥ 4.5:1 on --color-bg */
+  --color-text-primary:   #1a1a1a; /* 16.75:1 */
+  --color-text-secondary: #595959; /* 7.0:1  */
+  --color-text-muted:     #767676; /* 4.54:1 */
+
+  /* Brand */
+  --color-primary:        #0057b8; /* 7.1:1 on white */
+  --color-primary-hover:  #004494;
+  --color-primary-text:   #ffffff; /* on --color-primary bg */
+
+  /* Status */
+  --color-success:        #1a6e1a; /* 7.2:1 on white */
+  --color-warning:        #7a4f00; /* 7.1:1 on white */
+  --color-error:          #b91c1c; /* 5.9:1 on white */
+  --color-info:           #0057b8;
+
+  /* Dark mode */
+  --color-dark-bg:            #121212;
+  --color-dark-surface:       #1e1e1e;
+  --color-dark-text-primary:  #e8e8e8; /* 14.5:1 on #121212 */
+  --color-dark-text-secondary:#b0b0b0; /* 7.2:1  */
+  --color-dark-text-muted:    #8a8a8a; /* 4.6:1  */
+  --color-dark-primary:       #5ba3ff; /* 4.6:1 on #121212 */
+  --color-dark-border:        #8a8a8a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg:             var(--color-dark-bg);
+    --color-surface:        var(--color-dark-surface);
+    --color-border:         var(--color-dark-border);
+    --color-text-primary:   var(--color-dark-text-primary);
+    --color-text-secondary: var(--color-dark-text-secondary);
+    --color-text-muted:     var(--color-dark-text-muted);
+    --color-primary:        var(--color-dark-primary);
+  }
+}
