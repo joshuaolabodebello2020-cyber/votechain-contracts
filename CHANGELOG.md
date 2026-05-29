@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Entry Format
+
+Every entry belongs under a release heading and one of the following subsection types (omit types that have no entries):
+
+```markdown
+## [Unreleased]
+
+### Added
+- Short description of a new feature or function. ([#<issue>](https://github.com/Vera3289/votechain-contracts/issues/<issue>))
+
+### Changed
+- Short description of a change to existing behaviour.
+
+### Deprecated
+- Short description of a feature that will be removed in a future release.
+
+### Removed
+- Short description of a removed feature.
+
+### Fixed
+- Short description of a bug fix.
+
+### Security
+- Short description of a security fix or hardening measure.
+```
+
+**Rules:**
+- Use plain English, present tense, imperative mood: "Add", "Fix", "Remove".
+- Each bullet is one logical change; keep it to one or two sentences.
+- Link the related issue or PR at the end of the bullet: `([#42](...))`.
+- Add entries to `[Unreleased]` as you work; they are moved to a versioned heading at release time.
+- Do **not** document internal refactors or test-only changes unless they affect observable behaviour.
+
+---
+
 ## [Unreleased]
 
 ## [0.1.0] - 2026-04-27
