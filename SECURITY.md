@@ -59,6 +59,13 @@ When reporting, please include:
 - `contracts/token/**` — governance token minting, balances, transfers
 - Build and CI tooling that could affect contract correctness (`scripts/`, `.github/workflows/`)
 
+## Secret scanning and push protection
+
+This repository includes an automated GitHub Actions workflow that scans code changes for Stellar secret seeds.
+The workflow is defined in `.github/workflows/secret-scanning.yml` and uses custom Stellar patterns from `.github/secret-scanning/stellar-patterns.txt`.
+
+When branch protection is configured, `Secret Scanning` is intended to be enforced as a required status check to prevent merges of code containing accidental secrets.
+
 ### Out of scope
 
 - Third-party dependencies and upstream toolchains (Rust, Soroban SDK, Stellar Core) — please report those to the respective upstream projects

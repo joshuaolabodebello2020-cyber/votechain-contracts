@@ -28,7 +28,7 @@ gh repo rule create \
     --repository "$REPO_FULL_NAME" \
     --branch "$BRANCH" \
     --require-status-checks \
-    --required-status-checks "Build & Test,Build WASM" \
+    --required-status-checks "Build & Test,Build WASM,Secret Scanning" \
     --require-code-reviews \
     --required-approvals 1 \
     --dismiss-stale-reviews \
@@ -47,7 +47,7 @@ if ! gh repo rule create --help &>/dev/null 2>&1; then
 {
   "required_status_checks": {
     "strict": true,
-    "contexts": ["Build & Test", "Build WASM"]
+    "contexts": ["Build & Test", "Build WASM", "Secret Scanning"]
   },
   "required_pull_request_reviews": {
     "dismissal_restrictions": {},

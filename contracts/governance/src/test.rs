@@ -208,6 +208,61 @@ fn test_cancel_proposal() {
     assert_eq!(t.client.get_proposal(&id).state, ProposalState::Cancelled);
 }
 
+#[test]
+fn test_migrate_updates_version_and_emits_event() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let gov_id = env.register(GovernanceContract, ());
+    let client = GovernanceContractClient::new(&env, &gov_id);
+
+    let admin = Address::generate(&env);
+    let tok_id = env.register(votechain_token::TokenContract, ());
+    let tok = votechain_token::TokenContractClient::new(&env, &tok_id);
+    tok.initialize(&admin, &10_000_000);
+
+    // initialize sets version to 1.0.0
+    client.initialize(&admin, &tok_id, &0_i128, &0_u64, &60_u64, &2_592_000_u64, &false, &0_u64);
+
+    // perform migration
+    client.migrate(&admin);
+
+    // version must be bumped to 2.0.0
+    assert_eq!(client.get_version(), (2, 0, 0));
+
+    // 'migrated' event must be present
+    let events = env.events().all();
+    assert!(events.iter().any(|(_, topics, _)| {
+        topics == (symbol_short!("migrated"),).into_val(&env)
+    }));
+}
+
+#[test]
+fn test_migrate_is_idempotent() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let gov_id = env.register(GovernanceContract, ());
+    let client = GovernanceContractClient::new(&env, &gov_id);
+
+    let admin = Address::generate(&env);
+    let tok_id = env.register(votechain_token::TokenContract, ());
+    let tok = votechain_token::TokenContractClient::new(&env, &tok_id);
+    tok.initialize(&admin, &10_000_000);
+
+    client.initialize(&admin, &tok_id, &0_i128, &0_u64, &60_u64, &2_592_000_u64, &false, &0_u64);
+
+    // first migration emits event
+    client.migrate(&admin);
+    let after_first = env.events().all().len();
+
+    // second migration should be a noop and not emit another migrated event
+    client.migrate(&admin);
+    let after_second = env.events().all().len();
+
+    assert_eq!(after_first, after_second);
+}
+
 // ── TEST-009: concurrent proposal scenario tests ──────────────────────────────
 
 #[test]
@@ -662,6 +717,68 @@ fn test_proposal_state_all_variants_reachable() {
     assert_eq!(t.client.get_proposal(&id4).state, ProposalState::Passed);
     t.client.execute(&t.admin, &id4);
     assert_eq!(t.client.get_proposal(&id4).state, ProposalState::Executed);
+}
+
+#[test]
+fn test_get_proposals_by_state_filters_and_paginates() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+
+    let active_id = create_test_proposal(&t, &proposer);
+    let cancelled_id = create_test_proposal(&t, &proposer);
+    t.client.cancel(&t.admin, &cancelled_id);
+
+    let rejected_id = create_test_proposal(&t, &proposer);
+    mint_and_vote(&t, &proposer, rejected_id, Vote::No, 1_000_000);
+    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+    t.client.finalise(&rejected_id);
+
+    let passed_id = create_test_proposal(&t, &proposer);
+    mint_and_vote(&t, &proposer, passed_id, Vote::Yes, 1_000_000);
+    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+    t.client.finalise(&passed_id);
+
+    let executed_id = create_test_proposal(&t, &proposer);
+    mint_and_vote(&t, &proposer, executed_id, Vote::Yes, 1_000_000);
+    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+    t.client.finalise(&executed_id);
+    t.client.execute(&t.admin, &executed_id);
+
+    let active_ids = t.client.get_proposals_by_state(&ProposalState::Active, &0_u64, &10_u64);
+    assert_eq!(active_ids.len(), 1);
+    assert_eq!(active_ids.get(0).unwrap(), active_id);
+
+    let cancelled_ids = t.client.get_proposals_by_state(&ProposalState::Cancelled, &0_u64, &10_u64);
+    assert_eq!(cancelled_ids.len(), 1);
+    assert_eq!(cancelled_ids.get(0).unwrap(), cancelled_id);
+
+    let rejected_ids = t.client.get_proposals_by_state(&ProposalState::Rejected, &0_u64, &10_u64);
+    assert_eq!(rejected_ids.len(), 1);
+    assert_eq!(rejected_ids.get(0).unwrap(), rejected_id);
+
+    let passed_ids = t.client.get_proposals_by_state(&ProposalState::Passed, &0_u64, &10_u64);
+    assert_eq!(passed_ids.len(), 1);
+    assert_eq!(passed_ids.get(0).unwrap(), passed_id);
+
+    let executed_ids = t.client.get_proposals_by_state(&ProposalState::Executed, &0_u64, &10_u64);
+    assert_eq!(executed_ids.len(), 1);
+    assert_eq!(executed_ids.get(0).unwrap(), executed_id);
+}
+
+#[test]
+fn test_get_proposals_by_state_respects_offset_and_limit() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+
+    let id1 = create_test_proposal(&t, &proposer);
+    let id2 = create_test_proposal(&t, &proposer);
+    let id3 = create_test_proposal(&t, &proposer);
+    let id4 = create_test_proposal(&t, &proposer);
+
+    let ids = t.client.get_proposals_by_state(&ProposalState::Active, &1_u64, &2_u64);
+    assert_eq!(ids.len(), 2);
+    assert_eq!(ids.get(0).unwrap(), id2);
+    assert_eq!(ids.get(1).unwrap(), id3);
 }
 
 // ── end Issue #10 ─────────────────────────────────────────────────────────────
