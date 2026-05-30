@@ -902,3 +902,171 @@ fn test_yes_alone_below_quorum_rejected() {
 }
 
 // ── end SC-021 ────────────────────────────────────────────────────────────────
+
+// ── SEC-002: Rate limiting — comprehensive cooldown tests ─────────────────────
+
+/// Cooldown is per-address: a different proposer is never blocked by another's cooldown.
+#[test]
+fn test_cooldown_is_per_address_isolated() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let client = new_client(&env);
+    let admin = Address::generate(&env);
+    let token_id = setup_token(&env, &admin);
+    client.initialize(&admin, &token_id, &0_i128, &3600_u64);
+
+    let proposer_a = Address::generate(&env);
+    let proposer_b = Address::generate(&env);
+
+    // A creates a proposal — starts A's cooldown
+    client.create_proposal(
+        &proposer_a,
+        &String::from_str(&env, "A first"),
+        &String::from_str(&env, "desc"),
+        &100,
+        &3600,
+    );
+
+    // B has never proposed — must succeed immediately despite A being in cooldown
+    let id = client.create_proposal(
+        &proposer_b,
+        &String::from_str(&env, "B first"),
+        &String::from_str(&env, "desc"),
+        &100,
+        &3600,
+    );
+    assert_eq!(client.get_proposal(&id).state, ProposalState::Active);
+}
+
+/// Zero cooldown means any address can propose back-to-back without restriction.
+#[test]
+fn test_zero_cooldown_allows_consecutive_proposals() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let client = new_client(&env);
+    let admin = Address::generate(&env);
+    let token_id = setup_token(&env, &admin);
+    // cooldown = 0 → disabled
+    client.initialize(&admin, &token_id, &0_i128, &0_u64);
+
+    let proposer = Address::generate(&env);
+    let id1 = client.create_proposal(
+        &proposer,
+        &String::from_str(&env, "First"),
+        &String::from_str(&env, "desc"),
+        &100,
+        &3600,
+    );
+    let id2 = client.create_proposal(
+        &proposer,
+        &String::from_str(&env, "Second"),
+        &String::from_str(&env, "desc"),
+        &100,
+        &3600,
+    );
+    assert_eq!(client.get_proposal(&id1).state, ProposalState::Active);
+    assert_eq!(client.get_proposal(&id2).state, ProposalState::Active);
+}
+
+/// Proposing at exactly `last + cooldown` (boundary) must succeed.
+#[test]
+fn test_cooldown_exact_boundary_accepted() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let client = new_client(&env);
+    let admin = Address::generate(&env);
+    let token_id = setup_token(&env, &admin);
+    let cooldown: u64 = 3600;
+    client.initialize(&admin, &token_id, &0_i128, &cooldown);
+
+    let proposer = Address::generate(&env);
+    client.create_proposal(
+        &proposer,
+        &String::from_str(&env, "First"),
+        &String::from_str(&env, "desc"),
+        &100,
+        &7200,
+    );
+    // advance by exactly the cooldown — now == last + cooldown, which satisfies now >= last + cooldown
+    env.ledger().with_mut(|l| l.timestamp += cooldown);
+    let id2 = client.create_proposal(
+        &proposer,
+        &String::from_str(&env, "Boundary"),
+        &String::from_str(&env, "desc"),
+        &100,
+        &3600,
+    );
+    assert_eq!(client.get_proposal(&id2).state, ProposalState::Active);
+}
+
+/// Proposing one second before the cooldown expires must be rejected.
+#[test]
+#[should_panic]
+fn test_cooldown_one_second_before_boundary_reverts() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let client = new_client(&env);
+    let admin = Address::generate(&env);
+    let token_id = setup_token(&env, &admin);
+    let cooldown: u64 = 3600;
+    client.initialize(&admin, &token_id, &0_i128, &cooldown);
+
+    let proposer = Address::generate(&env);
+    client.create_proposal(
+        &proposer,
+        &String::from_str(&env, "First"),
+        &String::from_str(&env, "desc"),
+        &100,
+        &7200,
+    );
+    // one second short of the cooldown — must still be blocked
+    env.ledger().with_mut(|l| l.timestamp += cooldown - 1);
+    client.create_proposal(
+        &proposer,
+        &String::from_str(&env, "Too soon"),
+        &String::from_str(&env, "desc"),
+        &100,
+        &3600,
+    );
+}
+
+/// After a successful second proposal the cooldown timestamp is refreshed,
+/// so a third proposal immediately after the second is still blocked.
+#[test]
+#[should_panic]
+fn test_cooldown_resets_after_each_proposal() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let client = new_client(&env);
+    let admin = Address::generate(&env);
+    let token_id = setup_token(&env, &admin);
+    let cooldown: u64 = 3600;
+    client.initialize(&admin, &token_id, &0_i128, &cooldown);
+
+    let proposer = Address::generate(&env);
+    client.create_proposal(
+        &proposer,
+        &String::from_str(&env, "First"),
+        &String::from_str(&env, "desc"),
+        &100,
+        &7200,
+    );
+    env.ledger().with_mut(|l| l.timestamp += cooldown);
+    client.create_proposal(
+        &proposer,
+        &String::from_str(&env, "Second"),
+        &String::from_str(&env, "desc"),
+        &100,
+        &7200,
+    );
+    // immediately after second — cooldown reset, must be blocked
+    client.create_proposal(
+        &proposer,
+        &String::from_str(&env, "Third too soon"),
+        &String::from_str(&env, "desc"),
+        &100,
+        &3600,
+    );
+}
+
+// ── end SEC-002 ───────────────────────────────────────────────────────────────
