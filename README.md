@@ -267,6 +267,7 @@ votechain-contracts/
 │   │   ├── rust.md                   # Rust integration examples
 │   │   └── javascript.md             # JavaScript/TypeScript examples
 │   ├── GETTING_STARTED.md
+│   ├── dao-integration-guide.md         # DAO deployment & governance walkthrough
 │   ├── lifecycle.md
 │   ├── storage.md
 │   ├── upgrading.md
@@ -1484,6 +1485,7 @@ We welcome contributions from the community. Please see [CONTRIBUTING.md](CONTRI
 ### Documentation
 
 - **[GETTING_STARTED.md](docs/GETTING_STARTED.md)** — Step-by-step setup guide
+- **[DAO Integration Guide](docs/dao-integration-guide.md)** — Deploy, configure, and run governance for your DAO
 - **[Proposal Lifecycle](docs/lifecycle.md)** — Detailed state diagram and transitions
 - **[Storage Model](docs/storage.md)** — Storage tier strategy and optimization
 - **[Upgrading](docs/upgrading.md)** — Contract upgrade procedures
