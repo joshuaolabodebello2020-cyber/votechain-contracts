@@ -229,6 +229,13 @@ impl GovernanceContract {
         let now = env.ledger().timestamp();
         // SEC-007: ID is generated contract-side only; checked_add prevents overflow.
         let id = next_id(&env)?;
+
+        // SEC-014: Verify that the monotonic ID does not collide with an existing proposal.
+        // This is a defense-in-depth measure; next_id() is the sole source of IDs.
+        if env.storage().persistent().has(&DataKey::Proposal(id)) {
+            return Err(ContractError::ProposalAlreadyExists);
+        }
+
         let proposal = Proposal {
             id,
             proposer: proposer.clone(),

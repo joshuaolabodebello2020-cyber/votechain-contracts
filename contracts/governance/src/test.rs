@@ -145,6 +145,50 @@ fn test_create_proposal() {
 }
 
 #[test]
+fn test_proposal_id_uniqueness_across_1000() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+
+    // Create 1000 proposals and ensure IDs are unique and incrementing.
+    for i in 1..=1000 {
+        let id = create_test_proposal(&t, &proposer);
+        assert_eq!(id, i as u64);
+    }
+    assert_eq!(t.client.proposal_count(), 1000);
+}
+
+#[test]
+fn test_create_proposal_collision_reverts() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+
+    // 1. Create a proposal normally (ID 1)
+    let id = create_test_proposal(&t, &proposer);
+    assert_eq!(id, 1);
+
+    // 2. Manually reset the counter to 0 (simulating a counter reset scenario)
+    t.env.as_contract(&t.client.address, || {
+        t.env.storage().instance().set(&DataKey::ProposalCount, &0u64);
+    });
+
+    // 3. Attempt to create another proposal.
+    // next_id() will return 1 again, but the SEC-014 check should catch the collision.
+    let result = t.client.try_create_proposal(
+        &proposer,
+        &String::from_str(&t.env, "Title"),
+        &String::from_str(&t.env, "Desc"),
+        &100,
+        &3600,
+    );
+
+    assert!(
+        matches!(result, Err(Ok(ContractError::ProposalAlreadyExists))),
+        "expected ProposalAlreadyExists, got {:?}",
+        result
+    );
+}
+
+#[test]
 fn test_cast_vote_and_finalise_passed() {
     let t = setup_env();
     let voter = Address::generate(&t.env);
