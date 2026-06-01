@@ -128,6 +128,54 @@ fn test_events_transfer() {
     }));
 }
 
+// ── TEST-005: ContractError variant coverage ──────────────────────────────────
+
+// AdminNotSet (1): call mint before initialise
+#[test]
+#[should_panic]
+fn test_error_admin_not_set() {
+    let (env, c) = setup();
+    let user = Address::generate(&env);
+    c.mint(&user, &user, &100); // no initialize → AdminNotSet
+}
+
+// InvalidAmount (3): transfer zero
+#[test]
+#[should_panic]
+fn test_error_invalid_amount_transfer_zero() {
+    let (env, c) = setup();
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    c.initialize(&admin, &1_000);
+    c.transfer(&admin, &user, &0);
+}
+
+// InvalidAmount (3): mint zero
+#[test]
+#[should_panic]
+fn test_error_invalid_amount_mint_zero() {
+    let (env, c) = setup();
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    c.initialize(&admin, &1_000);
+    c.mint(&admin, &user, &0);
+}
+
+// AllowanceExceeded (5)
+#[test]
+#[should_panic]
+fn test_error_allowance_exceeded() {
+    let (env, c) = setup();
+    let admin = Address::generate(&env);
+    let spender = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    c.initialize(&admin, &1_000);
+    c.approve(&admin, &spender, &50);
+    c.transfer_from(&spender, &admin, &recipient, &100); // exceeds allowance of 50
+}
+
+// ── end TEST-005 ──────────────────────────────────────────────────────────────
+
 #[test]
 fn test_events_burn() {
     let (env, c) = setup();

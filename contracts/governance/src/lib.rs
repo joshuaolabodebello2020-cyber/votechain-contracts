@@ -126,9 +126,9 @@ impl GovernanceContract {
         if weight <= 0 { return Err(ContractError::NoVotingPower); }
 
         match vote {
-            Vote::Yes     => proposal.votes_yes     = proposal.votes_yes.checked_add(weight).expect("vote tally overflow"),
-            Vote::No      => proposal.votes_no      = proposal.votes_no.checked_add(weight).expect("vote tally overflow"),
-            Vote::Abstain => proposal.votes_abstain = proposal.votes_abstain.checked_add(weight).expect("vote tally overflow"),
+            Vote::Yes     => proposal.votes_yes     = proposal.votes_yes.checked_add(weight).ok_or(ContractError::Overflow)?,
+            Vote::No      => proposal.votes_no      = proposal.votes_no.checked_add(weight).ok_or(ContractError::Overflow)?,
+            Vote::Abstain => proposal.votes_abstain = proposal.votes_abstain.checked_add(weight).ok_or(ContractError::Overflow)?,
         }
 
         mark_voted(&env, proposal_id, &voter);

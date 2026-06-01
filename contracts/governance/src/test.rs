@@ -422,3 +422,208 @@ fn test_reinit_by_zero_address_reverts() {
 }
 
 // ── end SEC-009 ───────────────────────────────────────────────────────────────
+
+// ── TEST-005: ContractError variant coverage ──────────────────────────────────
+
+// AdminNotSet (1): call get_proposal on an uninitialised contract (no admin set,
+// but load_proposal is reached first — trigger via cast_vote on uninit contract
+// which hits get_voting_token → VotingTokenNotSet; use execute on uninit to hit AdminNotSet)
+#[test]
+#[should_panic]
+fn test_error_admin_not_set() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let client = new_client(&env);
+    let admin = Address::generate(&env);
+    // execute without initialising → AdminNotSet
+    client.execute(&admin, &1);
+}
+
+// VotingTokenNotSet (3): initialise without a real token then cast_vote
+// Actually VotingTokenNotSet is only reachable if admin is set but token is not,
+// which cannot happen via the public API (initialize sets both atomically).
+// The closest reachable path is cast_vote after a fresh (uninitialised) contract,
+// but that hits AdminNotSet first. We verify the variant exists and has the right discriminant.
+#[test]
+fn test_error_voting_token_not_set_discriminant() {
+    assert_eq!(ContractError::VotingTokenNotSet as u32, 3);
+}
+
+// InvalidDuration (5)
+#[test]
+#[should_panic]
+fn test_error_invalid_duration() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    t.client.create_proposal(
+        &proposer,
+        &String::from_str(&t.env, "T"),
+        &String::from_str(&t.env, "D"),
+        &100,
+        &0, // zero duration
+    );
+}
+
+// ProposalNotFound (6)
+#[test]
+#[should_panic]
+fn test_error_proposal_not_found() {
+    let t = setup_env();
+    t.client.get_proposal(&9999);
+}
+
+// VotingPeriodEnded (8)
+#[test]
+#[should_panic]
+fn test_error_voting_period_ended() {
+    let t = setup_env();
+    let voter = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &voter);
+    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+    // voting window closed — cast_vote must return VotingPeriodEnded
+    let tok = votechain_token::TokenContractClient::new(&t.env, &t.token_id);
+    tok.mint(&t.admin, &voter, &1_000);
+    t.client.cast_vote(&voter, &id, &Vote::Yes);
+}
+
+// VotingStillOpen (9)
+#[test]
+#[should_panic]
+fn test_error_voting_still_open() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &proposer);
+    // try to finalise before the window closes
+    t.client.finalise(&id);
+}
+
+// NoVotingPower (11)
+#[test]
+#[should_panic]
+fn test_error_no_voting_power() {
+    let t = setup_env();
+    let voter = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &voter);
+    // voter has zero balance — cast_vote must return NoVotingPower
+    t.client.cast_vote(&voter, &id, &Vote::Yes);
+}
+
+// ProposalNotPassed (12)
+#[test]
+#[should_panic]
+fn test_error_proposal_not_passed() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &proposer);
+    // proposal is still Active, not Passed
+    t.client.execute(&t.admin, &id);
+}
+
+// ── end TEST-005 ──────────────────────────────────────────────────────────────
+
+// ── TEST-006: event payload snapshot tests ────────────────────────────────────
+
+#[test]
+fn test_event_proposal_created() {
+    use soroban_sdk::{symbol_short, testutils::Events, IntoVal};
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &proposer);
+    let events = t.env.events().all();
+    assert!(events.iter().any(|(_, topics, data)| {
+        topics == (symbol_short!("created"), id).into_val(&t.env)
+            && data == proposer.clone().into_val(&t.env)
+    }));
+}
+
+#[test]
+fn test_event_vote_cast() {
+    use soroban_sdk::{symbol_short, testutils::Events, IntoVal};
+    let t = setup_env();
+    let voter = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &voter);
+    mint_and_vote(&t, &voter, id, Vote::Yes, 500);
+    let events = t.env.events().all();
+    assert!(events.iter().any(|(_, topics, data)| {
+        topics == (symbol_short!("vote"), id).into_val(&t.env)
+            && data == (voter.clone(), Vote::Yes, 500_i128).into_val(&t.env)
+    }));
+}
+
+#[test]
+fn test_event_proposal_finalised_passed() {
+    use soroban_sdk::{symbol_short, testutils::Events, IntoVal};
+    let t = setup_env();
+    let voter = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &voter);
+    mint_and_vote(&t, &voter, id, Vote::Yes, 1_000_000);
+    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+    t.client.finalise(&id);
+    let events = t.env.events().all();
+    assert!(events.iter().any(|(_, topics, data)| {
+        topics == (symbol_short!("final"), id).into_val(&t.env)
+            && data == ProposalStatus::Passed.into_val(&t.env)
+    }));
+}
+
+#[test]
+fn test_event_proposal_finalised_rejected() {
+    use soroban_sdk::{symbol_short, testutils::Events, IntoVal};
+    let t = setup_env();
+    let voter = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &voter);
+    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+    t.client.finalise(&id);
+    let events = t.env.events().all();
+    assert!(events.iter().any(|(_, topics, data)| {
+        topics == (symbol_short!("final"), id).into_val(&t.env)
+            && data == ProposalStatus::Rejected.into_val(&t.env)
+    }));
+}
+
+#[test]
+fn test_event_proposal_executed() {
+    use soroban_sdk::{symbol_short, testutils::Events, IntoVal};
+    let t = setup_env();
+    let voter = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &voter);
+    mint_and_vote(&t, &voter, id, Vote::Yes, 1_000_000);
+    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+    t.client.finalise(&id);
+    t.client.execute(&t.admin, &id);
+    let events = t.env.events().all();
+    assert!(events.iter().any(|(_, topics, data)| {
+        topics == (symbol_short!("final"), id).into_val(&t.env)
+            && data == ProposalStatus::Executed.into_val(&t.env)
+    }));
+}
+
+#[test]
+fn test_event_proposal_cancelled() {
+    use soroban_sdk::{symbol_short, testutils::Events, IntoVal};
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &proposer);
+    t.client.cancel(&t.admin, &id);
+    let events = t.env.events().all();
+    assert!(events.iter().any(|(_, topics, data)| {
+        topics == (symbol_short!("final"), id).into_val(&t.env)
+            && data == ProposalStatus::Cancelled.into_val(&t.env)
+    }));
+}
+
+#[test]
+fn test_event_quorum_updated() {
+    use soroban_sdk::{symbol_short, testutils::Events, IntoVal};
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &proposer);
+    t.client.update_quorum(&t.admin, &id, &999);
+    let events = t.env.events().all();
+    assert!(events.iter().any(|(_, topics, data)| {
+        topics == (symbol_short!("qupdate"), id).into_val(&t.env)
+            && data == 999_i128.into_val(&t.env)
+    }));
+}
+
+// ── end TEST-006 ──────────────────────────────────────────────────────────────

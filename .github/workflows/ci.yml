@@ -29,6 +29,44 @@ jobs:
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
 
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-tarpaulin-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-tarpaulin-
+            ${{ runner.os }}-cargo-
+      - name: Install cargo-tarpaulin
+        run: cargo install --locked cargo-tarpaulin
+      - name: Run coverage
+        run: cargo tarpaulin --workspace --timeout 120 --out Xml --output-dir coverage/
+      - name: Enforce minimum coverage threshold
+        run: |
+          COVERAGE=$(grep -oP 'line-rate="\K[^"]+' coverage/cobertura.xml | head -1)
+          THRESHOLD=0.70
+          echo "Coverage: $COVERAGE (threshold: $THRESHOLD)"
+          python3 -c "
+          cov = float('$COVERAGE')
+          thr = float('$THRESHOLD')
+          if cov < thr:
+              raise SystemExit(f'Coverage {cov:.2%} is below threshold {thr:.2%}')
+          print(f'Coverage {cov:.2%} meets threshold {thr:.2%}')
+          "
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+
   security-audit:
     name: Security Audit
     runs-on: ubuntu-latest
