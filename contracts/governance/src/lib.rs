@@ -122,6 +122,14 @@ impl GovernanceContract {
         if is_initialized(&env) {
             return Err(ContractError::AlreadyInitialized);
         }
+        // SEP-41 compliance check: verify the token contract exposes balance() and total_supply().
+        let token_client = token::Client::new(&env, &voting_token);
+        if token_client.try_balance(&admin).is_err() {
+            return Err(ContractError::InvalidTokenContract);
+        }
+        if TokenSupplyClient::new(&env, &voting_token).try_total_supply().is_err() {
+            return Err(ContractError::InvalidTokenContract);
+        }
         set_admin(&env, &admin);
         set_voting_token(&env, &voting_token);
         if min_proposal_balance > 0 {

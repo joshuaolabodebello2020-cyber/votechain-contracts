@@ -87,6 +87,8 @@ pub enum ContractError {
     NotPendingAdmin = 33,
     /// 34 – Target version is lower than or equal to the current version (downgrade rejected)
     DowngradeNotAllowed = 34,
+    /// 35 – The provided token contract does not implement the required SEP-41 interface
+    InvalidTokenContract = 35,
 }
 
 /// Lifecycle state of the governance contract itself.

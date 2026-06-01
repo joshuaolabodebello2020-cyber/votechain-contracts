@@ -2675,3 +2675,33 @@ fn test_concurrent_voting_no_double_vote() {
 }
 
 // ── end TEST-007 ──────────────────────────────────────────────────────────────
+
+// ── SC-008: SEP-41 token validation tests ─────────────────────────────────────
+
+/// A valid SEP-41 token (balance + total_supply) is accepted at initialization.
+#[test]
+fn test_initialize_valid_sep41_token_accepted() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let client = new_client(&env);
+    let admin = Address::generate(&env);
+    let token_id = setup_token(&env, &admin);
+    // Should not panic — token implements balance() and total_supply()
+    client.initialize(&admin, &token_id, &0_i128, &0_u64, &60_u64, &2_592_000_u64, &false, &0_u64);
+    assert_eq!(client.get_state(), ContractState::Ready);
+}
+
+/// A contract that does not implement SEP-41 is rejected with InvalidTokenContract (#35).
+#[test]
+#[should_panic(expected = "Error(Contract, #35)")]
+fn test_initialize_invalid_token_contract_reverts() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let client = new_client(&env);
+    let admin = Address::generate(&env);
+    // Register a second governance contract as the "token" — it has no balance/total_supply
+    let fake_token = env.register(GovernanceContract, ());
+    client.initialize(&admin, &fake_token, &0_i128, &0_u64, &60_u64, &2_592_000_u64, &false, &0_u64);
+}
+
+// ── end SC-008 ────────────────────────────────────────────────────────────────
