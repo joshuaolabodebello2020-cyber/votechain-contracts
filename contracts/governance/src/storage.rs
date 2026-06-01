@@ -243,6 +243,14 @@ pub fn get_restrict_admin_vote(env: &Env) -> bool {
     env.storage().instance().get(&DataKey::RestrictAdminVote).unwrap_or(false)
 }
 
+pub fn set_amend_window(env: &Env, v: u64) {
+    env.storage().instance().set(&DataKey::AmendWindow, &v);
+}
+
+pub fn get_amend_window(env: &Env) -> u64 {
+    env.storage().instance().get(&DataKey::AmendWindow).unwrap_or(0)
+}
+
 /// Stores the mandatory delay (seconds) a passed proposal must wait before it can be executed.
 pub fn set_timelock_duration(env: &Env, v: u64) {
     env.storage().instance().set(&DataKey::TimelockDuration, &v);

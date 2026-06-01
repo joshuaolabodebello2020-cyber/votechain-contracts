@@ -23,8 +23,7 @@ use crate::types::{ProposalState, Vote};
 /// | Function      | Topic 0        | Topic 1       | Data                              |
 /// |---------------|----------------|---------------|-----------------------------------|
 /// | initialize    | `"init"`       | —             | `admin: Address`                  |
-/// | create_proposal | `"created"`  | `id: u64`     | `proposer: Address`               |
-/// | cast_vote     | `"vote"`       | `id: u64`     | `(voter, vote, weight)`           |
+/// | create_proposal | `"created"`  | `id: u64`     | `proposer: Address`               |/// | amend_proposal | "amended"   | `id: u64`     | `(proposer, title, description)`  |/// | cast_vote     | `"vote"`       | `id: u64`     | `(voter, vote, weight)`           |
 /// | finalise      | `"final"`      | `id: u64`     | `state: ProposalState`            |
 /// | execute       | `"executed"`   | `id: u64`     | `()`                              |
 /// | cancel        | `"cancelled"`  | `id: u64`     | `()`                              |
@@ -81,6 +80,14 @@ pub fn proposal_executed(env: &Env, id: u64) {
 /// Data: `()`
 pub fn proposal_cancelled(env: &Env, id: u64) {
     env.events().publish((symbol_short!("cancelled"), id), ());
+}
+
+/// Emits an `amended` event when a proposal is updated before voting starts.
+///
+/// Topics: `("amended", id)`  
+/// Data: `(proposer: Address, title: String, description: String)`
+pub fn proposal_amended(env: &Env, id: u64, proposer: &Address, title: &String, description: &String) {
+    env.events().publish((symbol_short!("amended"), id), (proposer.clone(), title.clone(), description.clone()));
 }
 
 /// Emits a `qupdate` event when a proposal's quorum is updated.

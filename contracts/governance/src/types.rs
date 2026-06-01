@@ -87,6 +87,10 @@ pub enum ContractError {
     NotPendingAdmin = 33,
     /// 34 – Target version is lower than or equal to the current version (downgrade rejected)
     DowngradeNotAllowed = 34,
+    /// 35 – Proposal amendment is not allowed after the amendment window or once voting has started
+    ProposalAmendmentNotAllowed = 35,
+    /// 36 – Only the original proposer may amend the proposal
+    NotProposalOwner = 36,
 }
 
 /// Lifecycle state of the governance contract itself.
@@ -255,6 +259,10 @@ pub enum DataKey {
 
     /// Unix timestamp after which the pending admin nomination expires (instance storage).
     AdminTransferExpiry,
+
+    /// Amendment window in seconds before voting begins.
+    /// Key space: singleton — only one `AmendWindow` entry exists.
+    AmendWindow,
 }
 
 #[contracttype]
