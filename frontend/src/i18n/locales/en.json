@@ -79,9 +79,13 @@
     "addressLabel": "Wallet address",
     "addressPlaceholder": "Enter public address",
     "addressHelp": "Enter a public wallet address to view read-only vote history.",
+    "useConnectedWallet": "Use connected wallet",
     "fromLabel": "From",
     "toLabel": "To",
     "stateLabel": "Proposal state",
+    "sortLabel": "Sort by date",
+    "sortNewest": "Newest first",
+    "sortOldest": "Oldest first",
     "tableCaption": "Vote history for the selected address",
     "colProposal": "Proposal",
     "colVote": "Vote",
@@ -89,7 +93,12 @@
     "colState": "State",
     "colVotedAt": "Voted At",
     "noVotes": "No votes found for this address in the selected range.",
-    "voteAriaLabel": "{{type}} vote"
+    "noAddress": "Enter a wallet address above to view vote history.",
+    "voteAriaLabel": "{{type}} vote",
+    "sortVotedAt": "Voted At",
+    "voteFor": "For",
+    "voteAgainst": "Against",
+    "voteAbstain": "Abstain"
   },
   "proposalDetail": {
     "heading": "Proposal Detail",

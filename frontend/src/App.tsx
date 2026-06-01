@@ -6,6 +6,7 @@ import Navbar from "./components/Navbar";
 const ProposalList = React.lazy(() => import("./pages/ProposalList"));
 const ProposalDetail = React.lazy(() => import("./pages/ProposalDetail"));
 const VotingPanel = React.lazy(() => import("./pages/VotingPanel"));
+const VoteHistoryPage = React.lazy(() => import("./pages/VoteHistoryPage"));
 
 export default function App() {
   const { t } = useTranslation();
