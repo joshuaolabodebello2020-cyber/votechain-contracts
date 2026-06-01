@@ -1,9 +1,11 @@
 [workspace]
 resolver = "2"
 members = [
-    "api",
     "contracts/governance",
     "contracts/token",
+]
+exclude = [
+    "api",
     "indexer",
 ]
 
