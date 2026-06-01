@@ -25,7 +25,7 @@ pub mod test_helpers;
 #[cfg(test)]
 mod prop_tests;
 
-use soroban_sdk::{contract, contractclient, contractimpl, token, Address, Env, String};
+use soroban_sdk::{contract, contractclient, contractimpl, token, Address, Env, String, Vec};
 use storage::{
     get_admin, get_contract_state, get_last_proposal, get_min_duration, get_min_proposal_balance,
     get_proposal_cooldown, get_restrict_admin_vote, get_timelock_duration, get_version,
@@ -41,6 +41,8 @@ use types::{ContractError, ContractState, DataKey, Proposal, ProposalState, Vote
 
 const MAX_TITLE_LEN: u32 = 128;
 const MAX_DESC_LEN: u32 = 1024;
+const MAX_TAGS: u32 = 5;
+const MAX_TAG_LEN: u32 = 32;
 
 // SEC-004: Stellar null/zero address used as the sentinel for invalid inputs.
 const ZERO_ADDRESS: &str = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF";
@@ -164,6 +166,7 @@ impl GovernanceContract {
         description: String,
         quorum: i128,
         duration: u64,
+        tags: Vec<String>,
     ) -> Result<u64, ContractError> {
         // SEC-005: auth first.
         proposer.require_auth();
@@ -185,6 +188,17 @@ impl GovernanceContract {
             return Err(ContractError::InvalidDescription);
         }
         validate_string(&description, ContractError::InvalidDescription)?;
+
+        // Tags: max 5, each max 32 chars
+        if tags.len() > MAX_TAGS {
+            return Err(ContractError::TooManyTags);
+        }
+        for tag in tags.iter() {
+            if tag.len() > MAX_TAG_LEN {
+                return Err(ContractError::TagTooLong);
+            }
+        }
+
         // Quorum: > 0
         if quorum <= 0 {
             return Err(ContractError::InvalidQuorum);
@@ -242,6 +256,7 @@ impl GovernanceContract {
             end_time: now + duration,
             state: ProposalState::Active,
             execute_after: 0,
+            tags,
         };
         save_proposal(&env, &proposal);
         set_last_proposal(&env, &proposer, now);

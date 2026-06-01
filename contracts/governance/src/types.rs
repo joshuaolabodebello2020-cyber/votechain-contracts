@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use soroban_sdk::{contracterror, contracttype, Address, String};
+use soroban_sdk::{contracterror, contracttype, Address, String, Vec};
 
 /// All revert conditions for the governance contract.
 #[contracterror]
@@ -87,6 +87,10 @@ pub enum ContractError {
     NotPendingAdmin = 33,
     /// 34 – Target version is lower than or equal to the current version (downgrade rejected)
     DowngradeNotAllowed = 34,
+    /// 35 – Too many tags supplied (max 5)
+    TooManyTags = 35,
+    /// 36 – A tag exceeds the maximum allowed length (max 32 chars)
+    TagTooLong = 36,
 }
 
 /// Lifecycle state of the governance contract itself.
@@ -137,6 +141,8 @@ pub struct Proposal {
     /// Earliest Unix timestamp at which the proposal may be executed.
     /// Set to `end_time + timelock_duration` when the proposal passes; 0 otherwise.
     pub execute_after: u64,
+    /// Optional category tags (max 5, each max 32 chars).
+    pub tags: Vec<String>,
 }
 
 /// Storage key enum for the governance contract.
