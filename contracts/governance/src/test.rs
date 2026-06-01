@@ -15,7 +15,7 @@
 #![cfg(test)]
 
 use super::*;
-use soroban_sdk::{symbol_short, testutils::{Address as _, Events, Ledger}, Address, Env, IntoVal, String, TryFromVal};
+use soroban_sdk::{symbol_short, testutils::{Address as _, Events, Ledger}, Address, Env, IntoVal, String, TryFromVal, Vec};
 use crate::test_helpers::{setup_env, create_test_proposal, mint_and_vote};
 
 // ── local helpers for tests that need a custom Env/client shape ───────────────
@@ -128,6 +128,81 @@ fn test_initialize_emits_event() {
         }),
         "expected 'init' event with admin address as data"
     );
+}
+
+#[test]
+fn test_initialize_multisig_config_bootstraps_with_threshold() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let gov_id = env.register(GovernanceContract, ());
+    let client = GovernanceContractClient::new(&env, &gov_id);
+
+    let admin = Address::generate(&env);
+    let second_admin = Address::generate(&env);
+    let tok_id = env.register(votechain_token::TokenContract, ());
+    let tok = votechain_token::TokenContractClient::new(&env, &tok_id);
+    tok.initialize(&admin, &10_000_000);
+
+    client.initialize(&admin, &tok_id, &0_i128, &0_u64, &60_u64, &2_592_000_u64, &false, &0_u64);
+
+    let mut admins = Vec::new(&env);
+    admins.push_back(admin.clone());
+    admins.push_back(second_admin.clone());
+
+    client.initialize_multisig(&admin, &admins, &2_u32);
+
+    let config = client.get_multisig_config().expect("multisig config should exist");
+    assert_eq!(config.threshold, 2);
+    assert_eq!(config.admins.len(), 2);
+}
+
+#[test]
+fn test_execute_proposal_requires_multisig_threshold() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let gov_id = env.register(GovernanceContract, ());
+    let client = GovernanceContractClient::new(&env, &gov_id);
+
+    let admin = Address::generate(&env);
+    let second_admin = Address::generate(&env);
+    let proposer = Address::generate(&env);
+
+    let tok_id = env.register(votechain_token::TokenContract, ());
+    let tok = votechain_token::TokenContractClient::new(&env, &tok_id);
+    tok.initialize(&admin, &10_000_000);
+
+    client.initialize(&admin, &tok_id, &0_i128, &0_u64, &60_u64, &2_592_000_u64, &false, &0_u64);
+
+    let mut admins = Vec::new(&env);
+    admins.push_back(admin.clone());
+    admins.push_back(second_admin.clone());
+    client.initialize_multisig(&admin, &admins, &2_u32);
+
+    let proposal_id = client.create_proposal(
+        &proposer,
+        &String::from_str(&env, "Execute threshold"),
+        &String::from_str(&env, "desc"),
+        &100,
+        &3600,
+    );
+
+    client.cast_vote(&proposer, &proposal_id, &Vote::Yes);
+    env.ledger().with_mut(|l| l.timestamp += 3601);
+    client.finalise(&proposal_id);
+
+    let action_id = client.propose_multisig_action(
+        &admin,
+        &MultiSigActionType::ExecuteProposal,
+        &proposal_id,
+        &None::<MultiSigConfig>,
+    );
+
+    assert_eq!(client.get_proposal(&proposal_id).state, ProposalState::Passed);
+
+    client.approve_multisig_action(&second_admin, &action_id);
+    assert_eq!(client.get_proposal(&proposal_id).state, ProposalState::Executed);
 }
 
 // ── end SC-001 ────────────────────────────────────────────────────────────────

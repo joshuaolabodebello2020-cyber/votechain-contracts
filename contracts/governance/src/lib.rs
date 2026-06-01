@@ -25,7 +25,7 @@ pub mod test_helpers;
 #[cfg(test)]
 mod prop_tests;
 
-use soroban_sdk::{contract, contractclient, contractimpl, token, Address, Env, String};
+use soroban_sdk::{contract, contractclient, contractimpl, token, Address, Env, String, Vec};
 use storage::{
     get_admin, get_contract_state, get_last_proposal, get_min_duration, get_min_proposal_balance,
     get_proposal_cooldown, get_restrict_admin_vote, get_timelock_duration, get_version,
@@ -36,8 +36,13 @@ use storage::{
     set_timelock_duration, set_version, set_voting_token, get_vote_record, get_max_duration,
     set_pending_admin, get_pending_admin, clear_pending_admin,
     set_admin_transfer_expiry, get_admin_transfer_expiry,
+    get_multisig_config, set_multisig_config, next_multisig_action_id,
+    save_multisig_action, load_multisig_action, set_multisig_approval, has_multisig_approval,
 };
-use types::{ContractError, ContractState, DataKey, Proposal, ProposalState, Vote, VoteRecord};
+use types::{
+    ContractError, ContractState, DataKey, MultiSigAction, MultiSigActionType, MultiSigConfig,
+    Proposal, ProposalState, Vote, VoteRecord,
+};
 
 const MAX_TITLE_LEN: u32 = 128;
 const MAX_DESC_LEN: u32 = 1024;
@@ -81,6 +86,86 @@ fn require_non_zero_address(env: &Env, addr: &Address) -> Result<(), ContractErr
 #[contractclient(name = "TokenSupplyClient")]
 pub trait TokenSupplyInterface {
     fn total_supply(env: Env) -> i128;
+}
+
+/// Returns `Ok(())` if `addr` is in the multi-sig admin list, else `NotMultiSigAdmin`.
+fn require_multisig_admin(config: &MultiSigConfig, addr: &Address) -> Result<(), ContractError> {
+    for i in 0..config.admins.len() {
+        if config.admins.get(i).unwrap() == *addr {
+            return Ok(());
+        }
+    }
+    Err(ContractError::NotMultiSigAdmin)
+}
+
+/// Executes a multi-sig action after threshold is reached.
+/// Marks the action as executed and performs the underlying operation.
+fn execute_multisig_action(
+    env: &Env,
+    action_id: u64,
+    action_type: &MultiSigActionType,
+    proposal_id: u64,
+    new_config: &Option<MultiSigConfig>,
+) -> Result<(), ContractError> {
+    // Mark executed first to prevent re-entrancy.
+    let mut action = load_multisig_action(env, action_id)?;
+    action.executed = true;
+    save_multisig_action(env, &action);
+
+    match action_type {
+        MultiSigActionType::ExecuteProposal => {
+            let mut proposal = load_proposal(env, proposal_id)?;
+            if proposal.state != ProposalState::Passed {
+                return Err(ContractError::ProposalNotPassed);
+            }
+            if env.ledger().timestamp() < proposal.execute_after {
+                return Err(ContractError::TimelockNotExpired);
+            }
+            proposal.state = ProposalState::Executed;
+            save_proposal(env, &proposal);
+            events::proposal_executed(env, proposal_id);
+        }
+        MultiSigActionType::CancelProposal => {
+            let mut proposal = load_proposal(env, proposal_id)?;
+            if proposal.state != ProposalState::Active {
+                return Err(ContractError::ProposalNotActive);
+            }
+            proposal.state = ProposalState::Cancelled;
+            save_proposal(env, &proposal);
+            events::proposal_cancelled(env, proposal_id);
+        }
+        MultiSigActionType::UpdateMultiSig => {
+            let config = new_config.clone().ok_or(ContractError::MultiSigNotConfigured)?;
+            if config.admins.is_empty() {
+                return Err(ContractError::EmptyAdminList);
+            }
+            if config.threshold == 0 || config.threshold > config.admins.len() {
+                return Err(ContractError::InvalidThreshold);
+            }
+            let threshold = config.threshold;
+            set_multisig_config(env, &config);
+            events::multisig_config_updated(env, threshold);
+        }
+        MultiSigActionType::Pause => {
+            set_paused(env, true);
+            // Emit using the stored admin address as the actor.
+            if let Ok(admin) = get_admin(env) {
+                events::contract_paused(env, &admin);
+            }
+        }
+        MultiSigActionType::Unpause => {
+            if !is_paused(env) {
+                return Err(ContractError::NotPaused);
+            }
+            set_paused(env, false);
+            if let Ok(admin) = get_admin(env) {
+                events::contract_unpaused(env, &admin);
+            }
+        }
+    }
+
+    events::multisig_action_executed(env, action_id, action_type);
+    Ok(())
 }
 
 #[contract]
@@ -758,5 +843,144 @@ impl GovernanceContract {
         set_version(&env, new_version);
         events::contract_upgraded(&env, current, new_version);
         Ok(())
+    }
+
+    // =========================================================================
+    // Multi-sig admin operations (SC-003)
+    // =========================================================================
+
+    /// Configures the multi-sig admin list and threshold.
+    ///
+    /// Can be called by the current single admin to bootstrap multi-sig, or
+    /// via an approved `UpdateMultiSig` multi-sig action once multi-sig is active.
+    ///
+    /// # Errors
+    /// - [`ContractError::NotAdmin`] if `caller` is not the current admin.
+    /// - [`ContractError::EmptyAdminList`] if `admins` is empty.
+    /// - [`ContractError::InvalidThreshold`] if `threshold` is 0 or > len(admins).
+    pub fn initialize_multisig(
+        env: Env,
+        caller: Address,
+        admins: Vec<Address>,
+        threshold: u32,
+    ) -> Result<(), ContractError> {
+        caller.require_auth();
+        require_non_zero_address(&env, &caller)?;
+        if get_admin(&env)? != caller {
+            return Err(ContractError::NotAdmin);
+        }
+        if admins.is_empty() {
+            return Err(ContractError::EmptyAdminList);
+        }
+        let n = admins.len();
+        if threshold == 0 || threshold > n {
+            return Err(ContractError::InvalidThreshold);
+        }
+        let config = MultiSigConfig { admins, threshold };
+        set_multisig_config(&env, &config);
+        events::multisig_config_updated(&env, threshold);
+        Ok(())
+    }
+
+    /// Proposes a privileged action that requires multi-sig approval.
+    ///
+    /// The proposer must be in the multi-sig admin list. Their approval is
+    /// counted automatically (first approval).
+    ///
+    /// # Parameters
+    /// - `action_type` — the type of action to perform.
+    /// - `proposal_id` — relevant proposal ID (for Execute/Cancel actions; pass 0 otherwise).
+    /// - `new_config` — new multi-sig config (for UpdateMultiSig action; pass `None` otherwise).
+    ///
+    /// # Returns
+    /// The new action ID.
+    ///
+    /// # Errors
+    /// - [`ContractError::MultiSigNotConfigured`] if multi-sig has not been set up.
+    /// - [`ContractError::NotMultiSigAdmin`] if `proposer` is not in the admin list.
+    pub fn propose_multisig_action(
+        env: Env,
+        proposer: Address,
+        action_type: MultiSigActionType,
+        proposal_id: u64,
+        new_config: Option<MultiSigConfig>,
+    ) -> Result<u64, ContractError> {
+        proposer.require_auth();
+        require_non_zero_address(&env, &proposer)?;
+        if is_paused(&env) {
+            return Err(ContractError::ContractPaused);
+        }
+        let config = get_multisig_config(&env).ok_or(ContractError::MultiSigNotConfigured)?;
+        require_multisig_admin(&config, &proposer)?;
+
+        let action_id = next_multisig_action_id(&env)?;
+        let action = MultiSigAction {
+            id: action_id,
+            action_type: action_type.clone(),
+            proposal_id,
+            new_config,
+            approvals: 1,
+            executed: false,
+        };
+        save_multisig_action(&env, &action);
+        set_multisig_approval(&env, action_id, &proposer);
+        events::multisig_action_proposed(&env, action_id, &proposer, &action_type);
+        events::multisig_action_approved(&env, action_id, &proposer, 1, config.threshold);
+
+        // Auto-execute if threshold is 1.
+        if config.threshold == 1 {
+            execute_multisig_action(&env, action_id, &action_type, action.proposal_id, &action.new_config)?;
+        }
+
+        Ok(action_id)
+    }
+
+    /// Approves a pending multi-sig action.
+    ///
+    /// When the approval count reaches the configured threshold the action is
+    /// executed immediately within the same transaction.
+    ///
+    /// # Errors
+    /// - [`ContractError::MultiSigNotConfigured`] if multi-sig has not been set up.
+    /// - [`ContractError::NotMultiSigAdmin`] if `approver` is not in the admin list.
+    /// - [`ContractError::ActionNotFound`] if `action_id` does not exist.
+    /// - [`ContractError::ActionAlreadyExecuted`] if the action was already executed.
+    /// - [`ContractError::AlreadyApproved`] if `approver` has already approved this action.
+    pub fn approve_multisig_action(
+        env: Env,
+        approver: Address,
+        action_id: u64,
+    ) -> Result<(), ContractError> {
+        approver.require_auth();
+        require_non_zero_address(&env, &approver)?;
+        if is_paused(&env) {
+            return Err(ContractError::ContractPaused);
+        }
+        let config = get_multisig_config(&env).ok_or(ContractError::MultiSigNotConfigured)?;
+        require_multisig_admin(&config, &approver)?;
+
+        let mut action = load_multisig_action(&env, action_id)?;
+        if action.executed {
+            return Err(ContractError::ActionAlreadyExecuted);
+        }
+        if has_multisig_approval(&env, action_id, &approver) {
+            return Err(ContractError::AlreadyApproved);
+        }
+
+        action.approvals = action.approvals.checked_add(1).ok_or(ContractError::VoteTallyOverflow)?;
+        set_multisig_approval(&env, action_id, &approver);
+        save_multisig_action(&env, &action);
+        events::multisig_action_approved(&env, action_id, &approver, action.approvals, config.threshold);
+
+        if action.approvals >= config.threshold {
+            execute_multisig_action(&env, action_id, &action.action_type, action.proposal_id, &action.new_config)?;
+        }
+
+        Ok(())
+    }
+
+    /// Returns the current multi-sig configuration, or `None` if not configured.
+    pub fn get_multisig_config(env: Env) -> Option<MultiSigConfig> {
+        get_multisig_config(&env)
     }
 }

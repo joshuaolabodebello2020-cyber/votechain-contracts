@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use soroban_sdk::{symbol_short, Address, Env};
-use crate::types::{ProposalState, Vote};
+use crate::types::{MultiSigActionType, ProposalState, Vote};
 
 /// # Event Schema
 ///
@@ -135,4 +135,64 @@ pub fn contract_unpaused(env: &Env, admin: &Address) {
 /// Data: `(old_version: (u32, u32, u32), new_version: (u32, u32, u32))`
 pub fn contract_upgraded(env: &Env, old_version: (u32, u32, u32), new_version: (u32, u32, u32)) {
     env.events().publish((symbol_short!("upgraded"),), (old_version, new_version));
+}
+
+/// Emits a `migrated` event when a contract migration completes.
+///
+/// Topics: `("migrated",)`
+/// Data: `(old_version: (u32, u32, u32), new_version: (u32, u32, u32))`
+pub fn migration_completed(env: &Env, old_version: (u32, u32, u32), new_version: (u32, u32, u32)) {
+    env.events().publish((symbol_short!("migrated"),), (old_version, new_version));
+}
+
+/// Emits an `mspropose` event when a multi-sig action is proposed.
+///
+/// Topics: `("mspropose", action_id)`
+/// Data: `(proposer: Address, action_type: MultiSigActionType)`
+pub fn multisig_action_proposed(
+    env: &Env,
+    action_id: u64,
+    proposer: &Address,
+    action_type: &MultiSigActionType,
+) {
+    env.events().publish(
+        (symbol_short!("msprop"), action_id),
+        (proposer.clone(), action_type.clone()),
+    );
+}
+
+/// Emits an `msapprove` event when a multi-sig action receives an approval.
+///
+/// Topics: `("msapprove", action_id)`
+/// Data: `(approver: Address, approvals: u32, threshold: u32)`
+pub fn multisig_action_approved(
+    env: &Env,
+    action_id: u64,
+    approver: &Address,
+    approvals: u32,
+    threshold: u32,
+) {
+    env.events().publish(
+        (symbol_short!("msapprv"), action_id),
+        (approver.clone(), approvals, threshold),
+    );
+}
+
+/// Emits an `msexec` event when a multi-sig action reaches threshold and executes.
+///
+/// Topics: `("msexec", action_id)`
+/// Data: `action_type: MultiSigActionType`
+pub fn multisig_action_executed(env: &Env, action_id: u64, action_type: &MultiSigActionType) {
+    env.events().publish(
+        (symbol_short!("msexec"), action_id),
+        action_type.clone(),
+    );
+}
+
+/// Emits an `mscfg` event when the multi-sig config is updated.
+///
+/// Topics: `("mscfg",)`
+/// Data: `threshold: u32`
+pub fn multisig_config_updated(env: &Env, threshold: u32) {
+    env.events().publish((symbol_short!("mscfg"),), threshold);
 }
