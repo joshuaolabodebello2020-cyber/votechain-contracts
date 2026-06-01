@@ -24,6 +24,8 @@ mod test;
 pub mod test_helpers;
 #[cfg(test)]
 mod prop_tests;
+#[cfg(test)]
+mod integration_tests;
 
 use soroban_sdk::{contract, contractclient, contractimpl, token, Address, Env, String};
 use storage::{
