@@ -12,6 +12,11 @@ export enum VoteType {
   Abstain = 'Abstain',
 }
 
+export interface Translation {
+  title: string;
+  description: string;
+}
+
 export interface Proposal {
   id: string;
   proposer: string;
@@ -24,4 +29,5 @@ export interface Proposal {
   startTime: number; // unix timestamp
   endTime: number; // unix timestamp
   status: ProposalStatus;
+  translations?: Record<string, Translation>;
 }

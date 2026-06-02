@@ -26,6 +26,7 @@ export default function App() {
 
   return (
     <ErrorBoundary section="App">
+      <OnboardingTutorial />
       {/* Skip navigation link — allows keyboard users to bypass repeated nav (WCAG 2.4.1) */}
       <a href="#main-content" className="skip-link">
         {t("nav.skipToMain")}

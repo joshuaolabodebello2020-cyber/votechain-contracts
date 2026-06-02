@@ -125,6 +125,13 @@ pub enum Vote {
 }
 
 #[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct Translation {
+    pub title: String,
+    pub description: String,
+}
+
+#[contracttype]
 #[derive(Clone, Debug)]
 pub struct Proposal {
     pub id: u64,

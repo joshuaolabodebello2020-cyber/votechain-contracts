@@ -29,7 +29,7 @@ mod integration_tests;
 
 use soroban_sdk::{contract, contractclient, contractimpl, token, Address, Env, String, Vec};
 use storage::{
-    get_admin, get_contract_state, get_last_proposal, get_min_duration, get_min_proposal_balance,
+    get_admin as storage_get_admin, get_contract_state, get_last_proposal, get_min_duration, get_min_proposal_balance,
     get_proposal_cooldown, get_restrict_admin_vote, get_timelock_duration, get_version,
     get_amend_window, get_voter_snapshot, get_voting_token, has_voted, is_initialized, is_paused, load_proposal,
     mark_voted, next_id, save_proposal, save_vote_record, save_voter_snapshot, set_admin,
@@ -521,7 +521,7 @@ impl GovernanceContract {
         }
 
         if get_restrict_admin_vote(&env) {
-            let admin = get_admin(&env)?;
+            let admin = storage_get_admin(&env)?;
             if voter == admin && proposal.proposer == admin {
                 return Err(ContractError::AdminVoteRestricted);
             }
@@ -640,7 +640,7 @@ impl GovernanceContract {
         if is_paused(&env) {
             return Err(ContractError::ContractPaused);
         }
-        if get_admin(&env)? != admin {
+        if storage_get_admin(&env)? != admin {
             return Err(ContractError::NotAdmin);
         }
         let mut proposal = load_proposal(&env, proposal_id)?;
@@ -671,7 +671,7 @@ impl GovernanceContract {
         if is_paused(&env) {
             return Err(ContractError::ContractPaused);
         }
-        if get_admin(&env)? != admin {
+        if storage_get_admin(&env)? != admin {
             return Err(ContractError::NotAdmin);
         }
         let mut proposal = load_proposal(&env, proposal_id)?;
@@ -705,7 +705,7 @@ impl GovernanceContract {
         if is_paused(&env) {
             return Err(ContractError::ContractPaused);
         }
-        if get_admin(&env)? != admin {
+        if storage_get_admin(&env)? != admin {
             return Err(ContractError::NotAdmin);
         }
         if new_quorum <= 0 {
@@ -741,7 +741,7 @@ impl GovernanceContract {
         if is_paused(&env) {
             return Err(ContractError::ContractPaused);
         }
-        if get_admin(&env)? != admin {
+        if storage_get_admin(&env)? != admin {
             return Err(ContractError::NotAdmin);
         }
         set_admin(&env, &new_admin);
@@ -771,7 +771,7 @@ impl GovernanceContract {
         if is_paused(&env) {
             return Err(ContractError::ContractPaused);
         }
-        if get_admin(&env)? != admin {
+        if storage_get_admin(&env)? != admin {
             return Err(ContractError::NotAdmin);
         }
         let window = if window_secs == 0 { 172_800 } else { window_secs }; // default 48 h
@@ -807,7 +807,7 @@ impl GovernanceContract {
             clear_pending_admin(&env);
             return Err(ContractError::AdminTransferExpired);
         }
-        let old_admin = get_admin(&env)?;
+        let old_admin = storage_get_admin(&env)?;
         set_admin(&env, &new_admin);
         clear_pending_admin(&env);
         events::admin_transferred(&env, &old_admin, &new_admin);
@@ -825,7 +825,7 @@ impl GovernanceContract {
     pub fn pause(env: Env, admin: Address, reason: Option<String>) -> Result<(), ContractError> {
         admin.require_auth();
         require_non_zero_address(&env, &admin)?;
-        if get_admin(&env)? != admin {
+        if storage_get_admin(&env)? != admin {
             return Err(ContractError::NotAdmin);
         }
         set_paused(&env, true);
@@ -845,7 +845,7 @@ impl GovernanceContract {
     pub fn unpause(env: Env, admin: Address) -> Result<(), ContractError> {
         admin.require_auth();
         require_non_zero_address(&env, &admin)?;
-        if get_admin(&env)? != admin {
+        if storage_get_admin(&env)? != admin {
             return Err(ContractError::NotAdmin);
         }
         if !is_paused(&env) {
@@ -1002,7 +1002,7 @@ impl GovernanceContract {
     ) -> Result<(), ContractError> {
         admin.require_auth();
         require_non_zero_address(&env, &admin)?;
-        if get_admin(&env)? != admin {
+        if storage_get_admin(&env)? != admin {
             return Err(ContractError::NotAdmin);
         }
         let current = get_version(&env);
