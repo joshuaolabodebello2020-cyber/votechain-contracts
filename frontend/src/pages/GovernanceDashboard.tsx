@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { NotificationSubscribe } from "../components/NotificationSubscribe";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -205,9 +206,20 @@ export function GovernanceDashboard() {
           </p>
         </section>
 
+        {/* Pass/Reject Ratio */}
+        <section aria-labelledby="ratio-heading" style={cardStyle}>
+          <h2 id="ratio-heading" style={h2Style}>Pass/Reject Ratio</h2>
+          <div style={{ fontSize: 48, fontWeight: 700, color: "#42a5f5" }}>
+            {stats.byState.Passed}:{stats.byState.Rejected}
+          </div>
+          <p style={{ fontSize: 13, color: "#aaa" }}>
+            Ratio of passed vs. rejected proposals
+          </p>
+        </section>
+
         {/* Top 10 voters */}
         <section aria-labelledby="voters-heading" style={{ ...cardStyle, gridColumn: "1 / -1" }}>
-          <h2 id="voters-heading" style={h2Style}>Top 10 Voters by Vote Weight</h2>
+          <h2 id="voters-heading" style={h2Style}>Top 10 Voters (Anonymized)</h2>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr style={{ borderBottom: "1px solid #333" }}>
@@ -220,7 +232,11 @@ export function GovernanceDashboard() {
               {stats.topVoters.map((v, i) => (
                 <tr key={v.address} style={{ borderBottom: "1px solid #222" }}>
                   <td style={tdStyle}>{i + 1}</td>
-                  <td style={tdStyle}>{v.address}</td>
+                  <td style={tdStyle}>
+                    {v.address.length > 12 
+                      ? `${v.address.slice(0, 6)}...${v.address.slice(-4)}` 
+                      : v.address}
+                  </td>
                   <td style={{ ...tdStyle, textAlign: "right" }}>
                     {v.total_weight.toLocaleString()}
                   </td>
@@ -228,6 +244,11 @@ export function GovernanceDashboard() {
               ))}
             </tbody>
           </table>
+        </section>
+
+        {/* Notification subscriptions */}
+        <section style={{ gridColumn: "1 / -1" }}>
+          <NotificationSubscribe />
         </section>
 
       </div>

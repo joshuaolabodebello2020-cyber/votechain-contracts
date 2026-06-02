@@ -1,0 +1,13 @@
+#!/bin/sh
+# Pre-commit hook: runs rustfmt and clippy checks.
+# Skip with: git commit --no-verify
+
+set -e
+
+echo "Running rustfmt check..."
+cargo fmt --all -- --check
+
+echo "Running clippy..."
+cargo clippy --all-targets --all-features -- -D warnings
+
+echo "Pre-commit checks passed."

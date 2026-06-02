@@ -59,8 +59,7 @@ If you prefer to configure manually:
 - Required checks:
   - `Build & Test`
   - `Build WASM`
-- Require branches to be up to date before merging: ✓
-
+- `Secret Scanning`
 ✅ **Require branches to be up to date before merging**
 - ✓ Enabled
 

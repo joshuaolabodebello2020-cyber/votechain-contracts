@@ -73,7 +73,7 @@ VoteChain consists of two complementary Soroban smart contracts:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    VoteChain System                          │
+│                    VoteChain System                          │k
 ├─────────────────────────────────────────────────────────────┤
 │                                                               │
 │  ┌──────────────────────┐      ┌──────────────────────┐     │
@@ -96,6 +96,14 @@ VoteChain consists of two complementary Soroban smart contracts:
 │                                                               │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+### Frontend–Contract Interaction
+
+The diagram below shows how the browser communicates with Soroban contracts via Stellar RPC, including the full vote submission flow:
+
+![Frontend–Contract Architecture](docs/frontend-contract-architecture.svg)
+
+See [`docs/frontend-contract-architecture.svg`](docs/frontend-contract-architecture.svg) for the full-resolution file.
 
 ### Key Design Decisions
 
@@ -261,13 +269,15 @@ votechain-contracts/
 │       └── Cargo.toml
 │
 ├── docs/
+│   ├── frontend-contract-architecture.svg  # Frontend↔Contract interaction diagram
 │   ├── adr/                          # Architecture Decision Records
 │   │   ├── ADR-001-stellar-soroban-platform.md
 │   │   ├── ADR-002-token-weighted-voting.md
 │   │   ├── ADR-003-live-balance-over-snapshot.md
 │   │   ├── ADR-004-three-way-vote.md
 │   │   ├── ADR-005-on-chain-events.md
-│   │   └── ADR-006-instance-vs-persistent-storage.md
+│   │   ├── ADR-006-instance-vs-persistent-storage.md
+│   │   └── ADR-007-vote-delegation.md
 │   ├── security/
 │   │   ├── threat-model.md
 │   │   ├── known-issues.md
@@ -279,6 +289,7 @@ votechain-contracts/
 │   │   ├── rust.md                   # Rust integration examples
 │   │   └── javascript.md             # JavaScript/TypeScript examples
 │   ├── GETTING_STARTED.md
+│   ├── dao-integration-guide.md         # DAO deployment & governance walkthrough
 │   ├── lifecycle.md
 │   ├── storage.md
 │   ├── upgrading.md
@@ -1496,6 +1507,7 @@ We welcome contributions from the community. Please see [CONTRIBUTING.md](CONTRI
 ### Documentation
 
 - **[GETTING_STARTED.md](docs/GETTING_STARTED.md)** — Step-by-step setup guide
+- **[DAO Integration Guide](docs/dao-integration-guide.md)** — Deploy, configure, and run governance for your DAO
 - **[Proposal Lifecycle](docs/lifecycle.md)** — Detailed state diagram and transitions
 - **[Storage Model](docs/storage.md)** — Storage tier strategy and optimization
 - **[Upgrading](docs/upgrading.md)** — Contract upgrade procedures
@@ -1511,6 +1523,7 @@ We welcome contributions from the community. Please see [CONTRIBUTING.md](CONTRI
 - **[ADR-004](docs/adr/ADR-004-three-way-vote.md)** — Three-way voting
 - **[ADR-005](docs/adr/ADR-005-on-chain-events.md)** — On-chain events
 - **[ADR-006](docs/adr/ADR-006-instance-vs-persistent-storage.md)** — Storage tier optimization
+- **[ADR-007](docs/adr/ADR-007-vote-delegation.md)** — Vote delegation (deferred)
 
 ### Examples
 
