@@ -59,6 +59,7 @@ fn setup_passed_proposal(env: &Env, client: &GovernanceContractClient, admin: &A
         &String::from_str(env, "desc"),
         &100,
         &3600,
+        &Vec::new(env),
     );
     client.cast_vote(&voter, &id, &Vote::Yes);
     env.ledger().with_mut(|l| l.timestamp += 3601);
@@ -77,6 +78,7 @@ fn setup_active_proposal(env: &Env, client: &GovernanceContractClient, admin: &A
         &String::from_str(env, "desc"),
         &100,
         &3600,
+        &Vec::new(env),
     )
 }
 
@@ -114,6 +116,7 @@ fn test_initialize() {
         &String::from_str(&env, "desc"),
         &100,
         &3600,
+        &Vec::new(&env),
     );
     client.cancel(&admin, &id); // would revert with NotAdmin if admin wasn't stored
     assert_eq!(client.get_proposal(&id).state, ProposalState::Cancelled);
@@ -376,6 +379,7 @@ fn test_finalise_rejected_below_quorum() {
         &String::from_str(&t.env, "desc"),
         &9_999_999,
         &3600,
+        &Vec::new(&t.env),
     );
     mint_and_vote(&t, &voter, id, Vote::Yes, 1_000_000);
     t.env.ledger().with_mut(|l| l.timestamp += 3601);
@@ -587,6 +591,7 @@ fn test_finalise_one_does_not_affect_others() {
         &String::from_str(&t.env, "d"),
         &1,
         &7200,
+        &Vec::new(&t.env),
     );
 
     mint_and_vote(&t, &voter, id1, Vote::Yes, 1_000_000);
@@ -613,9 +618,9 @@ fn test_proposals_at_different_lifecycle_stages() {
     let t = setup_env();
     let voter = Address::generate(&t.env);
 
-    let active_id    = t.client.create_proposal(&voter, &String::from_str(&t.env, "Active"),   &String::from_str(&t.env, "d"), &1,         &7200);
+    let active_id    = t.client.create_proposal(&voter, &String::from_str(&t.env, "Active"),   &String::from_str(&t.env, "d"), &1,         &7200, &Vec::new(&t.env));
     let passed_id    = create_test_proposal(&t, &voter);
-    let rejected_id  = t.client.create_proposal(&voter, &String::from_str(&t.env, "Rejected"), &String::from_str(&t.env, "d"), &9_999_999, &3600);
+    let rejected_id  = t.client.create_proposal(&voter, &String::from_str(&t.env, "Rejected"), &String::from_str(&t.env, "d"), &9_999_999, &3600, &Vec::new(&t.env));
     let cancelled_id = create_test_proposal(&t, &voter);
 
     mint_and_vote(&t, &voter, passed_id, Vote::Yes, 1_000_000);
@@ -724,6 +729,7 @@ fn test_execute_rejected_proposal_reverts() {
         &String::from_str(&env, "desc"),
         &1_000_000,
         &3600,
+        &Vec::new(&env),
     );
     env.ledger().with_mut(|l| l.timestamp += 3601);
     client.finalise(&id);
@@ -812,6 +818,7 @@ fn test_proposal_data_persists_unchanged() {
         &String::from_str(&t.env, "Persist desc"),
         &250,
         &1800,
+        &Vec::new(&t.env),
     );
     let p = t.client.get_proposal(&id);
     assert_eq!(p.id, id);
@@ -862,6 +869,7 @@ fn test_no_data_lost_between_calls() {
         &String::from_str(&t.env, "d2"),
         &200,
         &7200,
+        &Vec::new(&t.env),
     );
 
     mint_and_vote(&t, &voter, id1, Vote::Yes, 1_000_000);
@@ -1205,6 +1213,7 @@ fn test_vote_at_exact_end_time_reverts() {
         &String::from_str(&t.env, "desc"),
         &1,
         &3600,
+        &Vec::new(&t.env),
     );
     t.env.ledger().with_mut(|l| l.timestamp = now + 3600);
     mint_and_vote(&t, &voter, id, Vote::Yes, 1_000_000);
@@ -1354,6 +1363,7 @@ fn test_create_proposal_below_min_balance_reverts() {
         &String::from_str(&env, "desc"),
         &100,
         &3600,
+        &Vec::new(&env),
     );
 }
 
@@ -1376,6 +1386,7 @@ fn test_create_proposal_at_min_balance_accepted() {
         &String::from_str(&env, "desc"),
         &100,
         &3600,
+        &Vec::new(&env),
     );
     assert_eq!(client.get_proposal(&id).state, ProposalState::Active);
 }
@@ -1400,6 +1411,7 @@ fn test_create_proposal_within_cooldown_reverts() {
         &String::from_str(&env, "desc"),
         &100,
         &7200,
+        &Vec::new(&env),
     );
     // second proposal immediately within cooldown — should panic
     client.create_proposal(
@@ -1408,6 +1420,7 @@ fn test_create_proposal_within_cooldown_reverts() {
         &String::from_str(&env, "desc"),
         &100,
         &3600,
+        &Vec::new(&env),
     );
 }
 
@@ -1427,6 +1440,7 @@ fn test_create_proposal_after_cooldown_accepted() {
         &String::from_str(&env, "desc"),
         &100,
         &7200,
+        &Vec::new(&env),
     );
     // advance past cooldown
     env.ledger().with_mut(|l| l.timestamp += 3601);
@@ -1436,6 +1450,7 @@ fn test_create_proposal_after_cooldown_accepted() {
         &String::from_str(&env, "desc"),
         &100,
         &3600,
+        &Vec::new(&env),
     );
     assert_eq!(client.get_proposal(&id2).state, ProposalState::Active);
 }
@@ -1504,6 +1519,7 @@ fn test_abstain_votes_count_toward_quorum() {
         &String::from_str(&t.env, "desc"),
         &500_000,
         &3600,
+        &Vec::new(&t.env),
     );
     mint_and_vote(&t, &voter, id, Vote::Abstain, 500_000);
 
@@ -1529,6 +1545,7 @@ fn test_abstain_plus_yes_meets_quorum_and_passes() {
         &String::from_str(&t.env, "desc"),
         &1_000_000,
         &3600,
+        &Vec::new(&t.env),
     );
     mint_and_vote(&t, &voter_yes, id, Vote::Yes,     600_000);
     mint_and_vote(&t, &voter_abs, id, Vote::Abstain, 400_000);
@@ -1551,6 +1568,7 @@ fn test_yes_alone_below_quorum_rejected() {
         &String::from_str(&t.env, "desc"),
         &1_000_000,
         &3600,
+        &Vec::new(&t.env),
     );
     mint_and_vote(&t, &voter, id, Vote::Yes, 600_000);
 
@@ -1580,6 +1598,7 @@ fn make_passed_proposal_for_transfer(
         &String::from_str(env, "desc"),
         &100,
         &3600,
+        &Vec::new(&env),
     );
     client.cast_vote(&voter, &id, &Vote::Yes);
     env.ledger().with_mut(|l| l.timestamp += 3601);
@@ -1626,6 +1645,7 @@ fn test_transfer_admin_old_admin_cannot_cancel() {
         &String::from_str(&t.env, "desc"),
         &100,
         &3600,
+        &Vec::new(&t.env),
     );
 
     t.client.transfer_admin(&t.admin, &new_admin);
@@ -1683,6 +1703,7 @@ fn test_admin_cannot_vote_own_proposal_when_restricted() {
         &String::from_str(&env, "desc"),
         &100,
         &3600,
+        &Vec::new(&env),
     );
     // admin tries to vote on their own proposal — should panic
     client.cast_vote(&admin, &id, &Vote::Yes);
@@ -1706,6 +1727,7 @@ fn test_admin_can_vote_own_proposal_when_not_restricted() {
         &String::from_str(&env, "desc"),
         &100,
         &3600,
+        &Vec::new(&env),
     );
     // admin votes on their own proposal — should succeed
     client.cast_vote(&admin, &id, &Vote::Yes);
@@ -1730,6 +1752,7 @@ fn test_non_admin_can_vote_when_admin_restricted() {
         &String::from_str(&env, "desc"),
         &100,
         &3600,
+        &Vec::new(&env),
     );
     let voter = Address::generate(&env);
     tok.mint(&admin, &voter, &500_000_i128);
@@ -1811,6 +1834,7 @@ fn test_create_proposal_reverts_when_paused() {
         &String::from_str(&t.env, "d"),
         &100,
         &3600,
+        &Vec::new(&t.env),
     );
 }
 
@@ -2049,6 +2073,7 @@ fn test_cancel_reverts_on_non_active_proposal() {
         &String::from_str(&env, "desc"),
         &1_000_000,
         &3600,
+        &Vec::new(&env),
     );
     env.ledger().with_mut(|l| l.timestamp += 3601);
     client.finalise(&id);
@@ -2302,6 +2327,7 @@ fn test_initialize_min_balance_enforced() {
         &String::from_str(&env, "desc"),
         &100,
         &3600,
+        &Vec::new(&env),
     );
 }
 
@@ -2322,6 +2348,7 @@ fn test_initialize_restrict_admin_vote_enforced() {
         &String::from_str(&env, "desc"),
         &100,
         &3600,
+        &Vec::new(&env),
     );
     // admin voting on their own proposal must revert
     client.cast_vote(&admin, &id, &Vote::Yes);
@@ -2379,6 +2406,7 @@ fn test_finalise_passes_when_quorum_met_and_yes_wins() {
         &String::from_str(&t.env, "desc"),
         &500_000,
         &3600,
+        &Vec::new(&t.env),
     );
     mint_and_vote(&t, &voter, id, Vote::Yes, 600_000);
     t.env.ledger().with_mut(|l| l.timestamp += 3601);
@@ -2397,6 +2425,7 @@ fn test_finalise_rejected_when_quorum_not_met() {
         &String::from_str(&t.env, "desc"),
         &1_000_000,
         &3600,
+        &Vec::new(&t.env),
     );
     mint_and_vote(&t, &voter, id, Vote::Yes, 500_000); // below quorum
     t.env.ledger().with_mut(|l| l.timestamp += 3601);
@@ -2416,6 +2445,7 @@ fn test_finalise_rejected_on_tie() {
         &String::from_str(&t.env, "desc"),
         &200_000,
         &3600,
+        &Vec::new(&t.env),
     );
     mint_and_vote(&t, &voter_yes, id, Vote::Yes, 200_000);
     mint_and_vote(&t, &voter_no,  id, Vote::No,  200_000);
@@ -2436,6 +2466,7 @@ fn test_finalise_rejected_when_no_wins() {
         &String::from_str(&t.env, "desc"),
         &100_000,
         &3600,
+        &Vec::new(&t.env),
     );
     mint_and_vote(&t, &voter_yes, id, Vote::Yes, 100_000);
     mint_and_vote(&t, &voter_no,  id, Vote::No,  300_000);
@@ -2509,6 +2540,7 @@ fn test_finalise_abstain_counts_toward_quorum_but_not_outcome() {
         &String::from_str(&t.env, "desc"),
         &300_000,
         &3600,
+        &Vec::new(&t.env),
     );
     mint_and_vote(&t, &voter, id, Vote::Abstain, 300_000);
     t.env.ledger().with_mut(|l| l.timestamp += 3601);
@@ -2546,6 +2578,7 @@ fn test_full_lifecycle_pass_and_execute() {
         &String::from_str(&env, "Allocate funds"),
         &500_000,
         &3600,
+        &Vec::new(&env),
     );
     assert_eq!(client.get_proposal(&id).state, ProposalState::Active);
     assert_eq!(client.proposal_count(), 1);
@@ -2586,6 +2619,7 @@ fn test_full_lifecycle_reject_below_quorum() {
         &String::from_str(&env, "desc"),
         &500_000, // quorum higher than available votes
         &3600,
+        &Vec::new(&env),
     );
 
     client.cast_vote(&voter, &id, &Vote::Yes);
@@ -2612,6 +2646,7 @@ fn test_full_lifecycle_cancel() {
         &String::from_str(&env, "desc"),
         &100,
         &3600,
+        &Vec::new(&env),
     );
     assert_eq!(client.get_proposal(&id).state, ProposalState::Active);
 
@@ -2642,6 +2677,7 @@ fn test_full_lifecycle_multiple_proposals_isolated() {
         &String::from_str(&env, "d"),
         &500_000,
         &3600,
+        &Vec::new(&env),
     );
     let id2 = client.create_proposal(
         &voter2,
@@ -2649,6 +2685,7 @@ fn test_full_lifecycle_multiple_proposals_isolated() {
         &String::from_str(&env, "d"),
         &500_000,
         &7200,
+        &Vec::new(&env),
     );
 
     client.cast_vote(&voter1, &id1, &Vote::Yes);
@@ -2697,6 +2734,7 @@ fn test_full_lifecycle_pause_and_unpause() {
         &String::from_str(&env, "desc"),
         &500_000,
         &3600,
+        &Vec::new(&env),
     );
 
     // pause — cast_vote must fail
@@ -2734,6 +2772,7 @@ fn test_title_null_byte_rejected() {
         &String::from_str(&t.env, "desc"),
         &100,
         &3600,
+        &Vec::new(&t.env),
     );
 }
 
@@ -2749,6 +2788,7 @@ fn test_title_control_char_rejected() {
         &String::from_str(&t.env, "desc"),
         &100,
         &3600,
+        &Vec::new(&t.env),
     );
 }
 
@@ -2764,6 +2804,7 @@ fn test_title_del_char_rejected() {
         &String::from_str(&t.env, "desc"),
         &100,
         &3600,
+        &Vec::new(&t.env),
     );
 }
 
@@ -2779,6 +2820,7 @@ fn test_description_null_byte_rejected() {
         &String::from_bytes(&t.env, b"bad\x00desc"),
         &100,
         &3600,
+        &Vec::new(&t.env),
     );
 }
 
@@ -2794,6 +2836,7 @@ fn test_description_control_char_rejected() {
         &String::from_bytes(&t.env, b"bad\x09desc"),
         &100,
         &3600,
+        &Vec::new(&t.env),
     );
 }
 
@@ -2809,6 +2852,7 @@ fn test_title_max_length_accepted() {
         &String::from_str(&t.env, "desc"),
         &100,
         &3600,
+        &Vec::new(&t.env),
     );
     assert_eq!(t.client.get_proposal(&id).state, ProposalState::Active);
 }
@@ -2825,6 +2869,7 @@ fn test_description_max_length_accepted() {
         &String::from_str(&t.env, &desc_1024),
         &100,
         &3600,
+        &Vec::new(&t.env),
     );
     assert_eq!(t.client.get_proposal(&id).state, ProposalState::Active);
 }
@@ -2842,6 +2887,7 @@ fn test_title_too_long_rejected() {
         &String::from_str(&t.env, "desc"),
         &100,
         &3600,
+        &Vec::new(&t.env),
     );
 }
 
@@ -2858,6 +2904,7 @@ fn test_description_too_long_rejected() {
         &String::from_str(&t.env, &desc_1025),
         &100,
         &3600,
+        &Vec::new(&t.env),
     );
 }
 
@@ -2872,6 +2919,7 @@ fn test_title_space_accepted() {
         &String::from_str(&t.env, "desc"),
         &100,
         &3600,
+        &Vec::new(&t.env),
     );
     assert_eq!(t.client.get_proposal(&id).state, ProposalState::Active);
 }
