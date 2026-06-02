@@ -49,7 +49,15 @@ confirm() {
 
 run_stellar() {
   if [[ "$DRY_RUN" == "true" ]]; then
-    echo "  [dry-run] stellar $*"
+    local masked_args=()
+    for arg in "$@"; do
+      if [[ "$arg" == "$STELLAR_SECRET_KEY" ]]; then
+        masked_args+=("***REDACTED_SECRET***")
+      else
+        masked_args+=("$arg")
+      fi
+    done
+    echo "  [dry-run] stellar ${masked_args[*]}"
   else
     stellar "$@"
   fi

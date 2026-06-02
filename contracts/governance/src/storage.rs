@@ -37,7 +37,7 @@
 //! Because the discriminant is part of the serialised key, these can never
 //! collide even when called with identical arguments.
 
-use soroban_sdk::{Env, Address};
+use soroban_sdk::{Env, Address, String};
 use crate::types::{ContractError, ContractState, DataKey, Proposal, VoteRecord};
 
 // =============================================================================
@@ -243,6 +243,14 @@ pub fn get_restrict_admin_vote(env: &Env) -> bool {
     env.storage().instance().get(&DataKey::RestrictAdminVote).unwrap_or(false)
 }
 
+pub fn set_amend_window(env: &Env, v: u64) {
+    env.storage().instance().set(&DataKey::AmendWindow, &v);
+}
+
+pub fn get_amend_window(env: &Env) -> u64 {
+    env.storage().instance().get(&DataKey::AmendWindow).unwrap_or(0)
+}
+
 /// Stores the mandatory delay (seconds) a passed proposal must wait before it can be executed.
 pub fn set_timelock_duration(env: &Env, v: u64) {
     env.storage().instance().set(&DataKey::TimelockDuration, &v);
@@ -261,6 +269,19 @@ pub fn set_paused(env: &Env, paused: bool) {
 /// Returns `true` if the contract is currently paused.
 pub fn is_paused(env: &Env) -> bool {
     env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+}
+
+/// Stores an optional pause reason string in instance storage.
+pub fn set_pause_reason(env: &Env, reason: Option<String>) {
+    match reason {
+        Some(r) => env.storage().instance().set(&DataKey::PauseReason, &r),
+        None => env.storage().instance().remove(&DataKey::PauseReason),
+    }
+}
+
+/// Returns the stored pause reason, or `None` if not set.
+pub fn get_pause_reason(env: &Env) -> Option<String> {
+    env.storage().instance().get(&DataKey::PauseReason)
 }
 
 pub fn set_min_duration(env: &Env, v: u64) {
@@ -303,4 +324,68 @@ pub fn set_admin_transfer_expiry(env: &Env, ts: u64) {
 /// Returns the expiry timestamp for the pending admin nomination.
 pub fn get_admin_transfer_expiry(env: &Env) -> u64 {
     env.storage().instance().get(&DataKey::AdminTransferExpiry).unwrap_or(0)
+}
+
+// =============================================================================
+// Multi-sig storage accessors
+// =============================================================================
+
+/// Stores the multi-sig admin configuration.
+pub fn set_multisig_config(env: &Env, config: &MultiSigConfig) {
+    env.storage().instance().set(&DataKey::MultiSigConfig, config);
+}
+
+/// Returns the multi-sig config, or `None` if not configured.
+pub fn get_multisig_config(env: &Env) -> Option<MultiSigConfig> {
+    env.storage().instance().get(&DataKey::MultiSigConfig)
+}
+
+/// Increments the multi-sig action counter and returns the new ID.
+///
+/// # Errors
+/// - [`ContractError::ProposalCountOverflow`] if the counter would exceed `u64::MAX`.
+pub fn next_multisig_action_id(env: &Env) -> Result<u64, ContractError> {
+    let current: u64 = env
+        .storage()
+        .instance()
+        .get(&DataKey::MultiSigActionCount)
+        .unwrap_or(0);
+    let n = current
+        .checked_add(1)
+        .ok_or(ContractError::ProposalCountOverflow)?;
+    env.storage().instance().set(&DataKey::MultiSigActionCount, &n);
+    Ok(n)
+}
+
+/// Persists a multi-sig action.
+pub fn save_multisig_action(env: &Env, action: &MultiSigAction) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::MultiSigAction(action.id), action);
+}
+
+/// Loads a multi-sig action by ID.
+///
+/// # Errors
+/// - [`ContractError::ActionNotFound`] if no action exists for `id`.
+pub fn load_multisig_action(env: &Env, id: u64) -> Result<MultiSigAction, ContractError> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::MultiSigAction(id))
+        .ok_or(ContractError::ActionNotFound)
+}
+
+/// Records that `approver` has approved multi-sig action `action_id`.
+pub fn set_multisig_approval(env: &Env, action_id: u64, approver: &Address) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::MultiSigApproval(action_id, approver.clone()), &true);
+}
+
+/// Returns `true` if `approver` has already approved `action_id`.
+pub fn has_multisig_approval(env: &Env, action_id: u64, approver: &Address) -> bool {
+    env.storage()
+        .persistent()
+        .get(&DataKey::MultiSigApproval(action_id, approver.clone()))
+        .unwrap_or(false)
 }
