@@ -1,21 +1,13 @@
+import { useTranslation } from "react-i18next";
 import { FreighterWallet } from "./FreighterWallet";
+import LanguageSwitcher from "./LanguageSwitcher";
 
-interface Props {
-  onNavigate: (page: string) => void;
-  currentPage: string;
-}
-
-export default function Navbar({ onNavigate, currentPage }: Props) {
-  const navItems = [
-    { id: "dashboard", label: "Dashboard" },
-    { id: "proposals", label: "Proposals" },
-    { id: "admin", label: "Admin Panel" },
-    { id: "profile", label: "My Profile" },
-  ];
+export default function Navbar() {
+  const { t } = useTranslation();
 
   return (
     <nav
-      aria-label="Main navigation"
+      aria-label={t("nav.mainNavLabel")}
       style={{
         display: "flex",
         alignItems: "center",
@@ -25,33 +17,13 @@ export default function Navbar({ onNavigate, currentPage }: Props) {
         borderBottom: "1px solid #333",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: "2rem" }}>
-        <span
-          style={{ fontWeight: 700, fontSize: "1.1rem", color: "#fff", cursor: "pointer" }}
-          onClick={() => onNavigate("dashboard")}
-        >
-          VoteChain
-        </span>
-        <div style={{ display: "flex", gap: "1rem" }}>
-          {navItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => onNavigate(item.id)}
-              style={{
-                background: "none",
-                border: "none",
-                color: currentPage === item.id ? "#42a5f5" : "#888",
-                cursor: "pointer",
-                fontWeight: currentPage === item.id ? 600 : 400,
-                fontSize: "0.9rem",
-              }}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
+      <span style={{ fontWeight: 700, fontSize: "1.1rem", color: "#fff" }}>
+        {t("nav.brand")}
+      </span>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+        <LanguageSwitcher />
+        <FreighterWallet />
       </div>
-      <FreighterWallet />
     </nav>
   );
 }

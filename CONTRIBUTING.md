@@ -13,6 +13,7 @@ Thank you for contributing! VoteChain is an open-source governance protocol buil
 - [Development Workflow](#development-workflow)
 - [Pull Request Process](#pull-request-process)
 - [Code Review Expectations](#code-review-expectations)
+- [Changelog](#changelog)
 - [Reporting Bugs](#reporting-bugs)
 - [License](#license)
 
@@ -171,6 +172,20 @@ cargo test test_cast_vote_and_finalise_passed
 cargo test -- --nocapture
 ```
 
+### Pre-commit hooks
+
+The repository ships a pre-commit hook that runs `rustfmt` and `clippy` before every commit. To activate it:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+The hook runs automatically on `git commit`. To skip it in an emergency:
+
+```bash
+git commit --no-verify
+```
+
 ### Formatting and linting
 
 ```bash
@@ -226,7 +241,7 @@ Every contribution to the contract crates must follow these invariants or the CI
 - [ ] Events emitted for every state-changing operation
 - [ ] New public functions have tests
 - [ ] `README.md` updated if observable behaviour changed
-- [ ] `CHANGELOG.md` `[Unreleased]` section updated for user-visible changes
+- [ ] `CHANGELOG.md` `[Unreleased]` section updated for every user-visible change (see [Changelog](#changelog))
 
 ---
 
@@ -250,6 +265,42 @@ Every contribution to the contract crates must follow these invariants or the CI
   - The PR checklist has been completed.
 - Distinguish between blocking concerns (must fix) and suggestions (nice to have) when leaving comments.
 - Approve once all blocking concerns are addressed; do not block a merge on optional style preferences.
+
+---
+
+## Changelog
+
+Every pull request that introduces a user-visible change **must** update the `[Unreleased]` section of [CHANGELOG.md](CHANGELOG.md). This is a required step in the PR checklist.
+
+### What counts as a user-visible change
+
+| Requires a CHANGELOG entry | Does not require an entry |
+| -------------------------- | ------------------------- |
+| New contract function or parameter | Internal refactor with no behaviour change |
+| Changed or removed public API | Test-only additions |
+| Bug fix that affects contract output | CI / tooling / formatting changes |
+| Security fix or hardening | Typo fixes in comments |
+| New configuration option | |
+
+### How to add an entry
+
+1. Open `CHANGELOG.md`.
+2. Under `## [Unreleased]`, add a bullet under the appropriate subsection (`Added`, `Changed`, `Fixed`, `Security`, etc.). Create the subsection heading if it does not exist yet.
+3. Write one concise sentence in imperative mood and link the issue or PR.
+
+**Example:**
+
+```markdown
+## [Unreleased]
+
+### Added
+- Add `restrict_admin_vote` flag to `initialize` to prevent the admin from voting on their own proposals. ([#42](https://github.com/Vera3289/votechain-contracts/issues/42))
+
+### Fixed
+- Fix off-by-one in `proposal_cooldown` check that allowed a second proposal one second early. ([#57](https://github.com/Vera3289/votechain-contracts/issues/57))
+```
+
+See [CHANGELOG.md](CHANGELOG.md) for the full entry format reference and subsection types.
 
 ---
 

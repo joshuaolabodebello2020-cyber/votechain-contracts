@@ -38,6 +38,40 @@ let countdownTimers = [];
 let toastTimer = null;
 let currentToast = null;
 
+// ── Wallet State (SEC-013) ───────────────────────────────────────────────────
+
+let userAddress = null;
+
+function updateWalletUI() {
+  const btn = document.getElementById('wallet-connect-btn');
+  if (!btn) return;
+  if (userAddress) {
+    btn.textContent = `${userAddress.slice(0, 6)}…${userAddress.slice(-4)}`;
+    btn.classList.add('connected');
+  } else {
+    btn.textContent = 'Connect Wallet';
+    btn.classList.remove('connected');
+  }
+}
+
+async function connectWallet() {
+  const freighter = window.freighter;
+  if (!freighter) {
+    alert('Freighter extension not found. Please install the extension to connect.');
+    return;
+  }
+  try {
+    await freighter.requestAccess();
+    userAddress = await freighter.getPublicKey();
+    updateWalletUI();
+    // Track wallet connection (PROD-003)
+    if (window.plausible) window.plausible('ConnectWallet');
+  } catch (e) {
+    console.error('Wallet connection failed:', e);
+    alert('Failed to connect wallet.');
+  }
+}
+
 // ── Mock data ────────────────────────────────────────────────────────────────
 // Replace this array with a live fetch from your Stellar RPC endpoint.
 // Each object mirrors the on-chain `Proposal` struct.
@@ -397,26 +431,63 @@ function dismissToast() {
   renderToast(null);
 }
 
-function submitMockTransaction(actionLabel) {
-  const hash = `tx_${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`;
-  showToast({
-    hash,
-    status: TOAST_STATUS.pending,
-    label: actionLabel,
-    actionLabel,
-    error: null,
-  });
+async function submitMockTransaction(actionLabel) {
+  if (!userAddress) {
+    alert('Please connect your wallet before submitting transactions.');
+    return;
+  }
 
-  setTimeout(() => {
-    const failed = Math.random() < 0.2;
+  // SEC-013: Require explicit wallet signature via Freighter
+  const freighter = window.freighter;
+  if (!freighter) {
+    alert('Freighter extension not found.');
+    return;
+  }
+
+  try {
+    // SEC-013: Signature request shows clear action description via 'reason' parameter
+    // In a real implementation, we would build and sign a XDR transaction.
+    await freighter.signTransaction('', {
+      network: 'TESTNET',
+      reason: `Sign this transaction to: ${actionLabel}`
+    });
+
+    const hash = `tx_${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`;
     showToast({
       hash,
-      status: failed ? TOAST_STATUS.failed : TOAST_STATUS.confirmed,
+      status: TOAST_STATUS.pending,
       label: actionLabel,
       actionLabel,
-      error: failed ? `${actionLabel} failed due to a network error.` : null,
+      error: null,
     });
-  }, 1600);
+
+    // Track submission (PROD-003)
+    if (window.plausible) {
+      window.plausible('SubmitAction', { props: { action: actionLabel } });
+    }
+
+    setTimeout(() => {
+      const failed = Math.random() < 0.2;
+      showToast({
+        hash,
+        status: failed ? TOAST_STATUS.failed : TOAST_STATUS.confirmed,
+        label: actionLabel,
+        actionLabel,
+        error: failed ? `${actionLabel} failed due to a network error.` : null,
+      });
+
+      // Track outcome (PROD-003)
+      if (window.plausible && !failed) {
+        window.plausible('ActionConfirmed', { props: { action: actionLabel } });
+      }
+    }, 1600);
+  } catch (e) {
+    console.warn('Transaction cancelled or failed:', e);
+    // Unsigned transactions are never submitted (SEC-013)
+    if (e.message?.includes('User declined')) {
+      alert('Transaction cancelled by user.');
+    }
+  }
 }
 
 function clearToastTimer() {
@@ -625,7 +696,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const filterButtons = Array.from(document.querySelectorAll('.filter-btn'));
   const pageSizeSelect = document.getElementById('page-size-select');
   const createProposalButton = document.getElementById('create-proposal-btn');
+  const walletConnectButton = document.getElementById('wallet-connect-btn');
   const proposalList = document.getElementById('proposal-list');
+
+  if (walletConnectButton) {
+    walletConnectButton.addEventListener('click', connectWallet);
+  }
 
   function updateFilterButtonState() {
     filterButtons.forEach((btn) => {
@@ -683,15 +759,27 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Vote buttons on proposal cards
+  // Vote buttons and title clicks on proposal cards
   if (proposalList) {
     proposalList.addEventListener('click', (event) => {
       const button = event.target.closest('button[data-action]');
-      if (!button) return;
-      const action = button.dataset.action;
-      const id = button.dataset.proposalId;
-      if (action === 'vote' && id) {
-        submitMockTransaction(`Vote on proposal #${id}`);
+      const titleLink = event.target.closest('.proposal-title');
+
+      if (button) {
+        const action = button.dataset.action;
+        const id = button.dataset.proposalId;
+        if (action === 'vote' && id) {
+          submitMockTransaction(`Vote on proposal #${id}`);
+        }
+      } else if (titleLink) {
+        const card = titleLink.closest('.proposal-card');
+        const id = card.querySelector('.proposal-id').textContent.replace('#', '');
+        // Track proposal view (PROD-003)
+        if (window.plausible) {
+          window.plausible('ViewProposal', { props: { id } });
+        }
+        // Simulation: show a mock detail view or alert for now
+        console.log(`Navigating to proposal #${id} details...`);
       }
     });
   }

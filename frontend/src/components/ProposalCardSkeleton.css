@@ -1,0 +1,54 @@
+/* ============================================================
+   ProposalCardSkeleton — shimmer placeholder styles
+   Tokens reference the same CSS custom properties used by the
+   real proposal card in styles.css so light/dark modes work
+   automatically.
+   ============================================================ */
+
+/* ── Shimmer keyframe ─────────────────────────────────────── */
+@keyframes skeleton-pulse {
+  0%   { opacity: 1; }
+  50%  { opacity: 0.45; }
+  100% { opacity: 1; }
+}
+
+/* ── Individual placeholder block ────────────────────────── */
+.skeleton-block {
+  background: var(--color-surface-2);
+  border-radius: var(--radius-sm);
+  animation: skeleton-pulse 1.6s ease-in-out infinite;
+  /* Stagger sibling pulses so the whole card doesn't flash in sync */
+}
+
+/* Stagger sibling blocks within a card */
+.skeleton-card .skeleton-block:nth-child(2) { animation-delay: 0.1s; }
+.skeleton-card .skeleton-block:nth-child(3) { animation-delay: 0.2s; }
+.skeleton-card .skeleton-block:nth-child(4) { animation-delay: 0.3s; }
+.skeleton-card .skeleton-block:nth-child(5) { animation-delay: 0.4s; }
+
+/* ── Card wrapper overrides ───────────────────────────────── */
+/*
+ * `.proposal-card` comes from styles.css. We add `.skeleton-card`
+ * to disable the hover effect — there's nothing to interact with.
+ */
+.skeleton-card {
+  cursor: default;
+  pointer-events: none;
+  /* Remove hover glow inherited from .proposal-card */
+  border-color: var(--color-border) !important;
+  box-shadow: var(--shadow-card) !important;
+}
+
+/* ── Respect user motion preferences (WCAG 2.3.3) ────────── */
+/*
+ * styles.css already has a blanket `animation: none` rule inside
+ * prefers-reduced-motion, so the skeleton will automatically stop
+ * animating for users who have requested reduced motion.
+ * We add an explicit block here for clarity and self-documentation.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-block {
+    animation: none;
+    opacity: 0.6;
+  }
+}

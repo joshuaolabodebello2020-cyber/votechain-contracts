@@ -2,6 +2,14 @@
 
 Welcome to VoteChain! This guide will help you set up your development environment and make your first contribution.
 
+## Video Walkthrough
+
+A short video walkthrough (≈ 8 min) covers the full local setup: cloning the repo, installing Rust and the Stellar CLI, running `make test`, and building the WASM binaries with `make build`.
+
+▶ **[Watch on YouTube](https://www.youtube.com/watch?v=TODO_REPLACE_WITH_REAL_ID)**
+
+A full text transcript is available in [`docs/video-transcript-local-dev-setup.md`](video-transcript-local-dev-setup.md) for accessibility.
+
 ## Prerequisites
 
 Before you begin, ensure you have the following installed on your system:
@@ -417,8 +425,9 @@ Now that you're set up:
 
 1. Read the [CONTRIBUTING.md](../CONTRIBUTING.md) for contribution guidelines
 2. Review the [Architecture Decision Records](adr/README.md) to understand design choices
-3. Check the [FAQ](faq.md) for common questions
-4. Browse [open issues](https://github.com/Vera3289/votechain-contracts/issues) to find something to work on
-5. Join the Stellar Discord to connect with the community
+3. Read [Soroban Gotchas & Limitations](soroban-gotchas.md) for platform-specific pitfalls
+4. Check the [FAQ](faq.md) for common questions
+5. Browse [open issues](https://github.com/Vera3289/votechain-contracts/issues) to find something to work on
+6. Join the Stellar Discord to connect with the community
 
 Happy coding! 🚀
