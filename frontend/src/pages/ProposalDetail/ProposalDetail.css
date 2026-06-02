@@ -260,3 +260,49 @@
   .vote-buttons { flex-direction: column; width: 100%; }
   .btn { width: 100%; }
 }
+
+@media print {
+  .back-link,
+  .proposal-actions {
+    display: none !important;
+  }
+
+  .proposal-detail {
+    margin: 0;
+    padding: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+
+  .proposal-header,
+  .proposal-meta,
+  .vote-stats,
+  .quorum-container {
+    page-break-inside: avoid;
+  }
+
+  .proposal-meta {
+    background: transparent;
+    border: none;
+    padding: 0;
+  }
+
+  .proposal-section h3 {
+    border-bottom: none;
+    font-size: 1.2rem;
+  }
+
+  .proposal-description,
+  .label-text,
+  .quorum-status,
+  .meta-value,
+  .meta-label {
+    color: #000 !important;
+  }
+
+  .chart-container,
+  .progress-bar-container {
+    background: transparent !important;
+  }
+}

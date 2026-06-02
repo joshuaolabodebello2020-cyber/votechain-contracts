@@ -191,6 +191,12 @@ struct EventRow {
     ingested_at: chrono::DateTime<chrono::Utc>,
 }
 
+#[derive(Serialize, sqlx::FromRow)]
+struct VoterStats {
+    voter: String,
+    vote_count: i64,
+}
+
 async fn list_events(State(pool): State<PgPool>) -> Json<Vec<EventRow>> {
     let rows = sqlx::query_as::<_, EventRow>(
         "SELECT id, ledger_seq, tx_hash, topic, proposal_id, payload, ingested_at
@@ -211,6 +217,21 @@ async fn list_proposal_events(
          FROM contract_events WHERE proposal_id = $1 ORDER BY ledger_seq ASC",
     )
     .bind(id)
+    .fetch_all(&pool)
+    .await
+    .unwrap_or_default();
+    Json(rows)
+}
+
+async fn get_participation_stats(State(pool): State<PgPool>) -> Json<Vec<VoterStats>> {
+    let rows = sqlx::query_as::<_, VoterStats>(
+        "SELECT payload->>0 as voter, COUNT(*) as vote_count 
+         FROM contract_events 
+         WHERE topic = 'vote' 
+         GROUP BY payload->>0 
+         ORDER BY vote_count DESC 
+         LIMIT 100"
+    )
     .fetch_all(&pool)
     .await
     .unwrap_or_default();
@@ -247,6 +268,7 @@ async fn main() -> Result<()> {
     let app = Router::new()
         .route("/events", get(list_events))
         .route("/events/proposals/{id}", get(list_proposal_events))
+        .route("/stats/participation", get(get_participation_stats))
         .with_state(pool);
 
     let addr = "0.0.0.0:4000";

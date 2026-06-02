@@ -1,0 +1,12 @@
+{
+  "mainNavLabel": "Main navigation",
+  "proposals": "Proposals",
+  "create": "Create",
+  "about": "About",
+  "toggleNav": "Toggle navigation",
+  "networkLabel": "Network:",
+  "languageSwitcherLabel": "Select language",
+  "languages": {
+    "en": "English"
+  }
+}

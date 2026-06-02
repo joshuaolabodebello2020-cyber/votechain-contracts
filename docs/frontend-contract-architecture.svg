@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 420" width="860" height="420" font-family="monospace, sans-serif">
+
+  <!-- Background -->
+  <rect width="860" height="420" rx="12" fill="#0f1117"/>
+
+  <!-- Title -->
+  <text x="430" y="36" text-anchor="middle" font-size="16" font-weight="bold" fill="#e2e8f0">Frontend ↔ Contract Interaction — VoteChain</text>
+
+  <!-- ── Box 1: Browser ── -->
+  <rect x="40" y="70" width="150" height="100" rx="8" fill="#1e293b" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="115" y="98" text-anchor="middle" font-size="13" font-weight="bold" fill="#93c5fd">Browser</text>
+  <text x="115" y="118" text-anchor="middle" font-size="11" fill="#94a3b8">React / Vite</text>
+  <text x="115" y="136" text-anchor="middle" font-size="11" fill="#94a3b8">@stellar/sdk</text>
+  <text x="115" y="154" text-anchor="middle" font-size="11" fill="#94a3b8">UI Components</text>
+
+  <!-- ── Box 2: Freighter ── -->
+  <rect x="270" y="70" width="150" height="100" rx="8" fill="#1e293b" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="345" y="98" text-anchor="middle" font-size="13" font-weight="bold" fill="#c4b5fd">Freighter</text>
+  <text x="345" y="118" text-anchor="middle" font-size="11" fill="#94a3b8">Wallet Extension</text>
+  <text x="345" y="136" text-anchor="middle" font-size="11" fill="#94a3b8">Key Management</text>
+  <text x="345" y="154" text-anchor="middle" font-size="11" fill="#94a3b8">Tx Signing</text>
+
+  <!-- ── Box 3: Stellar RPC ── -->
+  <rect x="500" y="70" width="150" height="100" rx="8" fill="#1e293b" stroke="#34d399" stroke-width="1.5"/>
+  <text x="575" y="98" text-anchor="middle" font-size="13" font-weight="bold" fill="#6ee7b7">Stellar RPC</text>
+  <text x="575" y="118" text-anchor="middle" font-size="11" fill="#94a3b8">soroban-rpc</text>
+  <text x="575" y="136" text-anchor="middle" font-size="11" fill="#94a3b8">simulateTransaction</text>
+  <text x="575" y="154" text-anchor="middle" font-size="11" fill="#94a3b8">sendTransaction</text>
+
+  <!-- ── Box 4: Contract ── -->
+  <rect x="670" y="70" width="150" height="100" rx="8" fill="#1e293b" stroke="#fb923c" stroke-width="1.5"/>
+  <text x="745" y="98" text-anchor="middle" font-size="13" font-weight="bold" fill="#fdba74">Soroban Contract</text>
+  <text x="745" y="118" text-anchor="middle" font-size="11" fill="#94a3b8">Governance</text>
+  <text x="745" y="136" text-anchor="middle" font-size="11" fill="#94a3b8">cast_vote()</text>
+  <text x="745" y="154" text-anchor="middle" font-size="11" fill="#94a3b8">get_proposal()</text>
+
+  <!-- ── Arrows (top row) ── -->
+  <!-- Browser → Freighter -->
+  <line x1="190" y1="120" x2="268" y2="120" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+  <!-- Freighter → Stellar RPC -->
+  <line x1="420" y1="120" x2="498" y2="120" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+  <!-- Stellar RPC → Contract -->
+  <line x1="650" y1="120" x2="668" y2="120" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Arrow labels -->
+  <text x="229" y="113" text-anchor="middle" font-size="9" fill="#64748b">sign request</text>
+  <text x="459" y="113" text-anchor="middle" font-size="9" fill="#64748b">signed tx</text>
+  <text x="659" y="113" text-anchor="middle" font-size="9" fill="#64748b">invoke</text>
+
+  <!-- ── Vote Submission Flow ── -->
+  <rect x="40" y="210" width="780" height="180" rx="8" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="430" y="234" text-anchor="middle" font-size="13" font-weight="bold" fill="#e2e8f0">Vote Submission Flow</text>
+
+  <!-- Step boxes -->
+  <!-- Step 1 -->
+  <rect x="60" y="248" width="130" height="52" rx="6" fill="#1e293b" stroke="#3b82f6" stroke-width="1"/>
+  <text x="125" y="268" text-anchor="middle" font-size="10" font-weight="bold" fill="#93c5fd">1. User clicks Vote</text>
+  <text x="125" y="284" text-anchor="middle" font-size="9" fill="#94a3b8">Browser builds</text>
+  <text x="125" y="296" text-anchor="middle" font-size="9" fill="#94a3b8">XDR transaction</text>
+
+  <!-- Step 2 -->
+  <rect x="220" y="248" width="130" height="52" rx="6" fill="#1e293b" stroke="#a78bfa" stroke-width="1"/>
+  <text x="285" y="268" text-anchor="middle" font-size="10" font-weight="bold" fill="#c4b5fd">2. Freighter Signs</text>
+  <text x="285" y="284" text-anchor="middle" font-size="9" fill="#94a3b8">User approves in</text>
+  <text x="285" y="296" text-anchor="middle" font-size="9" fill="#94a3b8">wallet popup</text>
+
+  <!-- Step 3 -->
+  <rect x="380" y="248" width="130" height="52" rx="6" fill="#1e293b" stroke="#34d399" stroke-width="1"/>
+  <text x="445" y="268" text-anchor="middle" font-size="10" font-weight="bold" fill="#6ee7b7">3. Simulate</text>
+  <text x="445" y="284" text-anchor="middle" font-size="9" fill="#94a3b8">RPC simulates tx,</text>
+  <text x="445" y="296" text-anchor="middle" font-size="9" fill="#94a3b8">returns fee/footprint</text>
+
+  <!-- Step 4 -->
+  <rect x="540" y="248" width="130" height="52" rx="6" fill="#1e293b" stroke="#34d399" stroke-width="1"/>
+  <text x="605" y="268" text-anchor="middle" font-size="10" font-weight="bold" fill="#6ee7b7">4. Submit</text>
+  <text x="605" y="284" text-anchor="middle" font-size="9" fill="#94a3b8">sendTransaction to</text>
+  <text x="605" y="296" text-anchor="middle" font-size="9" fill="#94a3b8">Stellar network</text>
+
+  <!-- Step 5 -->
+  <rect x="700" y="248" width="100" height="52" rx="6" fill="#1e293b" stroke="#fb923c" stroke-width="1"/>
+  <text x="750" y="268" text-anchor="middle" font-size="10" font-weight="bold" fill="#fdba74">5. cast_vote()</text>
+  <text x="750" y="284" text-anchor="middle" font-size="9" fill="#94a3b8">Contract stores</text>
+  <text x="750" y="296" text-anchor="middle" font-size="9" fill="#94a3b8">vote + emits event</text>
+
+  <!-- Flow arrows -->
+  <line x1="190" y1="274" x2="218" y2="274" stroke="#475569" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="350" y1="274" x2="378" y2="274" stroke="#475569" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="510" y1="274" x2="538" y2="274" stroke="#475569" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="670" y1="274" x2="698" y2="274" stroke="#475569" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Return path -->
+  <path d="M750 300 L750 360 L125 360 L125 302" fill="none" stroke="#475569" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr-ret)"/>
+  <text x="430" y="375" text-anchor="middle" font-size="9" fill="#475569">← tx hash / confirmation returned to UI</text>
+
+  <!-- Arrow marker -->
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#64748b"/>
+    </marker>
+    <marker id="arr-ret" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#475569"/>
+    </marker>
+  </defs>
+
+</svg>

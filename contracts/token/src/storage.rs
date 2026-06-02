@@ -117,3 +117,13 @@ pub fn set_version(env: &Env, version: (u32, u32, u32)) {
 pub fn get_version(env: &Env) -> (u32, u32, u32) {
     env.storage().instance().get(&TokenDataKey::Version).unwrap_or((0, 0, 0))
 }
+
+/// Returns `true` if `addr` is frozen.
+pub fn is_frozen(env: &Env, addr: &Address) -> bool {
+    env.storage().persistent().get(&TokenDataKey::Frozen(addr.clone())).unwrap_or(false)
+}
+
+/// Sets the frozen flag for `addr`.
+pub fn set_frozen(env: &Env, addr: &Address, frozen: bool) {
+    env.storage().persistent().set(&TokenDataKey::Frozen(addr.clone()), &frozen);
+}

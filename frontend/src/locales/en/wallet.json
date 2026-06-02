@@ -1,0 +1,14 @@
+{
+  "connectAriaLabel": "Connect Freighter Wallet",
+  "connecting": "Connecting…",
+  "connect": "Connect Wallet",
+  "addressAriaLabel": "Connected wallet address",
+  "disconnectAriaLabel": "Disconnect wallet",
+  "disconnect": "Disconnect",
+  "networkMismatch": "⚠ Network mismatch: connected to {{connected}}, expected {{expected}}",
+  "notFound": "Freighter extension not found. Please install it first.",
+  "connectFailed": "Failed to connect wallet.",
+  "installFreighter": "Install Freighter",
+  "mobileNetworkLabel": "Network:",
+  "walletConnectedTo": "Wallet connected to {{network}}"
+}

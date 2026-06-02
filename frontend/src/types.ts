@@ -1,5 +1,10 @@
 export type ProposalState = 'Active' | 'Passed' | 'Rejected' | 'Executed' | 'Cancelled';
 
+export interface Translation {
+  title: string;
+  description: string;
+}
+
 export interface VoteRecord {
   address: string;
   type: 'For' | 'Against' | 'Abstain';
@@ -17,4 +22,5 @@ export interface Proposal {
   votesCount: number;
   totalWeight: number;
   votes: VoteRecord[];
+  translations?: Record<string, Translation>;
 }

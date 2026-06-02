@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { PhishingWarning, usePhishingWarning } from "./PhishingWarning";
 
 const STELLAR_NETWORK = "TESTNET";
 const FREIGHTER_DOWNLOAD = "https://www.freighter.app/";
@@ -21,6 +22,8 @@ export function FreighterWallet() {
   });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const showWarning = usePhishingWarning();
+  const [pendingConnect, setPendingConnect] = useState(false);
 
   // Check if already connected on mount
   useEffect(() => {
@@ -37,7 +40,15 @@ export function FreighterWallet() {
     });
   }, []);
 
-  async function connect() {
+  function connect() {
+    if (showWarning) {
+      setPendingConnect(true);
+    } else {
+      doConnect();
+    }
+  }
+
+  async function doConnect() {
     const freighter = (window as any).freighter;
     if (!freighter) {
       setError("Freighter extension not found. Please install it first.");
@@ -69,6 +80,14 @@ export function FreighterWallet() {
 
   return (
     <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+      {pendingConnect && (
+        <PhishingWarning
+          onAcknowledge={() => {
+            setPendingConnect(false);
+            doConnect();
+          }}
+        />
+      )}
       {!wallet.connected ? (
         <button onClick={connect} disabled={loading} aria-label="Connect Freighter Wallet">
           {loading ? "Connecting…" : "Connect Wallet"}
