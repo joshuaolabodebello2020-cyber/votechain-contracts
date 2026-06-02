@@ -224,6 +224,10 @@ pub enum DataKey {
     /// Key space: singleton — only one `Paused` entry exists.
     Paused,
 
+    /// Optional reason string explaining why the contract was paused (instance storage).
+    /// Key space: singleton — only one `PauseReason` entry exists.
+    PauseReason,
+
     /// Timestamp (Unix seconds) of `proposer`'s most recent proposal (persistent storage).
     /// Key space: one entry per unique proposer address.
     LastProposal(Address),

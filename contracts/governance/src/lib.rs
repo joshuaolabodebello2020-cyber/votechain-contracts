@@ -36,6 +36,7 @@ use storage::{
     set_timelock_duration, set_version, set_voting_token, get_vote_record, get_max_duration,
     set_pending_admin, get_pending_admin, clear_pending_admin,
     set_admin_transfer_expiry, get_admin_transfer_expiry,
+    set_pause_reason,
 };
 use types::{ContractError, ContractState, DataKey, Proposal, ProposalState, Vote, VoteRecord};
 
@@ -595,14 +596,15 @@ impl GovernanceContract {
     /// # Errors
     /// - [`ContractError::InvalidAddress`] if `admin` is the zero address.
     /// - [`ContractError::NotAdmin`] if `admin` does not match the stored admin.
-    pub fn pause(env: Env, admin: Address) -> Result<(), ContractError> {
+    pub fn pause(env: Env, admin: Address, reason: Option<String>) -> Result<(), ContractError> {
         admin.require_auth();
         require_non_zero_address(&env, &admin)?;
         if get_admin(&env)? != admin {
             return Err(ContractError::NotAdmin);
         }
         set_paused(&env, true);
-        events::contract_paused(&env, &admin);
+        set_pause_reason(&env, reason.clone());
+        events::contract_paused(&env, &admin, reason);
         Ok(())
     }
 
@@ -624,6 +626,7 @@ impl GovernanceContract {
             return Err(ContractError::NotPaused);
         }
         set_paused(&env, false);
+        set_pause_reason(&env, None);
         events::contract_unpaused(&env, &admin);
         Ok(())
     }
@@ -631,6 +634,12 @@ impl GovernanceContract {
     /// Returns whether the contract is currently paused.
     pub fn paused(env: Env) -> bool {
         is_paused(&env)
+    }
+
+    /// Returns the optional pause reason string stored on-chain.
+    pub fn get_pause_reason(env: Env) -> Option<String> {
+        // Call the storage accessor directly to avoid name collision.
+        storage::get_pause_reason(&env)
     }
 
     /// Returns the full state of a proposal.
