@@ -26,8 +26,21 @@ VoteChain enables DAOs, protocols, and communities to create proposals, cast tok
 - [Development](#development)
 - [Testing](#testing)
 - [Security](#security)
+- [Live Demo](#live-demo)
 - [Contributing](#contributing)
 - [Resources](#resources)
+
+---
+
+## Live Demo
+
+A live instance of VoteChain is deployed on the Stellar Testnet for demonstration purposes.
+
+- **Demo URL:** [https://demo.votechain.io](https://demo.votechain.io)
+- **Governance Contract:** `CDO5V...V6P2`
+- **Token Contract:** `CAS3...K2M6`
+
+The demo environment includes pre-populated sample proposals in various states (Active, Passed, Rejected, Executed) to showcase the full governance lifecycle.
 
 ---
 
