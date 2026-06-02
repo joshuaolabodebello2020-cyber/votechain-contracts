@@ -1498,15 +1498,26 @@ fn test_non_admin_can_vote_when_admin_restricted() {
 fn test_pause_sets_paused_state() {
     let t = setup_env();
     assert!(!t.client.paused());
-    t.client.pause(&t.admin);
+    t.client.pause(&t.admin, &Option::<String>::None);
     assert!(t.client.paused());
+}
+
+/// pause with a reason stores the reason and is retrievable via view.
+#[test]
+fn test_pause_with_reason_stores_and_returns_reason() {
+    let t = setup_env();
+    let reason = String::from_str(&t.env, "maintenance");
+    t.client.pause(&t.admin, &Some(reason.clone()));
+    assert!(t.client.paused());
+    let stored = t.client.get_pause_reason();
+    assert_eq!(stored.unwrap(), reason);
 }
 
 /// unpause() by admin clears paused state and emits event.
 #[test]
 fn test_unpause_clears_paused_state() {
     let t = setup_env();
-    t.client.pause(&t.admin);
+    t.client.pause(&t.admin, &Option::<String>::None);
     assert!(t.client.paused());
     t.client.unpause(&t.admin);
     assert!(!t.client.paused());
@@ -1518,7 +1529,7 @@ fn test_unpause_clears_paused_state() {
 fn test_pause_non_admin_reverts() {
     let t = setup_env();
     let attacker = Address::generate(&t.env);
-    t.client.pause(&attacker);
+    t.client.pause(&attacker, &Option::<String>::None);
 }
 
 /// unpause() by non-admin must revert.
@@ -1526,7 +1537,7 @@ fn test_pause_non_admin_reverts() {
 #[should_panic(expected = "Error(Contract, #2)")]
 fn test_unpause_non_admin_reverts() {
     let t = setup_env();
-    t.client.pause(&t.admin);
+    t.client.pause(&t.admin, &Option::<String>::None);
     let attacker = Address::generate(&t.env);
     t.client.unpause(&attacker);
 }
@@ -1545,7 +1556,7 @@ fn test_unpause_when_not_paused_reverts() {
 fn test_create_proposal_reverts_when_paused() {
     let t = setup_env();
     let proposer = Address::generate(&t.env);
-    t.client.pause(&t.admin);
+    t.client.pause(&t.admin, &Option::<String>::None);
     t.client.create_proposal(
         &proposer,
         &String::from_str(&t.env, "P"),
@@ -1564,7 +1575,7 @@ fn test_cast_vote_reverts_when_paused() {
     let id = create_test_proposal(&t, &voter);
     let tok = votechain_token::TokenContractClient::new(&t.env, &t.token_id);
     tok.mint(&t.admin, &voter, &1_000_000_i128);
-    t.client.pause(&t.admin);
+    t.client.pause(&t.admin, &Option::<String>::None);
     t.client.cast_vote(&voter, &id, &Vote::Yes);
 }
 
@@ -1576,7 +1587,7 @@ fn test_finalise_reverts_when_paused() {
     let voter = Address::generate(&t.env);
     let id = create_test_proposal(&t, &voter);
     t.env.ledger().with_mut(|l| l.timestamp += 3601);
-    t.client.pause(&t.admin);
+    t.client.pause(&t.admin, &Option::<String>::None);
     t.client.finalise(&id);
 }
 
@@ -1592,7 +1603,7 @@ fn test_execute_reverts_when_paused() {
     t.client.cast_vote(&voter, &id, &Vote::Yes);
     t.env.ledger().with_mut(|l| l.timestamp += 3601);
     t.client.finalise(&id);
-    t.client.pause(&t.admin);
+    t.client.pause(&t.admin, &Option::<String>::None);
     t.client.execute(&t.admin, &id);
 }
 
@@ -1603,7 +1614,7 @@ fn test_cancel_reverts_when_paused() {
     let t = setup_env();
     let proposer = Address::generate(&t.env);
     let id = create_test_proposal(&t, &proposer);
-    t.client.pause(&t.admin);
+    t.client.pause(&t.admin, &Option::<String>::None);
     t.client.cancel(&t.admin, &id);
 }
 
@@ -1614,7 +1625,7 @@ fn test_update_quorum_reverts_when_paused() {
     let t = setup_env();
     let proposer = Address::generate(&t.env);
     let id = create_test_proposal(&t, &proposer);
-    t.client.pause(&t.admin);
+    t.client.pause(&t.admin, &Option::<String>::None);
     t.client.update_quorum(&t.admin, &id, &500);
 }
 
@@ -1624,7 +1635,7 @@ fn test_update_quorum_reverts_when_paused() {
 fn test_transfer_admin_reverts_when_paused() {
     let t = setup_env();
     let new_admin = Address::generate(&t.env);
-    t.client.pause(&t.admin);
+    t.client.pause(&t.admin, &Option::<String>::None);
     t.client.transfer_admin(&t.admin, &new_admin);
 }
 
@@ -1634,7 +1645,7 @@ fn test_read_functions_available_when_paused() {
     let t = setup_env();
     let voter = Address::generate(&t.env);
     let id = create_test_proposal(&t, &voter);
-    t.client.pause(&t.admin);
+    t.client.pause(&t.admin, &Option::<String>::None);
     // These should not panic
     let _ = t.client.get_proposal(&id);
     let _ = t.client.has_voted(&id, &voter);
@@ -1649,7 +1660,7 @@ fn test_read_functions_available_when_paused() {
 #[test]
 fn test_pause_emits_event() {
     let t = setup_env();
-    t.client.pause(&t.admin);
+    t.client.pause(&t.admin, &Option::<String>::None);
     let events = t.env.events().all();
     assert!(
         events.iter().any(|(_, topics, _)| {
@@ -1663,7 +1674,7 @@ fn test_pause_emits_event() {
 #[test]
 fn test_unpause_emits_event() {
     let t = setup_env();
-    t.client.pause(&t.admin);
+    t.client.pause(&t.admin, &Option::<String>::None);
     t.client.unpause(&t.admin);
     let events = t.env.events().all();
     assert!(
@@ -2441,7 +2452,7 @@ fn test_full_lifecycle_pause_and_unpause() {
     );
 
     // pause — cast_vote must fail
-    client.pause(&admin);
+    client.pause(&admin, &Option::<String>::None);
     assert!(client.paused());
     // ContractPaused guard is verified by the paused() flag above;
     // the actual revert is tested in test_create_proposal_reverts_when_paused.

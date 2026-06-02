@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use soroban_sdk::{symbol_short, Address, Env};
+use soroban_sdk::{symbol_short, Address, Env, String};
 use crate::types::{ProposalState, Vote};
 
 /// # Event Schema
@@ -116,9 +116,10 @@ pub fn admin_transfer_proposed(env: &Env, admin: &Address, nominee: &Address, ex
 /// Emits a `paused` event when the contract is paused.
 ///
 /// Topics: `("paused",)`
-/// Data: `admin: Address`
-pub fn contract_paused(env: &Env, admin: &Address) {
-    env.events().publish((symbol_short!("paused"),), admin.clone());
+/// Data: `(admin: Address, reason: Option<String>)`
+pub fn contract_paused(env: &Env, admin: &Address, reason: Option<String>) {
+    env.events()
+        .publish((symbol_short!("paused"),), (admin.clone(), reason));
 }
 
 /// Emits an `unpaused` event when the contract is unpaused.
