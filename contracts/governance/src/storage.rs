@@ -37,7 +37,7 @@
 //! Because the discriminant is part of the serialised key, these can never
 //! collide even when called with identical arguments.
 
-use soroban_sdk::{Env, Address};
+use soroban_sdk::{Env, Address, String};
 use crate::types::{ContractError, ContractState, DataKey, Proposal, VoteRecord};
 
 // =============================================================================
@@ -243,6 +243,14 @@ pub fn get_restrict_admin_vote(env: &Env) -> bool {
     env.storage().instance().get(&DataKey::RestrictAdminVote).unwrap_or(false)
 }
 
+pub fn set_amend_window(env: &Env, v: u64) {
+    env.storage().instance().set(&DataKey::AmendWindow, &v);
+}
+
+pub fn get_amend_window(env: &Env) -> u64 {
+    env.storage().instance().get(&DataKey::AmendWindow).unwrap_or(0)
+}
+
 /// Stores the mandatory delay (seconds) a passed proposal must wait before it can be executed.
 pub fn set_timelock_duration(env: &Env, v: u64) {
     env.storage().instance().set(&DataKey::TimelockDuration, &v);
@@ -261,6 +269,19 @@ pub fn set_paused(env: &Env, paused: bool) {
 /// Returns `true` if the contract is currently paused.
 pub fn is_paused(env: &Env) -> bool {
     env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+}
+
+/// Stores an optional pause reason string in instance storage.
+pub fn set_pause_reason(env: &Env, reason: Option<String>) {
+    match reason {
+        Some(r) => env.storage().instance().set(&DataKey::PauseReason, &r),
+        None => env.storage().instance().remove(&DataKey::PauseReason),
+    }
+}
+
+/// Returns the stored pause reason, or `None` if not set.
+pub fn get_pause_reason(env: &Env) -> Option<String> {
+    env.storage().instance().get(&DataKey::PauseReason)
 }
 
 pub fn set_min_duration(env: &Env, v: u64) {

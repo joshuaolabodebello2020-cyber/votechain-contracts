@@ -29,15 +29,16 @@ use soroban_sdk::{contract, contractclient, contractimpl, token, Address, Env, S
 use storage::{
     get_admin, get_contract_state, get_last_proposal, get_min_duration, get_min_proposal_balance,
     get_proposal_cooldown, get_restrict_admin_vote, get_timelock_duration, get_version,
-    get_voter_snapshot, get_voting_token, has_voted, is_initialized, is_paused, load_proposal,
+    get_amend_window, get_voter_snapshot, get_voting_token, has_voted, is_initialized, is_paused, load_proposal,
     mark_voted, next_id, save_proposal, save_vote_record, save_voter_snapshot, set_admin,
     set_contract_state, set_last_proposal, set_min_duration, set_max_duration,
     set_min_proposal_balance, set_paused, set_proposal_cooldown, set_restrict_admin_vote,
     set_timelock_duration, set_version, set_voting_token, get_vote_record, get_max_duration,
     set_pending_admin, get_pending_admin, clear_pending_admin,
     set_admin_transfer_expiry, get_admin_transfer_expiry,
+    set_pause_reason,
 };
-use types::{ContractError, ContractState, DataKey, Proposal, ProposalState, Vote, VoteRecord};
+use types::{ContractError, ContractState, DataKey, GovernanceConfig, Proposal, ProposalState, Vote, VoteRecord};
 
 const MAX_TITLE_LEN: u32 = 128;
 const MAX_DESC_LEN: u32 = 1024;
@@ -97,6 +98,8 @@ impl GovernanceContract {
     /// - `max_duration`: maximum allowed voting duration in seconds (e.g., 2592000 for 30 days)
     /// - `restrict_admin_vote`: when `true`, the admin address cannot cast votes on proposals
     ///   they created, preventing a conflict of interest.
+    /// - `amend_window`: number of seconds after creation during which the proposer may
+    ///   change the title and description before voting begins.
     /// - `timelock_duration`: mandatory delay in seconds between a proposal passing and it
     ///   becoming executable. Use `0` to disable the timelock.
     ///
@@ -112,6 +115,7 @@ impl GovernanceContract {
         min_duration: u64,
         max_duration: u64,
         restrict_admin_vote: bool,
+        amend_window: u64,
         timelock_duration: u64,
     ) -> Result<(), ContractError> {
         // SEC-005: auth is the first operation in every privileged function.
@@ -133,6 +137,9 @@ impl GovernanceContract {
         set_min_duration(&env, min_duration);
         set_max_duration(&env, max_duration);
         set_restrict_admin_vote(&env, restrict_admin_vote);
+        if amend_window > 0 {
+            set_amend_window(&env, amend_window);
+        }
         if timelock_duration > 0 {
             set_timelock_duration(&env, timelock_duration);
         }
@@ -227,6 +234,7 @@ impl GovernanceContract {
         }
 
         let now = env.ledger().timestamp();
+        let start_time = now + get_amend_window(&env);
         // SEC-007: ID is generated contract-side only; checked_add prevents overflow.
         let id = next_id(&env)?;
         let proposal = Proposal {
@@ -238,8 +246,8 @@ impl GovernanceContract {
             votes_no: 0,
             votes_abstain: 0,
             quorum,
-            start_time: now,
-            end_time: now + duration,
+            start_time,
+            end_time: start_time + duration,
             state: ProposalState::Active,
             execute_after: 0,
         };
@@ -247,6 +255,65 @@ impl GovernanceContract {
         set_last_proposal(&env, &proposer, now);
         events::proposal_created(&env, id, &proposer);
         Ok(id)
+    }
+
+    /// Amends the title and description of an active proposal before voting starts.
+    ///
+    /// Only the original proposer may call this, and only within the configured
+    /// amendment window before the proposal's voting window begins.
+    ///
+    /// # Errors
+    /// - [`ContractError::InvalidAddress`] if `proposer` is the zero address.
+    /// - [`ContractError::ProposalNotFound`] if `proposal_id` does not exist.
+    /// - [`ContractError::ProposalNotActive`] if the proposal is not in `Active` status.
+    /// - [`ContractError::NotProposalOwner`] if the caller is not the original proposer.
+    /// - [`ContractError::ProposalAmendmentNotAllowed`] if the amendment window has closed.
+    /// - [`ContractError::InvalidTitle`] if `title` is empty or exceeds the maximum length.
+    /// - [`ContractError::InvalidDescription`] if `description` is empty or exceeds the maximum length.
+    /// - [`ContractError::ContractPaused`] if the contract is paused.
+    pub fn amend_proposal(
+        env: Env,
+        proposer: Address,
+        proposal_id: u64,
+        title: String,
+        description: String,
+    ) -> Result<(), ContractError> {
+        proposer.require_auth();
+        require_non_zero_address(&env, &proposer)?;
+        if is_paused(&env) {
+            return Err(ContractError::ContractPaused);
+        }
+
+        let mut proposal = load_proposal(&env, proposal_id)?;
+        if proposal.state != ProposalState::Active {
+            return Err(ContractError::ProposalNotActive);
+        }
+        if proposal.proposer != proposer {
+            return Err(ContractError::NotProposalOwner);
+        }
+
+        let now = env.ledger().timestamp();
+        if now >= proposal.start_time {
+            return Err(ContractError::ProposalAmendmentNotAllowed);
+        }
+
+        let title_len = title.len();
+        if title_len == 0 || title_len > MAX_TITLE_LEN {
+            return Err(ContractError::InvalidTitle);
+        }
+        validate_string(&title, ContractError::InvalidTitle)?;
+
+        let desc_len = description.len();
+        if desc_len == 0 || desc_len > MAX_DESC_LEN {
+            return Err(ContractError::InvalidDescription);
+        }
+        validate_string(&description, ContractError::InvalidDescription)?;
+
+        proposal.title = title.clone();
+        proposal.description = description.clone();
+        save_proposal(&env, &proposal);
+        events::proposal_amended(&env, proposal_id, &proposer, &title, &description);
+        Ok(())
     }
 
     /// Casts a vote on an active proposal.
@@ -595,14 +662,15 @@ impl GovernanceContract {
     /// # Errors
     /// - [`ContractError::InvalidAddress`] if `admin` is the zero address.
     /// - [`ContractError::NotAdmin`] if `admin` does not match the stored admin.
-    pub fn pause(env: Env, admin: Address) -> Result<(), ContractError> {
+    pub fn pause(env: Env, admin: Address, reason: Option<String>) -> Result<(), ContractError> {
         admin.require_auth();
         require_non_zero_address(&env, &admin)?;
         if get_admin(&env)? != admin {
             return Err(ContractError::NotAdmin);
         }
         set_paused(&env, true);
-        events::contract_paused(&env, &admin);
+        set_pause_reason(&env, reason.clone());
+        events::contract_paused(&env, &admin, reason);
         Ok(())
     }
 
@@ -624,6 +692,7 @@ impl GovernanceContract {
             return Err(ContractError::NotPaused);
         }
         set_paused(&env, false);
+        set_pause_reason(&env, None);
         events::contract_unpaused(&env, &admin);
         Ok(())
     }
@@ -631,6 +700,12 @@ impl GovernanceContract {
     /// Returns whether the contract is currently paused.
     pub fn paused(env: Env) -> bool {
         is_paused(&env)
+    }
+
+    /// Returns the optional pause reason string stored on-chain.
+    pub fn get_pause_reason(env: Env) -> Option<String> {
+        // Call the storage accessor directly to avoid name collision.
+        storage::get_pause_reason(&env)
     }
 
     /// Returns the full state of a proposal.
