@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type KeyboardEvent } from 'react';
 import type { Proposal, ProposalState } from '../types';
 import { generateProposalCsv, downloadCsv } from '../utils/csv';
 import { useDebounce } from '../hooks/useDebounce';
+import { useWalletStore } from '../store';
 
 const sortOptions = [
   { value: 'newest', label: 'Newest' },
@@ -46,6 +47,7 @@ export default function ProposalList({ proposals }: Props) {
   const [searchText, setSearchText] = useState('');
   const [stateFilter, setStateFilter] = useState<StateFilter>('All');
   const [sortKey, setSortKey] = useState<SortKey>('newest');
+  const connected = useWalletStore((state) => state.connected);
 
   const debouncedSearch = useDebounce(searchText, 300);
 
@@ -74,7 +76,7 @@ export default function ProposalList({ proposals }: Props) {
   }, [proposals, debouncedSearch, stateFilter, sortKey]);
 
   /** Handle arrow-key navigation on the state filter tab list */
-  function handleTabKeyDown(e: React.KeyboardEvent<HTMLButtonElement>, index: number) {
+  function handleTabKeyDown(e: KeyboardEvent<HTMLButtonElement>, index: number) {
     const tabs = STATE_FILTERS;
     let next = index;
     if (e.key === 'ArrowRight') {
@@ -96,6 +98,22 @@ export default function ProposalList({ proposals }: Props) {
   }
 
   const highlightTerm = debouncedSearch.trim();
+  const hasQuery = Boolean(highlightTerm);
+  const isActiveFilter = stateFilter !== 'All';
+
+  const emptyTitle = proposals.length === 0
+    ? 'No proposals have been created yet.'
+    : hasQuery
+      ? `No proposals match "${highlightTerm}".`
+      : 'No proposals match your filter criteria.';
+
+  const emptyDescription = proposals.length === 0
+    ? 'Governance is ready when the first proposal lands. Connect your wallet to submit one.'
+    : hasQuery
+      ? 'Try a different keyword or clear the search to broaden your results.'
+      : isActiveFilter
+        ? 'Try a different state filter or clear the current filter to show more proposals.'
+        : 'There are no proposals to show at this time.';
 
   return (
     <section aria-labelledby="proposal-list-heading" className="card">
@@ -160,6 +178,59 @@ export default function ProposalList({ proposals }: Props) {
         ))}
       </div>
 
+      <div className="proposal-list" aria-live="polite" aria-atomic="true">
+        {filtered.length > 0 ? (
+          filtered.map((proposal) => (
+            <article className="proposal-card" key={proposal.id}>
+              <div className="card-header">
+                <div className="card-title-row">
+                  <p className="proposal-id">{proposal.id}</p>
+                  <h3 className="proposal-title">
+                    <Highlight text={proposal.title} term={highlightTerm} />
+                  </h3>
+                </div>
+                <span className={`state-badge status-${proposal.state.toLowerCase()}`}>
+                  {labelForState(proposal.state)}
+                </span>
+              </div>
+
+              <p className="proposal-description">
+                <Highlight text={proposal.description} term={highlightTerm} />
+              </p>
+
+              <div className="vote-summary">
+                <div className="vote-counts">
+                  <div className="vote-count-item">
+                    <span className="vote-dot dot-yes" /> {proposal.votesCount} votes
+                  </div>
+                  <div className="vote-count-item">
+                    <span className="vote-dot dot-abstain" /> {proposal.totalWeight} weight
+                  </div>
+                </div>
+              </div>
+
+              <div className="card-footer">
+                <span>Created {proposal.createdAt}</span>
+                <span>Ends {proposal.endAt}</span>
+              </div>
+            </article>
+          ))
+        ) : (
+          <div className="empty-state">
+            <div className="empty-state-illustration" aria-hidden="true">📭</div>
+            <div>
+              <h3>{emptyTitle}</h3>
+              <p>{emptyDescription}</p>
+            </div>
+            {connected ? (
+              <button type="button" className="action-btn">Create proposal</button>
+            ) : (
+              <p className="empty-state-note">Connect your wallet to create the first proposal.</p>
+            )}
+          </div>
+        )}
+      </div>
+
       <div className="table-wrapper" aria-live="polite" aria-atomic="true">
         <table>
           <caption className="visually-hidden">Filtered and sorted proposal listing</caption>
@@ -190,11 +261,7 @@ export default function ProposalList({ proposals }: Props) {
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7}>
-                  {debouncedSearch.trim()
-                    ? `No proposals match "${debouncedSearch.trim()}".`
-                    : 'No proposals match your filter criteria.'}
-                </td>
+                <td colSpan={7}>{emptyTitle}</td>
               </tr>
             )}
           </tbody>

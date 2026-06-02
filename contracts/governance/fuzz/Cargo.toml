@@ -1,0 +1,23 @@
+[package]
+name = "votechain-governance-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[[bin]]
+name = "fuzz_create_proposal"
+path = "fuzz_targets/fuzz_create_proposal.rs"
+test = false
+doc = false
+
+[dependencies]
+libfuzzer-sys = "0.4"
+votechain-governance = { path = "..", features = ["testutils"] }
+votechain-token = { path = "../../token", features = ["testutils"] }
+soroban-sdk = { version = "22.0.0", features = ["testutils"] }
+
+[profile.release]
+debug = 1

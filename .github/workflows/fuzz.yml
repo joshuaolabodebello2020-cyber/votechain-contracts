@@ -1,0 +1,50 @@
+name: Fuzz (nightly, optional)
+
+# Runs nightly on main, or on-demand via workflow_dispatch.
+# This job is intentionally non-blocking — failures are surfaced as
+# annotations but do not gate merges.
+on:
+  schedule:
+    - cron: "0 2 * * *"   # 02:00 UTC every day
+  workflow_dispatch:
+    inputs:
+      fuzz_duration:
+        description: "Seconds to fuzz per target"
+        required: false
+        default: "120"
+
+jobs:
+  fuzz-create-proposal:
+    name: Fuzz create_proposal
+    runs-on: ubuntu-latest
+    continue-on-error: true   # non-blocking
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@nightly
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-fuzz-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-fuzz-
+
+      - name: Install cargo-fuzz
+        run: cargo install --locked cargo-fuzz
+
+      - name: Run fuzz target
+        working-directory: contracts/governance
+        run: |
+          DURATION="${{ github.event.inputs.fuzz_duration || '120' }}"
+          cargo fuzz run fuzz_create_proposal -- -max_total_time="$DURATION"
+
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crashes
+          path: contracts/governance/fuzz/artifacts/fuzz_create_proposal/
