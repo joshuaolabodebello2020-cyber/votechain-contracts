@@ -1,0 +1,38 @@
+#215 FE-001: Implement responsive layout for proposal list page
+Repo Avatar
+Vera3289/votechain-contracts
+Description
+The proposal list page needs a fully responsive layout that works across mobile, tablet, and desktop viewports.
+
+Acceptance Criteria
+ Layout adapts correctly at 320px, 768px, and 1280px breakpoints
+ Proposal cards stack vertically on mobile
+ Table view switches to card view on small screens
+ No horizontal scroll on any viewport
+Priority
+Medium
+
+Estimated Effort
+Small
+
+Labels
+frontend, enhancement
+
+
+...........................................................................................................
+.......................................................................
+Description
+Show a friendly empty state with illustration and call-to-action when no proposals exist or no proposals match the current filter.
+
+Acceptance Criteria
+ Empty state shown when proposal list is empty
+ Different messages for 'no proposals' vs 'no search results'
+ CTA to create proposal (if wallet connected)
+Priority
+Low
+
+Estimated Effort
+Small
+
+Labels
+frontend, ux, enhancement

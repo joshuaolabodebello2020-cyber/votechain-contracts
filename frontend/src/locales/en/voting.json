@@ -1,0 +1,21 @@
+{
+  "panelHeading": "Voting Panel",
+  "panelPlaceholder": "Connect your wallet and select a proposal to cast your vote.",
+  "historyHeading": "Wallet vote history",
+  "historyDescription": "View votes cast by any public address without a wallet connection.",
+  "walletAddressLabel": "Wallet address",
+  "walletAddressPlaceholder": "Enter public address",
+  "walletAddressHelp": "Enter a public wallet address to view read-only vote history.",
+  "proposalStateLabel": "Proposal state",
+  "tableCaption": "Vote history for the selected address",
+  "exportAriaLabel": "Export vote history as CSV",
+  "columns": {
+    "proposal": "Proposal",
+    "vote": "Vote",
+    "weight": "Weight",
+    "state": "State",
+    "votedAt": "Voted At"
+  },
+  "noVotes": "No votes found for this address in the selected range.",
+  "voteTypeAriaLabel": "{{type}} vote"
+}

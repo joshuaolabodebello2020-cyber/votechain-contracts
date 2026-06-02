@@ -6,6 +6,20 @@ export function generateCsv(votes: VoteRecord[]) {
   return [header, ...rows].map((row) => row.join(',')).join('\n');
 }
 
+export function generateVoteHistoryCsv(
+  rows: Array<{ proposalId: string; proposalTitle: string; voteType: string; weight: number; votedAt: string }>
+) {
+  const header = ['Proposal ID', 'Proposal Title', 'Vote', 'Weight', 'Voted At'];
+  const data = rows.map(({ proposalId, proposalTitle, voteType, weight, votedAt }) => [
+    proposalId,
+    `"${proposalTitle.replace(/"/g, '""')}"`,
+    voteType,
+    weight.toString(),
+    votedAt,
+  ]);
+  return [header, ...data].map((row) => row.join(',')).join('\n');
+}
+
 export function generateProposalCsv(proposals: Proposal[]) {
   const header = ['ID', 'Title', 'State', 'Votes Count', 'Total Weight', 'Created At', 'End Date'];
   const rows = proposals.map(({ id, title, state, votesCount, totalWeight, createdAt, endAt }) => [

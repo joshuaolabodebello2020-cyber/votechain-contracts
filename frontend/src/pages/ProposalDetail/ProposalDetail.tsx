@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { Proposal, ProposalStatus } from '../../types/proposal';
+import { useOgMeta } from '../../hooks/useOgMeta';
 import './ProposalDetail.css';
 
 interface ProposalDetailProps {
@@ -37,6 +38,12 @@ const ProposalDetail: React.FC<ProposalDetailProps> = ({
   };
 
   const isExpired = Date.now() / 1000 > proposal.endTime;
+
+  useOgMeta({
+    title: proposal.title,
+    description: proposal.description,
+    url: `${window.location.origin}/proposals/${proposal.id}`,
+  });
 
   return (
     <div className="proposal-detail">
