@@ -84,6 +84,14 @@ VoteChain consists of two complementary Soroban smart contracts:
 └─────────────────────────────────────────────────────────────┘
 ```
 
+### Frontend–Contract Interaction
+
+The diagram below shows how the browser communicates with Soroban contracts via Stellar RPC, including the full vote submission flow:
+
+![Frontend–Contract Architecture](docs/frontend-contract-architecture.svg)
+
+See [`docs/frontend-contract-architecture.svg`](docs/frontend-contract-architecture.svg) for the full-resolution file.
+
 ### Key Design Decisions
 
 **1. Token-Weighted Voting (ADR-002)**
@@ -248,6 +256,7 @@ votechain-contracts/
 │       └── Cargo.toml
 │
 ├── docs/
+│   ├── frontend-contract-architecture.svg  # Frontend↔Contract interaction diagram
 │   ├── adr/                          # Architecture Decision Records
 │   │   ├── ADR-001-stellar-soroban-platform.md
 │   │   ├── ADR-002-token-weighted-voting.md
