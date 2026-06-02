@@ -263,3 +263,18 @@ pub struct VoteRecord {
     pub vote_type: Vote,
     pub weight: i128,
 }
+
+/// Full contract configuration returned by [`get_config`].
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct GovernanceConfig {
+    pub voting_token: Address,
+    pub min_proposal_balance: i128,
+    pub proposal_cooldown: u64,
+    pub min_duration: u64,
+    pub max_duration: u64,
+    pub restrict_admin_vote: bool,
+    pub timelock_duration: u64,
+    pub paused: bool,
+    pub version: (u32, u32, u32),
+}

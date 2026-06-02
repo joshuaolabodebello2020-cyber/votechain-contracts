@@ -37,7 +37,7 @@ use storage::{
     set_pending_admin, get_pending_admin, clear_pending_admin,
     set_admin_transfer_expiry, get_admin_transfer_expiry,
 };
-use types::{ContractError, ContractState, DataKey, Proposal, ProposalState, Vote, VoteRecord};
+use types::{ContractError, ContractState, DataKey, GovernanceConfig, Proposal, ProposalState, Vote, VoteRecord};
 
 const MAX_TITLE_LEN: u32 = 128;
 const MAX_DESC_LEN: u32 = 1024;
@@ -631,6 +631,32 @@ impl GovernanceContract {
     /// Returns whether the contract is currently paused.
     pub fn paused(env: Env) -> bool {
         is_paused(&env)
+    }
+
+    /// Returns the current admin address. No auth required.
+    ///
+    /// # Errors
+    /// - [`ContractError::AdminNotSet`] if the contract has not been initialised.
+    pub fn get_admin(env: Env) -> Result<Address, ContractError> {
+        get_admin(&env)
+    }
+
+    /// Returns the full contract configuration. No auth required.
+    ///
+    /// # Errors
+    /// - [`ContractError::VotingTokenNotSet`] if the contract has not been initialised.
+    pub fn get_config(env: Env) -> Result<GovernanceConfig, ContractError> {
+        Ok(GovernanceConfig {
+            voting_token: get_voting_token(&env)?,
+            min_proposal_balance: get_min_proposal_balance(&env),
+            proposal_cooldown: get_proposal_cooldown(&env),
+            min_duration: get_min_duration(&env),
+            max_duration: get_max_duration(&env),
+            restrict_admin_vote: get_restrict_admin_vote(&env),
+            timelock_duration: get_timelock_duration(&env),
+            paused: is_paused(&env),
+            version: get_version(&env),
+        })
     }
 
     /// Returns the full state of a proposal.

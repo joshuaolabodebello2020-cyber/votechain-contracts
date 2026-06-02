@@ -2675,3 +2675,68 @@ fn test_concurrent_voting_no_double_vote() {
 }
 
 // ── end TEST-007 ──────────────────────────────────────────────────────────────
+
+// ── SC-007: get_admin / get_config view functions ─────────────────────────────
+
+/// get_admin returns the admin address set during initialize, without auth.
+#[test]
+fn test_get_admin_returns_admin() {
+    let t = setup_env();
+    assert_eq!(t.client.get_admin(), t.admin);
+}
+
+/// get_admin fails before initialize (contract not yet set up).
+#[test]
+fn test_get_admin_before_init_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let client = GovernanceContractClient::new(&env, &env.register(GovernanceContract, ()));
+    let result = client.try_get_admin();
+    assert_eq!(result, Err(Ok(ContractError::AdminNotSet)));
+}
+
+/// get_config returns all initialization parameters correctly.
+#[test]
+fn test_get_config_returns_all_fields() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let gov_id = env.register(GovernanceContract, ());
+    let client = GovernanceContractClient::new(&env, &gov_id);
+    let admin = Address::generate(&env);
+
+    let tok_id = env.register(votechain_token::TokenContract, ());
+    votechain_token::TokenContractClient::new(&env, &tok_id).initialize(&admin, &10_000_000);
+
+    client.initialize(&admin, &tok_id, &500_i128, &3600_u64, &60_u64, &2_592_000_u64, &true, &86400_u64);
+
+    let cfg = client.get_config();
+    assert_eq!(cfg.voting_token, tok_id);
+    assert_eq!(cfg.min_proposal_balance, 500);
+    assert_eq!(cfg.proposal_cooldown, 3600);
+    assert_eq!(cfg.min_duration, 60);
+    assert_eq!(cfg.max_duration, 2_592_000);
+    assert!(cfg.restrict_admin_vote);
+    assert_eq!(cfg.timelock_duration, 86400);
+    assert!(!cfg.paused);
+    assert_eq!(cfg.version, (1, 0, 0));
+}
+
+/// get_config reflects paused state correctly.
+#[test]
+fn test_get_config_paused_flag() {
+    let t = setup_env();
+    assert!(!t.client.get_config().paused);
+    t.client.pause(&t.admin);
+    assert!(t.client.get_config().paused);
+}
+
+/// get_config fails before initialize.
+#[test]
+fn test_get_config_before_init_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let client = GovernanceContractClient::new(&env, &env.register(GovernanceContract, ()));
+    let result = client.try_get_config();
+    assert_eq!(result, Err(Ok(ContractError::VotingTokenNotSet)));
+}
