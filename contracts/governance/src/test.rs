@@ -15,7 +15,7 @@
 #![cfg(test)]
 
 use super::*;
-use soroban_sdk::{symbol_short, testutils::{Address as _, Events, Ledger}, Address, Env, IntoVal, String, TryFromVal};
+use soroban_sdk::{contract, contractimpl, symbol_short, testutils::{Address as _, Events, Ledger}, Address, Env, IntoVal, String, TryFromVal};
 use crate::test_helpers::{setup_env, create_test_proposal, mint_and_vote};
 
 // ── local helpers for tests that need a custom Env/client shape ───────────────
@@ -30,6 +30,22 @@ fn setup_token(env: &Env, admin: &Address) -> Address {
 
 fn new_client(env: &Env) -> GovernanceContractClient<'static> {
     GovernanceContractClient::new(env, &env.register(GovernanceContract, ()))
+}
+
+#[contract]
+pub struct ReentrantToken;
+
+#[contractimpl]
+impl ReentrantToken {
+    pub fn balance(env: Env, owner: Address) -> i128 {
+        let gov_id: Address = env
+            .storage()
+            .get(&symbol_short!("reentrant_token_governance"))
+            .expect("expected governance id in storage");
+        let client = GovernanceContractClient::new(&env, &gov_id);
+        let _ = client.has_voted(&owner, &1_u64);
+        1_000_000
+    }
 }
 
 /// Create a passed proposal (voted Yes, finalised) for access-control tests.
@@ -1081,6 +1097,47 @@ fn test_reinit_by_zero_address_reverts() {
     let t = setup_env();
     let zero = Address::from_str(&t.env, "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF");
     t.client.initialize(&zero, &t.token_id, &0_i128, &0_u64, &60_u64, &2_592_000_u64, &false, &0_u64);
+}
+
+#[test]
+#[should_panic]
+fn test_regression_sec_009_reinit_guard() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let client = new_client(&env);
+    let admin = Address::generate(&env);
+    let tok_id = env.register(votechain_token::TokenContract, ());
+    let tok = votechain_token::TokenContractClient::new(&env, &tok_id);
+    tok.initialize(&admin, &10_000_000);
+
+    client.initialize(&admin, &tok_id, &0_i128, &0_u64, &60_u64, &2_592_000_u64, &false, &0_u64);
+    let attacker = Address::generate(&env);
+    client.initialize(&attacker, &tok_id, &0_i128, &0_u64, &60_u64, &2_592_000_u64, &false, &0_u64);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #11)")]
+fn test_regression_sec_008_token_balance_fetch() {
+    let t = setup_env();
+    let voter = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &voter);
+    t.client.cast_vote(&voter, &id, &Vote::Yes);
+}
+
+#[test]
+#[should_panic]
+fn test_regression_sec_010_reentrancy() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let voter = Address::generate(&env);
+    let gov_id = env.register(GovernanceContract, ());
+    let client = GovernanceContractClient::new(&env, &gov_id);
+    let token_id = env.register(ReentrantToken, ());
+    env.storage().set(&symbol_short!("reentrant_token_governance"), &gov_id);
+
+    client.initialize(&voter, &token_id, &0_i128, &0_u64, &60_u64, &2_592_000_u64, &false, &0_u64);
+    let id = client.create_proposal(&voter, &String::from_str(&env, "Reentrancy test"), &String::from_str(&env, "desc"), &100, &3600);
+    client.cast_vote(&voter, &id, &Vote::Yes);
 }
 
 // ── end SEC-009 ───────────────────────────────────────────────────────────────
