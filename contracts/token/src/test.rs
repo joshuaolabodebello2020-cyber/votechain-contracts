@@ -375,3 +375,145 @@ fn test_transfer_admin_emits_event() {
 }
 
 // ── end SC-017 ────────────────────────────────────────────────────────────────
+
+// ── SC-015: freeze/unfreeze tests ─────────────────────────────────────────────
+
+#[test]
+fn test_freeze_prevents_transfer_from_frozen_sender() {
+    let (env, c) = setup();
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    c.initialize(&admin, &1_000);
+    c.transfer(&admin, &user, &500);
+    c.freeze(&admin, &user);
+    assert!(c.is_frozen(&user));
+    let result = c.try_transfer(&user, &recipient, &100);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_freeze_prevents_transfer_to_frozen_recipient() {
+    let (env, c) = setup();
+    let admin = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    c.initialize(&admin, &1_000);
+    c.freeze(&admin, &recipient);
+    let result = c.try_transfer(&admin, &recipient, &100);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_unfreeze_restores_transfer() {
+    let (env, c) = setup();
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    c.initialize(&admin, &1_000);
+    c.transfer(&admin, &user, &500);
+    c.freeze(&admin, &user);
+    c.unfreeze(&admin, &user);
+    assert!(!c.is_frozen(&user));
+    c.transfer(&user, &recipient, &100);
+    assert_eq!(c.balance(&recipient), 100);
+}
+
+#[test]
+fn test_freeze_prevents_mint_to_frozen_address() {
+    let (env, c) = setup();
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    c.initialize(&admin, &0);
+    c.freeze(&admin, &user);
+    let result = c.try_mint(&admin, &user, &500);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_freeze_prevents_burn_from_frozen_address() {
+    let (env, c) = setup();
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    c.initialize(&admin, &1_000);
+    c.mint(&admin, &user, &500);
+    c.freeze(&admin, &user);
+    let result = c.try_burn(&admin, &user, &100);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_freeze_prevents_transfer_from_for_frozen_owner() {
+    let (env, c) = setup();
+    let admin = Address::generate(&env);
+    let spender = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    c.initialize(&admin, &1_000);
+    c.approve(&admin, &spender, &500);
+    c.freeze(&admin, &admin);
+    let result = c.try_transfer_from(&spender, &admin, &recipient, &100);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_freeze_does_not_prevent_balance_read() {
+    let (env, c) = setup();
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    c.initialize(&admin, &1_000);
+    c.mint(&admin, &user, &400);
+    c.freeze(&admin, &user);
+    // Balance must still be readable (for voting)
+    assert_eq!(c.balance(&user), 400);
+}
+
+#[test]
+fn test_freeze_emits_event() {
+    let (env, c) = setup();
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    c.initialize(&admin, &0);
+    c.freeze(&admin, &user);
+    let events = env.events().all();
+    assert!(events.iter().any(|(_, topics, _)| {
+        topics == (symbol_short!("freeze"), user.clone()).into_val(&env)
+    }));
+}
+
+#[test]
+fn test_unfreeze_emits_event() {
+    let (env, c) = setup();
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    c.initialize(&admin, &0);
+    c.freeze(&admin, &user);
+    c.unfreeze(&admin, &user);
+    let events = env.events().all();
+    assert!(events.iter().any(|(_, topics, _)| {
+        topics == (symbol_short!("unfreeze"), user.clone()).into_val(&env)
+    }));
+}
+
+#[test]
+#[should_panic]
+fn test_freeze_non_admin_reverts() {
+    let (env, c) = setup();
+    let admin = Address::generate(&env);
+    let non_admin = Address::generate(&env);
+    let target = Address::generate(&env);
+    c.initialize(&admin, &0);
+    c.freeze(&non_admin, &target);
+}
+
+#[test]
+#[should_panic]
+fn test_unfreeze_non_admin_reverts() {
+    let (env, c) = setup();
+    let admin = Address::generate(&env);
+    let non_admin = Address::generate(&env);
+    let target = Address::generate(&env);
+    c.initialize(&admin, &0);
+    c.freeze(&admin, &target);
+    c.unfreeze(&non_admin, &target);
+}
+
+// ── end SC-015 ────────────────────────────────────────────────────────────────

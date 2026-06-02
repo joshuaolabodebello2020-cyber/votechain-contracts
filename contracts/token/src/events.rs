@@ -36,3 +36,11 @@ pub fn admin_transferred(env: &Env, old_admin: &Address, new_admin: &Address) {
         (old_admin.clone(), new_admin.clone()),
     );
 }
+
+pub fn frozen(env: &Env, addr: &Address) {
+    env.events().publish((symbol_short!("freeze"), addr.clone()), ());
+}
+
+pub fn unfrozen(env: &Env, addr: &Address) {
+    env.events().publish((symbol_short!("unfreeze"), addr.clone()), ());
+}
