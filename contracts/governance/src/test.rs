@@ -200,6 +200,80 @@ fn test_execute_passed_proposal() {
 }
 
 #[test]
+fn test_finalise_passed_proposal_records_execute_after_with_timelock() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let gov_id = env.register(GovernanceContract, ());
+    let client = GovernanceContractClient::new(&env, &gov_id);
+    let admin = Address::generate(&env);
+    let tok_id = setup_token(&env, &admin);
+
+    // Set a 1-hour timelock for execution.
+    client.initialize(
+        &admin,
+        &tok_id,
+        &0_i128,
+        &0_u64,
+        &60_u64,
+        &2_592_000_u64,
+        &false,
+        &3_600_u64,
+    );
+
+    let proposer = Address::generate(&env);
+    let id = client.create_proposal(
+        &proposer,
+        &String::from_str(&env, "Timelock test"),
+        &String::from_str(&env, "Ensure execute_after is stored"),
+        &100,
+        &3600,
+    );
+    client.cast_vote(&proposer, &id, &Vote::Yes);
+    env.ledger().with_mut(|l| l.timestamp += 3601);
+    let finalise_time = env.ledger().timestamp();
+    client.finalise(&id);
+
+    let proposal = client.get_proposal(&id);
+    assert_eq!(proposal.state, ProposalState::Passed);
+    assert_eq!(proposal.execute_after, finalise_time + 3_600);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #30)")]
+fn test_execute_reverts_before_timelock_expires() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let gov_id = env.register(GovernanceContract, ());
+    let client = GovernanceContractClient::new(&env, &gov_id);
+    let admin = Address::generate(&env);
+    let tok_id = setup_token(&env, &admin);
+
+    client.initialize(
+        &admin,
+        &tok_id,
+        &0_i128,
+        &0_u64,
+        &60_u64,
+        &2_592_000_u64,
+        &false,
+        &3_600_u64,
+    );
+
+    let proposer = Address::generate(&env);
+    let id = client.create_proposal(
+        &proposer,
+        &String::from_str(&env, "Timelock execute test"),
+        &String::from_str(&env, "Execute should wait"),
+        &100,
+        &3600,
+    );
+    client.cast_vote(&proposer, &id, &Vote::Yes);
+    env.ledger().with_mut(|l| l.timestamp += 3601);
+    client.finalise(&id);
+    client.execute(&admin, &id);
+}
+
+#[test]
 fn test_cancel_proposal() {
     let t = setup_env();
     let proposer = Address::generate(&t.env);
