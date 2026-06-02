@@ -87,10 +87,10 @@ pub enum ContractError {
     NotPendingAdmin = 33,
     /// 34 – Target version is lower than or equal to the current version (downgrade rejected)
     DowngradeNotAllowed = 34,
-    /// 35 – Too many tags supplied (max 5)
-    TooManyTags = 35,
-    /// 36 – A tag exceeds the maximum allowed length (max 32 chars)
-    TagTooLong = 36,
+    /// 35 – Proposal amendment is not allowed after the amendment window or once voting has started
+    ProposalAmendmentNotAllowed = 35,
+    /// 36 – Only the original proposer may amend the proposal
+    NotProposalOwner = 36,
 }
 
 /// Lifecycle state of the governance contract itself.
@@ -230,6 +230,10 @@ pub enum DataKey {
     /// Key space: singleton — only one `Paused` entry exists.
     Paused,
 
+    /// Optional reason string explaining why the contract was paused (instance storage).
+    /// Key space: singleton — only one `PauseReason` entry exists.
+    PauseReason,
+
     /// Timestamp (Unix seconds) of `proposer`'s most recent proposal (persistent storage).
     /// Key space: one entry per unique proposer address.
     LastProposal(Address),
@@ -261,6 +265,10 @@ pub enum DataKey {
 
     /// Unix timestamp after which the pending admin nomination expires (instance storage).
     AdminTransferExpiry,
+
+    /// Amendment window in seconds before voting begins.
+    /// Key space: singleton — only one `AmendWindow` entry exists.
+    AmendWindow,
 }
 
 #[contracttype]
@@ -268,4 +276,19 @@ pub enum DataKey {
 pub struct VoteRecord {
     pub vote_type: Vote,
     pub weight: i128,
+}
+
+/// Full contract configuration returned by [`get_config`].
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct GovernanceConfig {
+    pub voting_token: Address,
+    pub min_proposal_balance: i128,
+    pub proposal_cooldown: u64,
+    pub min_duration: u64,
+    pub max_duration: u64,
+    pub restrict_admin_vote: bool,
+    pub timelock_duration: u64,
+    pub paused: bool,
+    pub version: (u32, u32, u32),
 }

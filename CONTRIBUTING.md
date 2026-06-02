@@ -172,6 +172,20 @@ cargo test test_cast_vote_and_finalise_passed
 cargo test -- --nocapture
 ```
 
+### Pre-commit hooks
+
+The repository ships a pre-commit hook that runs `rustfmt` and `clippy` before every commit. To activate it:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+The hook runs automatically on `git commit`. To skip it in an emergency:
+
+```bash
+git commit --no-verify
+```
+
 ### Formatting and linting
 
 ```bash

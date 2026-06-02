@@ -173,7 +173,7 @@ jobs:
           - Environment: Testnet (Test SDF Network)
           - RPC URL: https://soroban-testnet.stellar.org
           - Deployment Status: ${{ steps.deploy.outcome }}
-          - Account: ${{ secrets.SOROBAN_ACCOUNT }}
+          - Account: configured via GitHub Secrets
           
           ## Contracts Deployed
           - votechain_token.wasm
@@ -209,7 +209,7 @@ jobs:
         run: |
           if [[ "${{ steps.deploy.outcome }}" == "success" ]]; then
             echo "✅ Deployment to testnet succeeded"
-            echo "📊 View contracts: https://testnet.stellar.expert/search?q=${{ secrets.SOROBAN_ACCOUNT }}"
+            echo "📊 View contracts: https://testnet.stellar.expert"
           else
             echo "❌ Deployment to testnet failed"
             echo "📋 Check logs: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
@@ -242,7 +242,7 @@ jobs:
           export SOROBAN_NETWORK_PASSPHRASE="Test SDF Network ; September 2015"
           
           # List account contracts
-          echo "📋 Contracts for account $SOROBAN_ACCOUNT:"
+          echo "📋 Contracts for configured deployment account:"
           stellar contract info --id "$SOROBAN_ACCOUNT" || echo "Contract verification requires additional setup"
           
           echo "✅ Verification complete"
