@@ -1,0 +1,47 @@
+{
+  "listHeading": "Proposal listing",
+  "listDescription": "Search proposals by title or description, filter by state, and sort results instantly.",
+  "searchLabel": "Search proposals",
+  "searchPlaceholder": "Search title or description",
+  "filterByStateLabel": "Filter proposals by state",
+  "tableCaption": "Filtered and sorted proposal listing",
+  "exportAriaLabel": "Export filtered proposals as CSV",
+  "noMatchSearch": "No proposals match \"{{term}}\".",
+  "noMatchFilter": "No proposals match your filter criteria.",
+  "sort": {
+    "newest": "Newest",
+    "oldest": "Oldest",
+    "votes": "Most votes",
+    "ending": "Ending soon"
+  },
+  "states": {
+    "All": "All",
+    "Active": "Active",
+    "Passed": "Passed",
+    "Rejected": "Rejected",
+    "Executed": "Executed",
+    "Cancelled": "Cancelled"
+  },
+  "detail": {
+    "heading": "Proposal Detail",
+    "placeholder": "Select a proposal to view its details."
+  },
+  "create": {
+    "heading": "Create Proposal",
+    "description": "Select a template to pre-fill common governance actions, or start from scratch.",
+    "templateLabel": "Template",
+    "templateHelp": "Templates pre-fill the title and description. You can edit them freely.",
+    "quickSelectLabel": "Quick-select template",
+    "titleLabel": "Title",
+    "titlePlaceholder": "Proposal title (max 128 characters)",
+    "descriptionLabel": "Description",
+    "descriptionPlaceholder": "Describe the proposal (max 1024 characters)",
+    "quorumLabel": "Quorum (minimum votes)",
+    "quorumPlaceholder": "e.g. 5000000",
+    "durationLabel": "Voting duration (seconds)",
+    "durationPlaceholder": "e.g. 604800 (7 days)",
+    "submitAriaLabel": "Submit governance proposal",
+    "submit": "Submit Proposal",
+    "required": "*"
+  }
+}

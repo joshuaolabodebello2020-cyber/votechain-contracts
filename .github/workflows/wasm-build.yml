@@ -1,0 +1,50 @@
+name: WASM Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  STELLAR_CLI_VERSION: "21.6.0"
+
+jobs:
+  build-wasm:
+    name: Build WASM Contracts
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-wasm-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-wasm-
+
+      - name: Install Stellar CLI
+        run: cargo install --locked stellar-cli@${{ env.STELLAR_CLI_VERSION }} --features opt
+
+      - name: Build governance and token WASM contracts
+        run: stellar contract build
+
+      - name: Verify both WASM binaries exist
+        run: |
+          ls -lh target/wasm32-unknown-unknown/release/votechain_governance.wasm
+          ls -lh target/wasm32-unknown-unknown/release/votechain_token.wasm
+
+      - name: Upload WASM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-contracts
+          path: target/wasm32-unknown-unknown/release/*.wasm
+          if-no-files-found: error

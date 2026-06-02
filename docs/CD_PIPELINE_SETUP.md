@@ -159,6 +159,35 @@ GitHub stores deployment artifacts (logs, reports) for 30 days:
    - `wasm-contracts-*` - Built WASM binaries
    - `deployment-logs-*` - Deployment logs and reports
 
+## Monitoring Deployed Testnet Contracts
+
+A scheduled monitoring workflow checks deployed governance contracts every 10 minutes.
+
+The monitoring workflow:
+
+- verifies the governance contract responds to RPC queries
+- detects if the contract becomes unreachable
+- inspects storage TTL metadata and alerts if remaining ledgers drop below 1000
+- sends alerts to Slack or email when configured via repository secrets
+
+### Required repository secrets
+
+Add these secrets under **Settings** → **Secrets and variables** → **Actions**:
+
+- `TESTNET_GOVERNANCE_CONTRACT_ID` — deployed governance contract ID on testnet
+- `TESTNET_TOKEN_CONTRACT_ID` — deployed token contract ID on testnet
+- `TESTNET_MONITOR_SLACK_WEBHOOK_URL` — optional Slack incoming webhook URL
+- `TESTNET_MONITOR_ALERT_EMAIL` — optional email address for SendGrid alerts
+- `TESTNET_MONITOR_SENDGRID_API_KEY` — optional SendGrid API key
+
+### Running the monitor manually
+
+You can manually trigger the workflow from the Actions tab and review the results in the run logs.
+
+### Workflow file
+
+The monitor is defined in `.github/workflows/testnet-monitoring.yml` and the health check script is located at `scripts/testnet-monitor.sh`.
+
 ## Troubleshooting
 
 ### Deployment Fails: "SOROBAN_ACCOUNT secret not configured"

@@ -1,9 +1,13 @@
+import { useTranslation } from "react-i18next";
 import { FreighterWallet } from "./FreighterWallet";
+import LanguageSwitcher from "./LanguageSwitcher";
 
 export default function Navbar() {
+  const { t } = useTranslation();
+
   return (
     <nav
-      aria-label="Main navigation"
+      aria-label={t("nav.mainNavLabel")}
       style={{
         display: "flex",
         alignItems: "center",
@@ -13,8 +17,13 @@ export default function Navbar() {
         borderBottom: "1px solid #333",
       }}
     >
-      <span style={{ fontWeight: 700, fontSize: "1.1rem", color: "#fff" }}>VoteChain</span>
-      <FreighterWallet />
+      <span style={{ fontWeight: 700, fontSize: "1.1rem", color: "#fff" }}>
+        {t("nav.brand")}
+      </span>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+        <LanguageSwitcher />
+        <FreighterWallet />
+      </div>
     </nav>
   );
 }

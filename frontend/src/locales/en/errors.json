@@ -1,0 +1,12 @@
+{
+  "somethingWentWrong": "Something went wrong",
+  "sectionFailed": "The \"{{section}}\" section failed to load.",
+  "unexpectedError": "An unexpected error occurred.",
+  "retryAriaLabel": "Retry loading this section",
+  "txPending": "⏳ Transaction pending…",
+  "txConfirmed": "✅ Transaction confirmed",
+  "txFailed": "❌ Transaction failed",
+  "viewOnExplorer": "View on Stellar Explorer ↗",
+  "retryTx": "Retry transaction",
+  "dismissNotification": "Dismiss notification"
+}

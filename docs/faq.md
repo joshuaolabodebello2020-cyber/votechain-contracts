@@ -92,3 +92,103 @@ A: Yes. Call `get_proposal(proposal_id)` to read the full proposal state, or `ha
 | 103 | ProposalExpired | Voting period has ended |
 | 104 | InsufficientStake | Voter holds no governance tokens |
 | 105 | InvalidStatus | Proposal is not in the required state for the operation |
+
+---
+
+## Token Setup & Integration {#token-setup}
+
+**Q: How do I deploy and configure the governance token?**  
+A: Deploy the `votechain_token` contract first, then pass its address to `GovernanceContract::initialize` as the `voting_token` parameter. The token must implement the SEP-41 interface (`balance`, `transfer`, `mint`, `burn`). Example:
+```rust
+let token_id = env.register(TokenContract, ());
+let tok = TokenContractClient::new(&env, &token_id);
+tok.initialize(&admin, &1_000_000_000);
+
+governance.initialize(&admin, &token_id, &0, &0, &60, &2_592_000, &false, &0);
+```
+
+**Q: Can I use an existing Stellar asset (classic asset) as the voting token?**  
+A: Not directly. VoteChain requires a Soroban-native token contract that exposes the `balance` function. You can wrap a classic Stellar asset using the Stellar Asset Contract (SAC) and pass the SAC address as `voting_token`.
+
+**Q: How do I distribute governance tokens to DAO members?**  
+A: Call `TokenContract::mint(admin, recipient, amount)` for each member. Only the token admin can mint. For a fair launch, consider minting all tokens at initialization and distributing via transfers, or using a vesting contract.
+
+**Q: Can the voting token be changed after initialization?**  
+A: No. The `voting_token` address is set once at initialization and is immutable. To change it, you would need to deploy a new governance contract.
+
+---
+
+## Quorum Configuration {#quorum-config}
+
+**Q: How should I choose a quorum value?**  
+A: Quorum should reflect the minimum participation you consider legitimate. A common starting point is 10–20% of total token supply. For example, with 1 billion tokens in circulation, a quorum of 100 million (10%) means at least 100M tokens must vote for the result to be binding.
+
+**Q: Can quorum be updated after a proposal is created?**  
+A: Yes, but only by the admin and only while the proposal is still Active. Call `update_quorum(admin, proposal_id, new_quorum)`. This cannot be called after the voting period ends.
+
+**Q: What happens if quorum is set to zero?**  
+A: `create_proposal` will return `InvalidQuorum`. Quorum must be a positive value greater than zero.
+
+**Q: Can quorum exceed the total token supply?**  
+A: No. The contract checks `quorum <= total_supply` at proposal creation and when `update_quorum` is called. Exceeding the supply returns `QuorumExceedsSupply`.
+
+---
+
+## Upgrade Path {#upgrade-path}
+
+**Q: How do I upgrade the governance contract?**  
+A: VoteChain uses a semantic versioning guard. Call `upgrade(admin, (major, minor, patch))` with a strictly higher version than the current one. Downgrades and same-version upgrades are rejected with `DowngradeNotAllowed`. See [docs/upgrading.md](upgrading.md) for the full procedure.
+
+**Q: Is contract state preserved during an upgrade?**  
+A: Yes. The upgrade only changes the contract's WASM bytecode. All persistent storage (proposals, vote records, balances) remains intact because it is stored in Soroban's persistent ledger entries, not in the WASM binary.
+
+**Q: Do I need to re-initialize after an upgrade?**  
+A: No. Re-initialization is blocked by the `AlreadyInitialized` guard. The existing admin, token address, and configuration carry over automatically.
+
+**Q: How do I upgrade the token contract?**  
+A: The token contract follows the same versioning pattern. Call `TokenContract::upgrade(admin, new_version)`. Token balances and allowances are unaffected.
+
+---
+
+## Event Indexing {#event-indexing}
+
+**Q: What events does VoteChain emit?**  
+A: Every state-changing operation emits a Soroban contract event. Key events include:
+- `proposal_created` — new proposal with ID, proposer, quorum, duration
+- `vote_cast` — voter address, proposal ID, vote type, weight
+- `proposal_finalised` — proposal ID, outcome (Passed/Rejected), vote totals
+- `proposal_executed` — proposal ID
+- `proposal_cancelled` — proposal ID
+
+See [docs/events.md](events.md) for the full event schema.
+
+**Q: How do I index VoteChain events off-chain?**  
+A: Use the Stellar RPC `getEvents` endpoint filtered by the governance contract address. The repo includes a reference indexer in `indexer/` that streams events into a PostgreSQL database. Run it with:
+```bash
+cargo run -p votechain-indexer -- --contract-id <GOVERNANCE_CONTRACT_ID>
+```
+
+**Q: Are events available for historical proposals?**  
+A: Events are stored on-chain and accessible via the Stellar RPC for as long as the ledger entries are within the archival window (typically 1 year on mainnet). For long-term retention, run the indexer continuously or use a third-party indexing service.
+
+**Q: Can I filter events by proposal ID?**  
+A: Yes. Each event includes the proposal ID as a topic. Use the `topic` filter in `getEvents` to retrieve all events for a specific proposal:
+```json
+{ "topics": [["proposal_created", "<proposal_id>"]] }
+```
+
+---
+
+## DAO Operations {#dao-operations}
+
+**Q: How do I pause the contract in an emergency?**  
+A: Call `GovernanceContract::pause(admin)`. While paused, all state-changing operations (`create_proposal`, `cast_vote`, etc.) are blocked. Read-only calls (`get_proposal`, `has_voted`) remain available. Resume with `unpause(admin)`.
+
+**Q: Can the admin vote on proposals they created?**  
+A: This is configurable. Set `restrict_admin_vote = true` during initialization to prevent the admin from voting on their own proposals. If `false`, the admin can vote like any other token holder.
+
+**Q: How do I transfer admin privileges to a multisig?**  
+A: Call `transfer_admin(current_admin, new_admin)` where `new_admin` is the address of a Soroban multisig contract or a new EOA. The transfer is immediate and irreversible without the new admin's cooperation.
+
+**Q: What is the proposal cooldown and how does it work?**  
+A: The cooldown (`proposal_cooldown`) is a per-address rate limit in seconds. After creating a proposal, the same address cannot create another until the cooldown expires. Set to `0` to disable. This prevents spam proposals.
