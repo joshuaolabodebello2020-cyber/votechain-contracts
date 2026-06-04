@@ -1,8 +1,8 @@
-import React, { Component, ErrorInfo, ReactNode } from "react";
+import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { withTranslation, WithTranslation } from 'react-i18next';
 
-interface Props {
+interface Props extends WithTranslation {
   children: ReactNode;
-  /** Optional section name for monitoring context */
   section?: string;
 }
 
@@ -10,7 +10,7 @@ interface State {
   error: Error | null;
 }
 
-export class ErrorBoundary extends Component<Props, State> {
+class ErrorBoundaryBase extends Component<Props, State> {
   state: State = { error: null };
 
   static getDerivedStateFromError(error: Error): State {
@@ -18,9 +18,8 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
-    // Log to monitoring service (replace with real integration, e.g. Sentry)
     console.error(
-      `[ErrorBoundary]${this.props.section ? ` [${this.props.section}]` : ""}`,
+      `[ErrorBoundary]${this.props.section ? ` [${this.props.section}]` : ''}`,
       error,
       info.componentStack,
     );
@@ -31,16 +30,20 @@ export class ErrorBoundary extends Component<Props, State> {
   };
 
   render(): ReactNode {
+    const { t, section } = this.props;
+
     if (this.state.error) {
       return (
-        <div role="alert" style={{ padding: "1.5rem", textAlign: "center" }}>
-          <h2>Something went wrong</h2>
+        <div role="alert" style={{ padding: '1.5rem', textAlign: 'center' }}>
+          <h2>{t('errors:somethingWentWrong')}</h2>
           <p>
-            {this.props.section
-              ? `The "${this.props.section}" section failed to load.`
-              : "An unexpected error occurred."}
+            {section
+              ? t('errors:sectionFailed', { section })
+              : t('errors:unexpectedError')}
           </p>
-          <button onClick={this.handleRetry} aria-label="Retry loading this section">Try again</button>
+          <button onClick={this.handleRetry} aria-label={t('errors:retryAriaLabel')}>
+            {t('common:tryAgain')}
+          </button>
         </div>
       );
     }
@@ -48,3 +51,5 @@ export class ErrorBoundary extends Component<Props, State> {
     return this.props.children;
   }
 }
+
+export const ErrorBoundary = withTranslation()(ErrorBoundaryBase);

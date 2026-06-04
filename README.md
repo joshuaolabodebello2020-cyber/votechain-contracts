@@ -26,8 +26,21 @@ VoteChain enables DAOs, protocols, and communities to create proposals, cast tok
 - [Development](#development)
 - [Testing](#testing)
 - [Security](#security)
+- [Live Demo](#live-demo)
 - [Contributing](#contributing)
 - [Resources](#resources)
+
+---
+
+## Live Demo
+
+A live instance of VoteChain is deployed on the Stellar Testnet for demonstration purposes.
+
+- **Demo URL:** [https://demo.votechain.io](https://demo.votechain.io)
+- **Governance Contract:** `CDO5V...V6P2`
+- **Token Contract:** `CAS3...K2M6`
+
+The demo environment includes pre-populated sample proposals in various states (Active, Passed, Rejected, Executed) to showcase the full governance lifecycle.
 
 ---
 
@@ -60,7 +73,7 @@ VoteChain consists of two complementary Soroban smart contracts:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    VoteChain System                          │
+│                    VoteChain System                          │k
 ├─────────────────────────────────────────────────────────────┤
 │                                                               │
 │  ┌──────────────────────┐      ┌──────────────────────┐     │
@@ -83,6 +96,14 @@ VoteChain consists of two complementary Soroban smart contracts:
 │                                                               │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+### Frontend–Contract Interaction
+
+The diagram below shows how the browser communicates with Soroban contracts via Stellar RPC, including the full vote submission flow:
+
+![Frontend–Contract Architecture](docs/frontend-contract-architecture.svg)
+
+See [`docs/frontend-contract-architecture.svg`](docs/frontend-contract-architecture.svg) for the full-resolution file.
 
 ### Key Design Decisions
 
@@ -248,6 +269,7 @@ votechain-contracts/
 │       └── Cargo.toml
 │
 ├── docs/
+│   ├── frontend-contract-architecture.svg  # Frontend↔Contract interaction diagram
 │   ├── adr/                          # Architecture Decision Records
 │   │   ├── ADR-001-stellar-soroban-platform.md
 │   │   ├── ADR-002-token-weighted-voting.md
@@ -267,6 +289,7 @@ votechain-contracts/
 │   │   ├── rust.md                   # Rust integration examples
 │   │   └── javascript.md             # JavaScript/TypeScript examples
 │   ├── GETTING_STARTED.md
+│   ├── dao-integration-guide.md         # DAO deployment & governance walkthrough
 │   ├── lifecycle.md
 │   ├── storage.md
 │   ├── upgrading.md
@@ -1484,6 +1507,7 @@ We welcome contributions from the community. Please see [CONTRIBUTING.md](CONTRI
 ### Documentation
 
 - **[GETTING_STARTED.md](docs/GETTING_STARTED.md)** — Step-by-step setup guide
+- **[DAO Integration Guide](docs/dao-integration-guide.md)** — Deploy, configure, and run governance for your DAO
 - **[Proposal Lifecycle](docs/lifecycle.md)** — Detailed state diagram and transitions
 - **[Storage Model](docs/storage.md)** — Storage tier strategy and optimization
 - **[Upgrading](docs/upgrading.md)** — Contract upgrade procedures

@@ -33,6 +33,8 @@ pub enum ContractError {
     InvalidNewAdmin = 6,
     /// 7 – Address parameter is the zero/default address
     InvalidAddress = 7,
+    /// 8 – Address is frozen and cannot send or receive tokens
+    AccountFrozen = 8,
 }
 
 /// Storage key enum for the token contract.
@@ -80,4 +82,8 @@ pub enum TokenDataKey {
     /// Contract version stored as a `(major, minor, patch)` semver tuple (instance storage).
     /// Key space: singleton — only one `Version` entry exists.
     Version,
+
+    /// Freeze flag for a specific address (persistent storage).
+    /// Key space: one entry per frozen address; absent means not frozen.
+    Frozen(Address),
 }

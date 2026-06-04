@@ -109,7 +109,11 @@ mod contract_props {
 
         runner
             .run(
-                &(1i128..=1_000_000i128, 1i128..=1_000_000i128, 1i128..=1_000_000i128),
+                &(
+                    1i128..=1_000_000i128,
+                    1i128..=1_000_000i128,
+                    1i128..=1_000_000i128,
+                ),
                 |(w_yes, w_no, w_abstain)| {
                     let t = setup_env();
                     let proposal_id = create_test_proposal(&t, &t.admin.clone());
@@ -122,7 +126,7 @@ mod contract_props {
                     mint_and_vote(&t, &voter_no, proposal_id, Vote::No, w_no);
                     mint_and_vote(&t, &voter_abstain, proposal_id, Vote::Abstain, w_abstain);
 
-                    let proposal = t.client.get_proposal(&proposal_id).unwrap();
+                    let proposal = t.client.get_proposal(&proposal_id);
 
                     // Each voter's recorded weight must match what was minted.
                     let rec_yes = t.client.get_vote(&proposal_id, &voter_yes).unwrap();
@@ -163,7 +167,7 @@ mod contract_props {
                 let voter = Address::generate(&t.env);
                 mint_and_vote(&t, &voter, proposal_id, Vote::Yes, weight);
 
-                let proposal_before = t.client.get_proposal(&proposal_id).unwrap();
+                let proposal_before = t.client.get_proposal(&proposal_id);
 
                 // Second vote must be rejected.
                 let result = t.client.try_cast_vote(&voter, &proposal_id, &Vote::No);
@@ -174,7 +178,7 @@ mod contract_props {
                 );
 
                 // Tally must be unchanged.
-                let proposal_after = t.client.get_proposal(&proposal_id).unwrap();
+                let proposal_after = t.client.get_proposal(&proposal_id);
                 prop_assert_eq!(proposal_before.votes_yes, proposal_after.votes_yes);
                 prop_assert_eq!(proposal_before.votes_no, proposal_after.votes_no);
                 prop_assert_eq!(proposal_before.votes_abstain, proposal_after.votes_abstain);

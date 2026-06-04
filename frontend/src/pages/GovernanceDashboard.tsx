@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { NotificationSubscribe } from "../components/NotificationSubscribe";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -22,32 +23,14 @@ type Stats = {
   avgQuorumAchievement: number;
 };
 
-// ── Mock data fetcher (replace with real API calls) ────────────────────────
+// ── Data fetcher ────────────────────────────────────────────────────────────
 
 async function fetchStats(): Promise<Stats> {
-  // In production, replace with: fetch('/api/governance/stats')
-  return {
-    byState: { Active: 3, Passed: 12, Rejected: 5, Executed: 10, Cancelled: 2 },
-    participationOverTime: [
-      { date: "2026-01", rate: 42 },
-      { date: "2026-02", rate: 55 },
-      { date: "2026-03", rate: 61 },
-      { date: "2026-04", rate: 48 },
-    ],
-    topVoters: [
-      { address: "GABC...1234", total_weight: 9_800_000 },
-      { address: "GDEF...5678", total_weight: 7_200_000 },
-      { address: "GHIJ...9012", total_weight: 5_500_000 },
-      { address: "GKLM...3456", total_weight: 4_100_000 },
-      { address: "GNOP...7890", total_weight: 3_800_000 },
-      { address: "GQRS...1234", total_weight: 3_200_000 },
-      { address: "GTUV...5678", total_weight: 2_900_000 },
-      { address: "GWXY...9012", total_weight: 2_400_000 },
-      { address: "GZAB...3456", total_weight: 1_900_000 },
-      { address: "GCDE...7890", total_weight: 1_500_000 },
-    ],
-    avgQuorumAchievement: 73,
-  };
+  const response = await fetch("/api/governance/stats");
+  if (!response.ok) {
+    throw new Error(`Failed to fetch governance stats: ${response.statusText}`);
+  }
+  return response.json() as Promise<Stats>;
 }
 
 // ── Minimal SVG pie chart ──────────────────────────────────────────────────
@@ -223,9 +206,20 @@ export function GovernanceDashboard() {
           </p>
         </section>
 
+        {/* Pass/Reject Ratio */}
+        <section aria-labelledby="ratio-heading" style={cardStyle}>
+          <h2 id="ratio-heading" style={h2Style}>Pass/Reject Ratio</h2>
+          <div style={{ fontSize: 48, fontWeight: 700, color: "#42a5f5" }}>
+            {stats.byState.Passed}:{stats.byState.Rejected}
+          </div>
+          <p style={{ fontSize: 13, color: "#aaa" }}>
+            Ratio of passed vs. rejected proposals
+          </p>
+        </section>
+
         {/* Top 10 voters */}
         <section aria-labelledby="voters-heading" style={{ ...cardStyle, gridColumn: "1 / -1" }}>
-          <h2 id="voters-heading" style={h2Style}>Top 10 Voters by Vote Weight</h2>
+          <h2 id="voters-heading" style={h2Style}>Top 10 Voters (Anonymized)</h2>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr style={{ borderBottom: "1px solid #333" }}>
@@ -238,7 +232,11 @@ export function GovernanceDashboard() {
               {stats.topVoters.map((v, i) => (
                 <tr key={v.address} style={{ borderBottom: "1px solid #222" }}>
                   <td style={tdStyle}>{i + 1}</td>
-                  <td style={tdStyle}>{v.address}</td>
+                  <td style={tdStyle}>
+                    {v.address.length > 12 
+                      ? `${v.address.slice(0, 6)}...${v.address.slice(-4)}` 
+                      : v.address}
+                  </td>
                   <td style={{ ...tdStyle, textAlign: "right" }}>
                     {v.total_weight.toLocaleString()}
                   </td>
@@ -246,6 +244,11 @@ export function GovernanceDashboard() {
               ))}
             </tbody>
           </table>
+        </section>
+
+        {/* Notification subscriptions */}
+        <section style={{ gridColumn: "1 / -1" }}>
+          <NotificationSubscribe />
         </section>
 
       </div>

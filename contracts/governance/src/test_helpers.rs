@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use soroban_sdk::{testutils::Address as _, Address, Env, String};
+use soroban_sdk::{testutils::Address as _, Address, Env, String, Vec};
 use crate::{GovernanceContract, GovernanceContractClient};
 use crate::types::Vote;
 
@@ -41,7 +41,7 @@ pub fn setup_env() -> TestEnv {
     let tok = votechain_token::TokenContractClient::new(&env, &tok_id);
     tok.initialize(&admin, &10_000_000);
 
-    client.initialize(&admin, &tok_id, &0_i128, &0_u64, &60_u64, &2_592_000_u64, &false, &0_u64, &0_i128);
+    client.initialize(&admin, &tok_id, &0_i128, &0_u64, &60_u64, &2_592_000_u64, &false, &0_u64, &0_u64);
 
     TestEnv { env, client, admin, token_id: tok_id }
 }
@@ -56,6 +56,7 @@ pub fn create_test_proposal(t: &TestEnv, proposer: &Address) -> u64 {
         &String::from_str(&t.env, "Test description"),
         &100,
         &3600,
+        &Vec::new(&t.env),
     )
 }
 
