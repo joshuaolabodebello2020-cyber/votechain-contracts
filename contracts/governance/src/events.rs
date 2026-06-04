@@ -14,6 +14,7 @@
 
 use soroban_sdk::{symbol_short, Address, Env, String};
 use crate::types::{ProposalState, Vote};
+use soroban_sdk::{symbol_short, Address, Env};
 
 /// # Event Schema
 ///
@@ -29,13 +30,14 @@ use crate::types::{ProposalState, Vote};
 /// | cancel        | `"cancelled"`  | `id: u64`     | `()`                              |
 /// | update_quorum | `"qupdate"`    | `id: u64`     | `new_quorum: i128`                |
 /// | transfer_admin | `"admxfer"`   | —             | `(old_admin, new_admin): (Address, Address)` |
-
+///
 /// Emits an `init` event when the contract is initialised.
 ///
 /// Topics: `("init",)`  
 /// Data: `admin: Address`
 pub fn contract_initialized(env: &Env, admin: &Address) {
-    env.events().publish((symbol_short!("init"),), admin.clone());
+    env.events()
+        .publish((symbol_short!("init"),), admin.clone());
 }
 
 /// Emits a `created` event when a new proposal is created.
@@ -43,7 +45,8 @@ pub fn contract_initialized(env: &Env, admin: &Address) {
 /// Topics: `("created", id)`  
 /// Data: `proposer: Address`
 pub fn proposal_created(env: &Env, id: u64, proposer: &Address) {
-    env.events().publish((symbol_short!("created"), id), proposer.clone());
+    env.events()
+        .publish((symbol_short!("created"), id), proposer.clone());
 }
 
 /// Emits a `vote` event when a vote is cast.
@@ -51,7 +54,10 @@ pub fn proposal_created(env: &Env, id: u64, proposer: &Address) {
 /// Topics: `("vote", id)`  
 /// Data: `(voter: Address, vote: Vote, weight: i128)`
 pub fn vote_cast(env: &Env, id: u64, voter: &Address, vote: &Vote, weight: i128) {
-    env.events().publish((symbol_short!("vote"), id), (voter.clone(), vote.clone(), weight));
+    env.events().publish(
+        (symbol_short!("vote"), id),
+        (voter.clone(), vote.clone(), weight),
+    );
 }
 
 /// Emits a `final` event when a proposal is finalised (Passed or Rejected).
@@ -63,7 +69,8 @@ pub fn vote_cast(env: &Env, id: u64, voter: &Address, vote: &Vote, weight: i128)
 /// executed (non-zero only when `state == Passed`).  Consumers can use this to
 /// schedule an execution call without querying the proposal struct separately.
 pub fn proposal_finalised(env: &Env, id: u64, state: &ProposalState, execute_after: u64) {
-    env.events().publish((symbol_short!("final"), id), (state.clone(), execute_after));
+    env.events()
+        .publish((symbol_short!("final"), id), (state.clone(), execute_after));
 }
 
 /// Emits an `executed` event when a passed proposal is executed.
@@ -95,7 +102,8 @@ pub fn proposal_amended(env: &Env, id: u64, proposer: &Address, title: &String, 
 /// Topics: `("qupdate", id)`  
 /// Data: `new_quorum: i128`
 pub fn quorum_updated(env: &Env, id: u64, new_quorum: i128) {
-    env.events().publish((symbol_short!("qupdate"), id), new_quorum);
+    env.events()
+        .publish((symbol_short!("qupdate"), id), new_quorum);
 }
 
 /// Emits an `admxfer` event when admin rights are transferred.
@@ -134,7 +142,8 @@ pub fn contract_paused(env: &Env, admin: &Address, reason: Option<String>) {
 /// Topics: `("unpaused",)`
 /// Data: `admin: Address`
 pub fn contract_unpaused(env: &Env, admin: &Address) {
-    env.events().publish((symbol_short!("unpaused"),), admin.clone());
+    env.events()
+        .publish((symbol_short!("unpaused"),), admin.clone());
 }
 
 /// Emits an `upgraded` event when the contract version is upgraded.
@@ -142,7 +151,17 @@ pub fn contract_unpaused(env: &Env, admin: &Address) {
 /// Topics: `("upgraded",)`
 /// Data: `(old_version: (u32, u32, u32), new_version: (u32, u32, u32))`
 pub fn contract_upgraded(env: &Env, old_version: (u32, u32, u32), new_version: (u32, u32, u32)) {
-    env.events().publish((symbol_short!("upgraded"),), (old_version, new_version));
+    env.events()
+        .publish((symbol_short!("upgraded"),), (old_version, new_version));
+}
+
+/// Emits a `migrated` event when a storage migration completes.
+///
+/// Topics: `("migrated",)`
+/// Data: `(old_version: (u32, u32, u32), new_version: (u32, u32, u32))`
+pub fn migration_completed(env: &Env, old_version: (u32, u32, u32), new_version: (u32, u32, u32)) {
+    env.events()
+        .publish((symbol_short!("migrated"),), (old_version, new_version));
 }
 
 /// Emits a `migrated` event when a contract migration completes.
