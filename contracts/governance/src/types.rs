@@ -266,6 +266,11 @@ pub enum DataKey {
     /// Key space: singleton — only one `MaxDuration` entry exists.
     MaxDuration,
 
+    /// Absolute vote weight threshold that rejects a proposal immediately when
+    /// `votes_no >= veto_threshold`. Stored as instance storage.
+    /// Key space: singleton — only one `VetoThreshold` entry exists.
+    VetoThreshold,
+
     /// Address nominated to become the next admin (instance storage).
     /// Set by `propose_admin_transfer`; cleared on acceptance or expiry.
     PendingAdmin,

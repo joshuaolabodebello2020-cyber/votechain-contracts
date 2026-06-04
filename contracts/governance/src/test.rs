@@ -370,6 +370,52 @@ fn test_cast_vote_and_finalise_passed() {
 }
 
 #[test]
+fn test_veto_threshold_rejects_proposal_immediately() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let gov_id = env.register(GovernanceContract, ());
+    let client = GovernanceContractClient::new(&env, &gov_id);
+
+    let admin = Address::generate(&env);
+    let tok_id = env.register(votechain_token::TokenContract, ());
+    let tok = votechain_token::TokenContractClient::new(&env, &tok_id);
+    tok.initialize(&admin, &10_000_000);
+
+    client.initialize(
+        &admin,
+        &tok_id,
+        &0_i128,
+        &0_u64,
+        &60_u64,
+        &2_592_000_u64,
+        &false,
+        &0_u64,
+        &5_000_000_i128,
+    );
+
+    let proposer = Address::generate(&env);
+    let id = client.create_proposal(
+        &proposer,
+        &String::from_str(&env, "Veto proposal"),
+        &String::from_str(&env, "desc"),
+        &100,
+        &3600,
+    );
+
+    let voter = Address::generate(&env);
+    tok.mint(&admin, &voter, &5_000_000_i128);
+    client.cast_vote(&voter, &id, &Vote::No);
+
+    assert_eq!(client.get_proposal(&id).state, ProposalState::Rejected);
+
+    let events = env.events().all();
+    assert!(events.iter().any(|(_, topics, _)| {
+        topics == (symbol_short!("veto"), id).into_val(&env)
+    }));
+}
+
+#[test]
 fn test_finalise_rejected_below_quorum() {
     let t = setup_env();
     let voter = Address::generate(&t.env);

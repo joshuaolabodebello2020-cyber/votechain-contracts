@@ -73,6 +73,14 @@ pub fn proposal_finalised(env: &Env, id: u64, state: &ProposalState, execute_aft
         .publish((symbol_short!("final"), id), (state.clone(), execute_after));
 }
 
+/// Emits a `veto` event when a proposal is immediately rejected by the veto.
+///
+/// Topics: `("veto", id)`
+/// Data: `(votes_no: i128, veto_threshold: i128)`
+pub fn proposal_vetoed(env: &Env, id: u64, votes_no: i128, veto_threshold: i128) {
+    env.events().publish((symbol_short!("veto"), id), (votes_no, veto_threshold));
+}
+
 /// Emits an `executed` event when a passed proposal is executed.
 ///
 /// Topics: `("executed", id)`  

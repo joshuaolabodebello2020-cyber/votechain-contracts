@@ -37,7 +37,7 @@ use storage::{
     mark_voted, next_id, save_proposal, save_vote_record, save_voter_snapshot, set_admin,
     set_contract_state, set_last_proposal, set_min_duration, set_max_duration,
     set_min_proposal_balance, set_paused, set_proposal_cooldown, set_restrict_admin_vote,
-    set_timelock_duration, set_version, set_voting_token, get_vote_record, get_max_duration,
+    set_timelock_duration, set_version, set_veto_threshold, set_voting_token, get_vote_record, get_max_duration,
     set_pending_admin, get_pending_admin, clear_pending_admin,
     set_admin_transfer_expiry, get_admin_transfer_expiry,
     set_pause_reason,
@@ -192,6 +192,8 @@ impl GovernanceContract {
     ///   change the title and description before voting begins.
     /// - `timelock_duration`: mandatory delay in seconds between a proposal passing and it
     ///   becoming executable. Use `0` to disable the timelock.
+    /// - `veto_threshold`: vote weight threshold that rejects a proposal immediately when
+    ///   `votes_no >= veto_threshold`. Use `0` to disable the veto mechanism.
     ///
     /// # Errors
     /// - [`ContractError::AlreadyInitialized`] if the contract has already been initialised.
@@ -220,6 +222,7 @@ impl GovernanceContract {
         restrict_admin_vote: bool,
         amend_window: u64,
         timelock_duration: u64,
+        veto_threshold: i128,
     ) -> Result<(), ContractError> {
         // SEC-005: auth is the first operation in every privileged function.
         admin.require_auth();
@@ -239,6 +242,10 @@ impl GovernanceContract {
         }
         set_admin(&env, &admin);
         set_voting_token(&env, &voting_token);
+        let supply = TokenSupplyClient::new(&env, &voting_token).total_supply();
+        if veto_threshold < 0 || veto_threshold > supply {
+            return Err(ContractError::InvalidVetoThreshold);
+        }
         if min_proposal_balance > 0 {
             set_min_proposal_balance(&env, min_proposal_balance);
         }
@@ -254,6 +261,7 @@ impl GovernanceContract {
         if timelock_duration > 0 {
             set_timelock_duration(&env, timelock_duration);
         }
+        set_veto_threshold(&env, veto_threshold);
         set_version(&env, (1, 0, 0));
         set_contract_state(&env, &ContractState::Ready);
         events::contract_initialized(&env, &admin);
@@ -583,6 +591,9 @@ impl GovernanceContract {
         );
         save_proposal(&env, &proposal);
         events::vote_cast(&env, proposal_id, &voter, &vote, weight);
+        if proposal.state == ProposalState::Rejected && veto_threshold > 0 && vote == Vote::No {
+            events::proposal_vetoed(&env, proposal_id, proposal.votes_no, veto_threshold);
+        }
         Ok(())
     }
 

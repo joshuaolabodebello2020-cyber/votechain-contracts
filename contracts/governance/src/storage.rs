@@ -161,6 +161,14 @@ pub fn get_voting_token(env: &Env) -> Result<Address, ContractError> {
         .ok_or(ContractError::VotingTokenNotSet)
 }
 
+pub fn set_veto_threshold(env: &Env, v: i128) {
+    env.storage().instance().set(&DataKey::VetoThreshold, &v);
+}
+
+pub fn get_veto_threshold(env: &Env) -> i128 {
+    env.storage().instance().get(&DataKey::VetoThreshold).unwrap_or(0)
+}
+
 /// Records that `voter` has voted on `proposal_id`.
 pub fn mark_voted(env: &Env, proposal_id: u64, voter: &Address) {
     env.storage().persistent().set(&DataKey::HasVoted(proposal_id, voter.clone()), &true);
