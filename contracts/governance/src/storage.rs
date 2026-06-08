@@ -37,8 +37,8 @@
 //! Because the discriminant is part of the serialised key, these can never
 //! collide even when called with identical arguments.
 
-use soroban_sdk::{Env, Address};
 use crate::types::{ContractError, ContractState, DataKey, Proposal, VoteRecord};
+use soroban_sdk::{Address, Env};
 
 // =============================================================================
 // Storage Strategy
@@ -102,8 +102,14 @@ pub fn load_proposal(env: &Env, id: u64) -> Result<Proposal, ContractError> {
 /// # Errors
 /// - [`ContractError::ProposalCountOverflow`] if the counter would exceed `u64::MAX`.
 pub fn next_id(env: &Env) -> Result<u64, ContractError> {
-    let current: u64 = env.storage().instance().get(&DataKey::ProposalCount).unwrap_or(0);
-    let n = current.checked_add(1).ok_or(ContractError::ProposalCountOverflow)?;
+    let current: u64 = env
+        .storage()
+        .instance()
+        .get(&DataKey::ProposalCount)
+        .unwrap_or(0);
+    let n = current
+        .checked_add(1)
+        .ok_or(ContractError::ProposalCountOverflow)?;
     env.storage().instance().set(&DataKey::ProposalCount, &n);
     Ok(n)
 }
@@ -163,7 +169,9 @@ pub fn get_voting_token(env: &Env) -> Result<Address, ContractError> {
 
 /// Records that `voter` has voted on `proposal_id`.
 pub fn mark_voted(env: &Env, proposal_id: u64, voter: &Address) {
-    env.storage().persistent().set(&DataKey::HasVoted(proposal_id, voter.clone()), &true);
+    env.storage()
+        .persistent()
+        .set(&DataKey::HasVoted(proposal_id, voter.clone()), &true);
 }
 
 /// Returns `true` if `voter` has already voted on `proposal_id`.
@@ -176,20 +184,29 @@ pub fn has_voted(env: &Env, proposal_id: u64, voter: &Address) -> bool {
 
 /// Stores the vote record for `voter` on `proposal_id`.
 pub fn save_vote_record(env: &Env, proposal_id: u64, voter: &Address, record: &VoteRecord) {
-    env.storage().persistent().set(&DataKey::VoteRecord(proposal_id, voter.clone()), record);
+    env.storage()
+        .persistent()
+        .set(&DataKey::VoteRecord(proposal_id, voter.clone()), record);
 }
 
 /// Returns the vote record for `voter` on `proposal_id`, or `None` if not voted.
 pub fn get_vote_record(env: &Env, proposal_id: u64, voter: &Address) -> Option<VoteRecord> {
-    env.storage().persistent().get(&DataKey::VoteRecord(proposal_id, voter.clone()))
+    env.storage()
+        .persistent()
+        .get(&DataKey::VoteRecord(proposal_id, voter.clone()))
 }
 
 pub fn set_min_proposal_balance(env: &Env, v: i128) {
-    env.storage().instance().set(&DataKey::MinProposalBalance, &v);
+    env.storage()
+        .instance()
+        .set(&DataKey::MinProposalBalance, &v);
 }
 
 pub fn get_min_proposal_balance(env: &Env) -> i128 {
-    env.storage().instance().get(&DataKey::MinProposalBalance).unwrap_or(0)
+    env.storage()
+        .instance()
+        .get(&DataKey::MinProposalBalance)
+        .unwrap_or(0)
 }
 
 pub fn set_proposal_cooldown(env: &Env, v: u64) {
@@ -197,15 +214,23 @@ pub fn set_proposal_cooldown(env: &Env, v: u64) {
 }
 
 pub fn get_proposal_cooldown(env: &Env) -> u64 {
-    env.storage().instance().get(&DataKey::ProposalCooldown).unwrap_or(0)
+    env.storage()
+        .instance()
+        .get(&DataKey::ProposalCooldown)
+        .unwrap_or(0)
 }
 
 pub fn set_last_proposal(env: &Env, proposer: &Address, ts: u64) {
-    env.storage().persistent().set(&DataKey::LastProposal(proposer.clone()), &ts);
+    env.storage()
+        .persistent()
+        .set(&DataKey::LastProposal(proposer.clone()), &ts);
 }
 
 pub fn get_last_proposal(env: &Env, proposer: &Address) -> u64 {
-    env.storage().persistent().get(&DataKey::LastProposal(proposer.clone())).unwrap_or(0)
+    env.storage()
+        .persistent()
+        .get(&DataKey::LastProposal(proposer.clone()))
+        .unwrap_or(0)
 }
 
 /// Records the voter's token balance snapshot for a given proposal.
@@ -230,17 +255,25 @@ pub fn set_version(env: &Env, version: (u32, u32, u32)) {
 
 /// Returns the stored contract version as a `(major, minor, patch)` tuple.
 pub fn get_version(env: &Env) -> (u32, u32, u32) {
-    env.storage().instance().get(&DataKey::Version).unwrap_or((0, 0, 0))
+    env.storage()
+        .instance()
+        .get(&DataKey::Version)
+        .unwrap_or((0, 0, 0))
 }
 
 /// Stores whether admin is restricted from voting on their own proposals.
 pub fn set_restrict_admin_vote(env: &Env, v: bool) {
-    env.storage().instance().set(&DataKey::RestrictAdminVote, &v);
+    env.storage()
+        .instance()
+        .set(&DataKey::RestrictAdminVote, &v);
 }
 
 /// Returns whether admin vote restriction is enabled. Defaults to `false`.
 pub fn get_restrict_admin_vote(env: &Env) -> bool {
-    env.storage().instance().get(&DataKey::RestrictAdminVote).unwrap_or(false)
+    env.storage()
+        .instance()
+        .get(&DataKey::RestrictAdminVote)
+        .unwrap_or(false)
 }
 
 /// Stores the mandatory delay (seconds) a passed proposal must wait before it can be executed.
@@ -250,7 +283,10 @@ pub fn set_timelock_duration(env: &Env, v: u64) {
 
 /// Returns the configured timelock duration in seconds. Defaults to 0 (no delay).
 pub fn get_timelock_duration(env: &Env) -> u64 {
-    env.storage().instance().get(&DataKey::TimelockDuration).unwrap_or(0)
+    env.storage()
+        .instance()
+        .get(&DataKey::TimelockDuration)
+        .unwrap_or(0)
 }
 
 /// Sets the contract paused state.
@@ -260,7 +296,10 @@ pub fn set_paused(env: &Env, paused: bool) {
 
 /// Returns `true` if the contract is currently paused.
 pub fn is_paused(env: &Env) -> bool {
-    env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+    env.storage()
+        .instance()
+        .get(&DataKey::Paused)
+        .unwrap_or(false)
 }
 
 pub fn set_min_duration(env: &Env, v: u64) {
@@ -268,7 +307,10 @@ pub fn set_min_duration(env: &Env, v: u64) {
 }
 
 pub fn get_min_duration(env: &Env) -> u64 {
-    env.storage().instance().get(&DataKey::MinDuration).unwrap_or(60)
+    env.storage()
+        .instance()
+        .get(&DataKey::MinDuration)
+        .unwrap_or(60)
 }
 
 pub fn set_max_duration(env: &Env, v: u64) {
@@ -276,5 +318,8 @@ pub fn set_max_duration(env: &Env, v: u64) {
 }
 
 pub fn get_max_duration(env: &Env) -> u64 {
-    env.storage().instance().get(&DataKey::MaxDuration).unwrap_or(2_592_000)
+    env.storage()
+        .instance()
+        .get(&DataKey::MaxDuration)
+        .unwrap_or(2_592_000)
 }

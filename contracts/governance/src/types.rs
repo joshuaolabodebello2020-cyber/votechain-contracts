@@ -122,7 +122,7 @@ pub struct Proposal {
     pub votes_yes: i128,
     pub votes_no: i128,
     pub votes_abstain: i128,
-    pub quorum: i128,       // minimum total votes required to pass
+    pub quorum: i128, // minimum total votes required to pass
     pub start_time: u64,
     pub end_time: u64,
     pub state: ProposalState,
