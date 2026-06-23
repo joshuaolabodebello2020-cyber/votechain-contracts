@@ -13,8 +13,7 @@
 // limitations under the License.
 
 use soroban_sdk::{symbol_short, Address, Env, String};
-use crate::types::{ProposalState, Vote};
-use soroban_sdk::{symbol_short, Address, Env};
+use crate::types::{MultiSigActionType, ProposalState, Vote};
 
 /// # Event Schema
 ///
@@ -172,12 +171,26 @@ pub fn migration_completed(env: &Env, old_version: (u32, u32, u32), new_version:
         .publish((symbol_short!("migrated"),), (old_version, new_version));
 }
 
-/// Emits a `migrated` event when a contract migration completes.
+/// Emits a `deleg` event when voting power is delegated.
 ///
-/// Topics: `("migrated",)`
-/// Data: `(old_version: (u32, u32, u32), new_version: (u32, u32, u32))`
-pub fn migration_completed(env: &Env, old_version: (u32, u32, u32), new_version: (u32, u32, u32)) {
-    env.events().publish((symbol_short!("migrated"),), (old_version, new_version));
+/// Topics: `("deleg",)`
+/// Data: `(delegator: Address, delegatee: Address, weight: i128)`
+pub fn delegation_set(env: &Env, delegator: &Address, delegatee: &Address, weight: i128) {
+    env.events().publish(
+        (symbol_short!("deleg"),),
+        (delegator.clone(), delegatee.clone(), weight),
+    );
+}
+
+/// Emits a `revoke` event when a delegation is revoked.
+///
+/// Topics: `("revoke",)`
+/// Data: `(delegator: Address, delegatee: Address, weight: i128)`
+pub fn delegation_revoked(env: &Env, delegator: &Address, delegatee: &Address, weight: i128) {
+    env.events().publish(
+        (symbol_short!("revoke"),),
+        (delegator.clone(), delegatee.clone(), weight),
+    );
 }
 
 /// Emits an `mspropose` event when a multi-sig action is proposed.

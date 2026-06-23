@@ -51,46 +51,72 @@ pub enum ContractError {
     InsufficientBalance = 15,
     /// 16 – Proposer must wait for the cooldown period to expire
     ProposalCooldown = 16,
-    /// 17 – Proposal title exceeds maximum byte length
-    TitleTooLong = 17,
-    /// 18 – Proposal description exceeds maximum byte length
-    DescriptionTooLong = 18,
-    /// 19 – Proposal title is empty or exceeds maximum byte length
-    InvalidTitle = 19,
-    /// 20 – Proposal description is empty or exceeds maximum byte length
-    InvalidDescription = 20,
-    /// 21 – Duration is outside the allowed [MIN_DURATION, MAX_DURATION] range
-    InvalidDurationRange = 21,
-    /// 22 – Quorum exceeds the total token supply
-    QuorumExceedsSupply = 22,
-    /// 23 – Voting period has not yet started
-    VotingNotStarted = 23,
-    /// 24 – New admin address is invalid (e.g. zero address)
-    InvalidNewAdmin = 24,
-    /// 25 – Admin is not permitted to vote on their own proposals
-    AdminVoteRestricted = 25,
-    /// 26 – Contract is paused; state-changing operations are blocked
-    ContractPaused = 26,
-    /// 27 – Contract is not paused
-    NotPaused = 27,
-    /// 28 – Address parameter is the zero/default address
-    InvalidAddress = 28,
-    /// 29 – Proposal ID counter overflowed (u64::MAX reached)
-    ProposalCountOverflow = 29,
-    /// 30 – Timelock period has not yet expired
-    TimelockNotExpired = 30,
-    /// 31 – No pending admin transfer has been proposed
-    PendingAdminNotSet = 31,
-    /// 32 – The admin transfer window has expired; propose again
-    AdminTransferExpired = 32,
-    /// 33 – Caller is not the pending admin
-    NotPendingAdmin = 33,
-    /// 34 – Target version is lower than or equal to the current version (downgrade rejected)
-    DowngradeNotAllowed = 34,
-    /// 35 – Proposal amendment is not allowed after the amendment window or once voting has started
-    ProposalAmendmentNotAllowed = 35,
-    /// 36 – Only the original proposer may amend the proposal
-    NotProposalOwner = 36,
+    /// 17 – Proposal title is empty or exceeds maximum byte length
+    InvalidTitle = 17,
+    /// 18 – Proposal description is empty or exceeds maximum byte length
+    InvalidDescription = 18,
+    /// 19 – Duration is outside the allowed [MIN_DURATION, MAX_DURATION] range
+    InvalidDurationRange = 19,
+    /// 20 – Quorum exceeds the total token supply
+    QuorumExceedsSupply = 20,
+    /// 21 – Voting period has not yet started
+    VotingNotStarted = 21,
+    /// 22 – New admin address is invalid (e.g. zero address)
+    InvalidNewAdmin = 22,
+    /// 23 – Admin is not permitted to vote on their own proposals
+    AdminVoteRestricted = 23,
+    /// 24 – Contract is paused; state-changing operations are blocked
+    ContractPaused = 24,
+    /// 25 – Contract is not paused
+    NotPaused = 25,
+    /// 26 – Address parameter is the zero/default address
+    InvalidAddress = 26,
+    /// 27 – Proposal ID counter overflowed (u64::MAX reached)
+    ProposalCountOverflow = 27,
+    /// 28 – Timelock period has not yet expired
+    TimelockNotExpired = 28,
+    /// 29 – No pending admin transfer has been proposed
+    PendingAdminNotSet = 29,
+    /// 30 – The admin transfer window has expired; propose again
+    AdminTransferExpired = 30,
+    /// 31 – Caller is not the pending admin
+    NotPendingAdmin = 31,
+    /// 32 – Target version is lower than or equal to the current version (downgrade rejected)
+    DowngradeNotAllowed = 32,
+    /// 33 – Proposal amendment is not allowed after the amendment window or once voting has started
+    ProposalAmendmentNotAllowed = 33,
+    /// 34 – Only the original proposer may amend the proposal
+    NotProposalOwner = 34,
+    /// 35 – Migration failed due to unexpected storage state
+    MigrationFailed = 35,
+    /// 36 – Multi-sig config is not set
+    MultiSigNotConfigured = 36,
+    /// 37 – Threshold must be >= 1 and <= number of admins
+    InvalidThreshold = 37,
+    /// 38 – Admin list must be non-empty
+    EmptyAdminList = 38,
+    /// 39 – Multi-sig action not found
+    ActionNotFound = 39,
+    /// 40 – Caller has already approved this action
+    AlreadyApproved = 40,
+    /// 41 – Caller is not in the multi-sig admin list
+    NotMultiSigAdmin = 41,
+    /// 42 – Multi-sig action has already been executed
+    ActionAlreadyExecuted = 42,
+    /// 43 – Voting token contract failed the SEP-41 interface check
+    InvalidTokenContract = 43,
+    /// 44 – Veto threshold is negative or exceeds total supply
+    InvalidVetoThreshold = 44,
+    /// 45 – Proposal ID already exists (defense-in-depth)
+    ProposalAlreadyExists = 45,
+    /// 46 – Too many tags on a proposal
+    TooManyTags = 46,
+    /// 47 – A single tag exceeds the maximum length
+    TagTooLong = 47,
+    /// 48 – Delegation would create a cycle in the delegate chain
+    DelegationCycle = 48,
+    /// 49 – Voter has delegated their power and cannot vote directly
+    VotingPowerDelegated = 49,
 }
 
 /// Lifecycle state of the governance contract itself.
@@ -286,6 +312,26 @@ pub enum DataKey {
     /// Controls how many ledgers into the future the TTL is extended on write operations.
     /// Key space: singleton — only one `PersistentStorageTTL` entry exists.
     PersistentStorageTTL,
+
+    /// Multi-sig admin configuration (instance storage).
+    MultiSigConfig,
+
+    /// Monotonic counter for multi-sig action IDs (instance storage).
+    MultiSigActionCount,
+
+    /// A pending multi-sig action, keyed by action ID (persistent storage).
+    MultiSigAction(u64),
+
+    /// Approval flag: has `Address` approved multi-sig action `u64` (persistent storage).
+    MultiSigApproval(u64, Address),
+
+    /// Delegatee address for a delegator's voting power (persistent storage).
+    /// Key space: one entry per delegator address.
+    Delegation(Address),
+
+    /// Aggregate delegated token weight received by a delegatee (persistent storage).
+    /// Key space: one entry per delegatee address.
+    DelegatedWeight(Address),
 }
 
 #[contracttype]
@@ -293,6 +339,48 @@ pub enum DataKey {
 pub struct VoteRecord {
     pub vote_type: Vote,
     pub weight: i128,
+}
+
+/// Optional governance parameters passed to [`GovernanceContract::initialize`].
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct GovernanceOptions {
+    pub amend_window: u64,
+    pub timelock_duration: u64,
+    pub veto_threshold: i128,
+    pub persistent_storage_ttl: u32,
+}
+
+/// Multi-sig admin configuration: a list of admin addresses and an approval threshold.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct MultiSigConfig {
+    pub admins: Vec<Address>,
+    pub threshold: u32,
+}
+
+/// The type of privileged action that requires multi-sig approval.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub enum MultiSigActionType {
+    ExecuteProposal,
+    CancelProposal,
+    UpdateMultiSig,
+    Pause,
+    Unpause,
+}
+
+/// A pending multi-sig action awaiting threshold approvals.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct MultiSigAction {
+    pub id: u64,
+    pub action_type: MultiSigActionType,
+    pub proposal_id: u64,
+    /// New multi-sig config for `UpdateMultiSig` actions; otherwise empty (`admins` len 0).
+    pub new_config: MultiSigConfig,
+    pub approvals: u32,
+    pub executed: bool,
 }
 
 /// Full contract configuration returned by [`get_config`].
