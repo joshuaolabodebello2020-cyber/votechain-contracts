@@ -42,6 +42,11 @@ const ProposalDetail: React.FC<ProposalDetailProps> = ({
     };
   }, [proposal, totalVotes]);
 
+  const quorumPercentage = useMemo(() => {
+    if (proposal.quorum === BigInt(0)) return 0;
+    return Math.min(100, Number((totalVotes * BigInt(100)) / proposal.quorum));
+  }, [totalVotes, proposal.quorum]);
+
   const formatDate = (timestamp: number) => {
     return new Date(timestamp * 1000).toLocaleString();
   };
@@ -117,6 +122,7 @@ const ProposalDetail: React.FC<ProposalDetailProps> = ({
         <div className="vote-stats" role="region" aria-label="Vote Statistics">
           {/* Vote Chart */}
           <div className="chart-container">
+            <h4 className="sr-only">Vote Distribution Chart</h4>
             <div className="stat-bar-container" aria-hidden="true">
               <div className="stat-bar">
                 <div className="bar yes" style={{ width: `${percentages.yes}%` }}></div>
@@ -125,45 +131,60 @@ const ProposalDetail: React.FC<ProposalDetailProps> = ({
               </div>
             </div>
             <div className="sr-only">
-              Vote distribution: Yes {percentages.yes}%, No {percentages.no}%, Abstain {percentages.abstain}%
+              Visual vote distribution chart showing: Yes {percentages.yes}%, No {percentages.no}%, Abstain {percentages.abstain}%
             </div>
             <div className="stat-labels">
-              <div className="label-item">
-                <span className="dot yes"></span>
-                <span className="label-text">Yes: {proposal.votesYes.toString()} ({percentages.yes}%)</span>
+              <div className="label-item" role="group" aria-label="Yes votes">
+                <span className="dot yes" aria-hidden="true"></span>
+                <div className="label-content">
+                  <span className="label-text">Yes</span>
+                  <span className="label-vote-count">{proposal.votesYes.toString()} votes ({percentages.yes}%)</span>
+                </div>
               </div>
-              <div className="label-item">
-                <span className="dot no"></span>
-                <span className="label-text">No: {proposal.votesNo.toString()} ({percentages.no}%)</span>
+              <div className="label-item" role="group" aria-label="No votes">
+                <span className="dot no" aria-hidden="true"></span>
+                <div className="label-content">
+                  <span className="label-text">No</span>
+                  <span className="label-vote-count">{proposal.votesNo.toString()} votes ({percentages.no}%)</span>
+                </div>
               </div>
-              <div className="label-item">
-                <span className="dot abstain"></span>
-                <span className="label-text">Abstain: {proposal.votesAbstain.toString()} ({percentages.abstain}%)</span>
+              <div className="label-item" role="group" aria-label="Abstain votes">
+                <span className="dot abstain" aria-hidden="true"></span>
+                <div className="label-content">
+                  <span className="label-text">Abstain</span>
+                  <span className="label-vote-count">{proposal.votesAbstain.toString()} votes ({percentages.abstain}%)</span>
+                </div>
               </div>
             </div>
           </div>
 
           {/* Quorum Progress */}
           <div className="quorum-container">
+            <h4 className="sr-only">Quorum Progress</h4>
             <div className="quorum-header">
               <span className="quorum-label">Quorum Progress</span>
               <span className="quorum-value">
                 {totalVotes.toString()} / {proposal.quorum.toString()} votes
               </span>
             </div>
-            <div className="progress-bar-container" role="progressbar" 
-                 aria-valuenow={Number(totalVotes)} 
-                 aria-valuemin={0} 
-                 aria-valuemax={Number(proposal.quorum)}>
+            <div 
+              className="progress-bar-container" 
+              role="progressbar" 
+              aria-valuenow={Number(totalVotes)} 
+              aria-valuemin={0} 
+              aria-valuemax={Number(proposal.quorum)}
+              aria-label={`Quorum progress: ${totalVotes.toString()} out of ${proposal.quorum.toString()} votes (${quorumPercentage}%)`}
+            >
               <div 
                 className={`progress-bar ${totalVotes >= proposal.quorum ? 'quorum-met' : ''}`}
-                style={{ width: `${Math.min(100, Number((totalVotes * BigInt(100)) / (proposal.quorum || BigInt(1))))}%` }}
+                style={{ width: `${quorumPercentage}%` }}
+                aria-hidden="true"
               ></div>
             </div>
-            <div className="quorum-status">
+            <div className={`quorum-status ${totalVotes >= proposal.quorum ? 'met' : 'pending'}`}>
               {totalVotes >= proposal.quorum 
                 ? '✅ Quorum Met' 
-                : `${(proposal.quorum - totalVotes).toString()} more votes needed`}
+                : `⏳ ${(proposal.quorum - totalVotes).toString()} more votes needed`}
             </div>
           </div>
         </div>

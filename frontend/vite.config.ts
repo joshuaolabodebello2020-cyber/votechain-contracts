@@ -42,6 +42,31 @@ export default defineConfig({
   server: {
     port: 4173,
   },
+  build: {
+    // Enable source maps for production debugging (can be disabled for further optimization)
+    sourcemap: false,
+    // Minify CSS
+    cssMinify: true,
+    // Optimize chunk splitting for better caching
+    rollupOptions: {
+      output: {
+        manualChunks: (id) => {
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom')) {
+              return 'react-vendor';
+            }
+            if (id.includes('i18next')) {
+              return 'i18n-vendor';
+            }
+            if (id.includes('zustand')) {
+              return 'zustand-vendor';
+            }
+            return 'vendor';
+          }
+        },
+      },
+    },
+  },
   test: {
     environment: 'jsdom',
     globals: true,
