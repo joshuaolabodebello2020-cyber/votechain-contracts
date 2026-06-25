@@ -14,10 +14,24 @@ import {
 const router = Router();
 
 // GET /proposals — cached 30 s
-router.get("/proposals", cacheProposalList, async (_req: Request, res: Response) => {
-  // TODO: fetch from Stellar RPC / indexer
-  const proposals: unknown[] = [];
-  res.json(proposals);
+router.get("/proposals", cacheProposalList, async (req: Request, res: Response) => {
+  // Parse query params
+  const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
+  const offset = req.query.offset ? parseInt(req.query.offset as string) : 0;
+
+  // TODO: fetch from Stellar RPC / indexer with pagination
+  const total = 0; // TODO: get total count from Stellar
+  const proposals: unknown[] = []; // TODO: fetch paginated proposals
+
+  res.json({
+    data: proposals,
+    pagination: {
+      limit,
+      offset,
+      total,
+      hasMore: offset + proposals.length < total,
+    },
+  });
 });
 
 // GET /proposals/:id — cached 10 s
