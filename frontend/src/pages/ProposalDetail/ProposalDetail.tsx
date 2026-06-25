@@ -188,7 +188,7 @@ const ProposalDetail: React.FC<ProposalDetailProps> = ({
           </button>
         )}
 
-        {isAdmin && (proposal.status === ProposalStatus.Active || proposal.status === ProposalStatus.Passed) && (
+        {isAdmin && proposal.status === ProposalStatus.Active && (
           <button onClick={onCancel} className="btn btn-danger">Cancel Proposal</button>
         )}
       </div>

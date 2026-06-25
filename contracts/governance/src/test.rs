@@ -3207,3 +3207,72 @@ fn test_get_config_before_init_fails() {
     let result = client.try_get_config();
     assert_eq!(result, Err(Ok(ContractError::VotingTokenNotSet)));
 }
+
+// ── Issue #487: Cancellation rules and admin override hardening ───────────────
+
+/// Cancelled proposal cannot be re-cancelled.
+#[test]
+#[should_panic(expected = "Error(Contract, #7)")]
+fn test_cancel_already_cancelled_proposal_reverts() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &proposer);
+    t.client.cancel(&t.admin, &id);
+    // Second cancel on already-Cancelled proposal must revert with ProposalNotActive
+    t.client.cancel(&t.admin, &id);
+}
+
+/// Cancelled proposal cannot be voted on.
+#[test]
+#[should_panic(expected = "Error(Contract, #7)")]
+fn test_vote_on_cancelled_proposal_reverts_487() {
+    let t = setup_env();
+    let voter = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &voter);
+    t.client.cancel(&t.admin, &id);
+    mint_and_vote(&t, &voter, id, Vote::Yes, 1_000_000);
+}
+
+/// Cancelled proposal cannot be finalised.
+#[test]
+#[should_panic(expected = "Error(Contract, #7)")]
+fn test_finalise_cancelled_proposal_reverts() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &proposer);
+    t.client.cancel(&t.admin, &id);
+    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+    t.client.finalise(&id);
+}
+
+/// Cancel emits a cancellation event with the correct proposal ID.
+#[test]
+fn test_cancel_emits_event() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &proposer);
+
+    t.env.events().all(); // clear prior events
+    t.client.cancel(&t.admin, &id);
+
+    let events = t.env.events().all();
+    assert!(
+        events.iter().any(|(_, topics, _)| {
+            topics == (symbol_short!("cancelled"), id).into_val(&t.env)
+        }),
+        "expected 'cancelled' event with proposal id {id}"
+    );
+}
+
+/// Passed proposal cannot be cancelled (only Active proposals can).
+#[test]
+#[should_panic(expected = "Error(Contract, #7)")]
+fn test_cancel_passed_proposal_reverts() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let client = new_client(&env);
+    let admin = Address::generate(&env);
+    let id = setup_passed_proposal(&env, &client, &admin);
+    // Passed is not Active — cancel must revert
+    client.cancel(&admin, &id);
+}
