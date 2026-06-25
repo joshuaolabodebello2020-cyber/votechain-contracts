@@ -91,6 +91,12 @@ pub enum ContractError {
     ProposalAmendmentNotAllowed = 35,
     /// 36 – Only the original proposer may amend the proposal
     NotProposalOwner = 36,
+    /// 37 – Cannot delegate to oneself
+    CannotDelegateToSelf = 37,
+    /// 38 – Delegation target is the zero address
+    InvalidDelegatee = 38,
+    /// 39 – Cannot remove a delegation that does not exist
+    NoDelegationExists = 39,
 }
 
 /// Lifecycle state of the governance contract itself.
@@ -286,6 +292,10 @@ pub enum DataKey {
     /// Controls how many ledgers into the future the TTL is extended on write operations.
     /// Key space: singleton — only one `PersistentStorageTTL` entry exists.
     PersistentStorageTTL,
+
+    /// The address that `delegator` has delegated their voting power to.
+    /// Key space: one entry per delegator address.
+    Delegation(Address),
 }
 
 #[contracttype]

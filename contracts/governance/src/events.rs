@@ -231,3 +231,23 @@ pub fn multisig_action_executed(env: &Env, action_id: u64, action_type: &MultiSi
 pub fn multisig_config_updated(env: &Env, threshold: u32) {
     env.events().publish((symbol_short!("mscfg"),), threshold);
 }
+
+/// Emits a `delegated` event when a delegation is set.
+///
+/// Topics: `("delegated", delegator)`
+/// Data: `delegatee: Address`
+pub fn delegation_set(env: &Env, delegator: &Address, delegatee: &Address) {
+    env.events().publish(
+        (symbol_short!("delegated"), delegator.clone()),
+        delegatee.clone(),
+    );
+}
+
+/// Emits an `undelegat` event when a delegation is removed.
+///
+/// Topics: `("undelegat", delegator)`
+/// Data: `()`
+pub fn delegation_cleared(env: &Env, delegator: &Address) {
+    env.events()
+        .publish((symbol_short!("undelegat"), delegator.clone()), ());
+}

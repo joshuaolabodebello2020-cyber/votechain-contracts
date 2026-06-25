@@ -529,3 +529,30 @@ pub fn bump_multisig_approval_ttl(env: &Env, action_id: u64, approver: &Address)
         .persistent()
         .bump(&DataKey::MultiSigApproval(action_id, approver.clone()), ttl);
 }
+
+// ── Issue #486: Vote delegation storage ──────────────────────────────────────
+
+/// Records that `delegator` has delegated their voting power to `delegatee`.
+pub fn set_delegation(env: &Env, delegator: &Address, delegatee: &Address) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::Delegation(delegator.clone()), delegatee);
+    let ttl = get_persistent_storage_ttl(env);
+    env.storage()
+        .persistent()
+        .bump(&DataKey::Delegation(delegator.clone()), ttl);
+}
+
+/// Returns the address that `delegator` has delegated to, or `None` if no delegation is set.
+pub fn get_delegation(env: &Env, delegator: &Address) -> Option<Address> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::Delegation(delegator.clone()))
+}
+
+/// Removes any existing delegation for `delegator`.
+pub fn clear_delegation(env: &Env, delegator: &Address) {
+    env.storage()
+        .persistent()
+        .remove(&DataKey::Delegation(delegator.clone()));
+}

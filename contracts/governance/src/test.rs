@@ -3207,3 +3207,135 @@ fn test_get_config_before_init_fails() {
     let result = client.try_get_config();
     assert_eq!(result, Err(Ok(ContractError::VotingTokenNotSet)));
 }
+
+// ── Issue #486: Vote delegation / proxy voting ────────────────────────────────
+
+/// delegate() stores the delegatee and get_delegate() retrieves it.
+#[test]
+fn test_delegate_and_get_delegate() {
+    let t = setup_env();
+    let delegator = Address::generate(&t.env);
+    let delegatee = Address::generate(&t.env);
+
+    t.client.delegate(&delegator, &delegatee);
+    assert_eq!(t.client.get_delegate(&delegator), Some(delegatee));
+}
+
+/// delegate() to self must revert.
+#[test]
+#[should_panic(expected = "Error(Contract, #37)")]
+fn test_delegate_to_self_reverts() {
+    let t = setup_env();
+    let addr = Address::generate(&t.env);
+    t.client.delegate(&addr, &addr);
+}
+
+/// undelegate() clears the delegation.
+#[test]
+fn test_undelegate_clears_delegation() {
+    let t = setup_env();
+    let delegator = Address::generate(&t.env);
+    let delegatee = Address::generate(&t.env);
+
+    t.client.delegate(&delegator, &delegatee);
+    t.client.undelegate(&delegator);
+    assert_eq!(t.client.get_delegate(&delegator), None);
+}
+
+/// undelegate() with no prior delegation must revert.
+#[test]
+#[should_panic(expected = "Error(Contract, #39)")]
+fn test_undelegate_without_delegation_reverts() {
+    let t = setup_env();
+    let addr = Address::generate(&t.env);
+    t.client.undelegate(&addr);
+}
+
+/// Redelegating overwrites the previous delegatee.
+#[test]
+fn test_redelegate_overwrites_previous() {
+    let t = setup_env();
+    let delegator = Address::generate(&t.env);
+    let first = Address::generate(&t.env);
+    let second = Address::generate(&t.env);
+
+    t.client.delegate(&delegator, &first);
+    t.client.delegate(&delegator, &second);
+    assert_eq!(t.client.get_delegate(&delegator), Some(second));
+}
+
+/// Delegated votes are tallied: delegate's vote weight includes delegator balance.
+#[test]
+fn test_cast_vote_as_delegate_tallies_delegated_weight() {
+    let t = setup_env();
+    let tok = votechain_token::TokenContractClient::new(&t.env, &t.token_id);
+
+    let delegate = Address::generate(&t.env);
+    let delegator = Address::generate(&t.env);
+
+    // Mint: delegate 400, delegator 600
+    tok.mint(&t.admin, &delegate, &400_i128);
+    tok.mint(&t.admin, &delegator, &600_i128);
+
+    // delegator delegates to delegate
+    t.client.delegate(&delegator, &delegate);
+
+    let id = create_test_proposal(&t, &delegate);
+
+    let delegators = soroban_sdk::vec![&t.env, delegator.clone()];
+    t.client.cast_vote_as_delegate(&delegate, &id, &Vote::Yes, &delegators);
+
+    let proposal = t.client.get_proposal(&id);
+    // Combined weight = 400 + 600 = 1000
+    assert_eq!(proposal.votes_yes, 1_000);
+}
+
+/// Delegator who already voted is skipped when delegate casts.
+#[test]
+fn test_delegator_already_voted_not_double_counted() {
+    let t = setup_env();
+    let tok = votechain_token::TokenContractClient::new(&t.env, &t.token_id);
+
+    let delegate = Address::generate(&t.env);
+    let delegator = Address::generate(&t.env);
+
+    tok.mint(&t.admin, &delegate, &500_i128);
+    tok.mint(&t.admin, &delegator, &500_i128);
+
+    t.client.delegate(&delegator, &delegate);
+
+    let id = create_test_proposal(&t, &delegate);
+
+    // Delegator votes independently first
+    t.client.cast_vote(&delegator, &id, &Vote::No);
+
+    // Now delegate votes — delegator already voted so only delegate's own weight counts
+    let delegators = soroban_sdk::vec![&t.env, delegator];
+    t.client.cast_vote_as_delegate(&delegate, &id, &Vote::Yes, &delegators);
+
+    let proposal = t.client.get_proposal(&id);
+    assert_eq!(proposal.votes_yes, 500); // only delegate's weight
+    assert_eq!(proposal.votes_no, 500);  // delegator's independent vote
+}
+
+/// Address with no delegation set is skipped silently.
+#[test]
+fn test_cast_vote_as_delegate_ignores_non_delegators() {
+    let t = setup_env();
+    let tok = votechain_token::TokenContractClient::new(&t.env, &t.token_id);
+
+    let delegate = Address::generate(&t.env);
+    let random = Address::generate(&t.env); // did NOT delegate
+
+    tok.mint(&t.admin, &delegate, &300_i128);
+    tok.mint(&t.admin, &random, &700_i128);
+
+    let id = create_test_proposal(&t, &delegate);
+
+    let delegators = soroban_sdk::vec![&t.env, random];
+    t.client.cast_vote_as_delegate(&delegate, &id, &Vote::Yes, &delegators);
+
+    let proposal = t.client.get_proposal(&id);
+    // Only delegate's own weight counted
+    assert_eq!(proposal.votes_yes, 300);
+}
