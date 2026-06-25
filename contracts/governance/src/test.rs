@@ -3207,3 +3207,135 @@ fn test_get_config_before_init_fails() {
     let result = client.try_get_config();
     assert_eq!(result, Err(Ok(ContractError::VotingTokenNotSet)));
 }
+
+// ── Issue #478: Quorum / Abstain edge-case coverage ───────────────────────────
+
+/// Tied vote (yes == no) must resolve as Rejected even when quorum is met.
+#[test]
+fn test_tied_votes_resolve_as_rejected() {
+    let t = setup_env();
+    let voter_yes = Address::generate(&t.env);
+    let voter_no = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &voter_yes);
+
+    // Equal weight on each side — quorum will be met (200 >= 100)
+    mint_and_vote(&t, &voter_yes, id, Vote::Yes, 100);
+    mint_and_vote(&t, &voter_no, id, Vote::No, 100);
+
+    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+    t.client.finalise(&id);
+
+    assert_eq!(t.client.get_proposal(&id).state, ProposalState::Rejected);
+}
+
+/// Abstain-only votes meet quorum but the proposal is Rejected (no yes majority).
+#[test]
+fn test_abstain_only_meets_quorum_but_rejected() {
+    let t = setup_env();
+    let voter = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &voter); // quorum = 100
+
+    // Only abstain votes; total = 1_000_000 >= quorum (100), but yes = 0
+    mint_and_vote(&t, &voter, id, Vote::Abstain, 1_000_000);
+
+    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+    t.client.finalise(&id);
+
+    assert_eq!(t.client.get_proposal(&id).state, ProposalState::Rejected);
+}
+
+/// Abstain votes count toward quorum: yes > no AND total (yes+no+abstain) >= quorum passes.
+#[test]
+fn test_abstain_votes_count_toward_quorum() {
+    let t = setup_env();
+    let voter_yes = Address::generate(&t.env);
+    let voter_abs = Address::generate(&t.env);
+
+    // quorum = 100; yes = 60, abstain = 50 → total = 110 >= 100, yes > no (0)
+    let id = create_test_proposal(&t, &voter_yes);
+    mint_and_vote(&t, &voter_yes, id, Vote::Yes, 60);
+    mint_and_vote(&t, &voter_abs, id, Vote::Abstain, 50);
+
+    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+    t.client.finalise(&id);
+
+    assert_eq!(t.client.get_proposal(&id).state, ProposalState::Passed);
+}
+
+/// Quorum exactly met with all-yes votes: boundary condition passes.
+#[test]
+fn test_quorum_exactly_met_passes() {
+    let t = setup_env();
+    let voter = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &voter); // quorum = 100
+
+    mint_and_vote(&t, &voter, id, Vote::Yes, 100); // exactly at quorum
+
+    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+    t.client.finalise(&id);
+
+    assert_eq!(t.client.get_proposal(&id).state, ProposalState::Passed);
+}
+
+/// One vote below quorum: boundary condition fails.
+#[test]
+fn test_quorum_one_below_rejects() {
+    let t = setup_env();
+    let voter = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &voter); // quorum = 100
+
+    mint_and_vote(&t, &voter, id, Vote::Yes, 99); // one below quorum
+
+    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+    t.client.finalise(&id);
+
+    assert_eq!(t.client.get_proposal(&id).state, ProposalState::Rejected);
+}
+
+/// No votes cast at all: quorum not met, result is Rejected.
+#[test]
+fn test_no_votes_cast_rejected() {
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &proposer);
+
+    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+    t.client.finalise(&id);
+
+    assert_eq!(t.client.get_proposal(&id).state, ProposalState::Rejected);
+}
+
+/// Mixed votes: yes > no, quorum met via yes+no+abstain — should pass.
+#[test]
+fn test_mixed_votes_yes_wins_with_abstain() {
+    let t = setup_env();
+    let voter_yes = Address::generate(&t.env);
+    let voter_no = Address::generate(&t.env);
+    let voter_abs = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &voter_yes); // quorum = 100
+
+    mint_and_vote(&t, &voter_yes, id, Vote::Yes, 50);
+    mint_and_vote(&t, &voter_no, id, Vote::No, 30);
+    mint_and_vote(&t, &voter_abs, id, Vote::Abstain, 30); // total = 110 >= 100, yes(50) > no(30)
+
+    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+    t.client.finalise(&id);
+
+    assert_eq!(t.client.get_proposal(&id).state, ProposalState::Passed);
+}
+
+/// Abstain votes do not count as yes: yes == 0, no == 0, abstain meets quorum → Rejected.
+#[test]
+fn test_abstain_does_not_contribute_to_yes_majority() {
+    let t = setup_env();
+    let voter = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &voter); // quorum = 100
+
+    mint_and_vote(&t, &voter, id, Vote::Abstain, 200);
+
+    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+    t.client.finalise(&id);
+
+    // Quorum met but yes (0) is not > no (0) → Rejected
+    assert_eq!(t.client.get_proposal(&id).state, ProposalState::Rejected);
+}
