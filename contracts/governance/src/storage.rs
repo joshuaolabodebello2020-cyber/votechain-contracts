@@ -264,3 +264,11 @@ pub fn set_max_duration(env: &Env, v: u64) {
 pub fn get_max_duration(env: &Env) -> u64 {
     env.storage().instance().get(&DataKey::MaxDuration).unwrap_or(2_592_000)
 }
+
+pub fn set_quorum_default(env: &Env, v: i128) {
+    env.storage().instance().set(&DataKey::QuorumDefault, &v);
+}
+
+pub fn get_quorum_default(env: &Env) -> i128 {
+    env.storage().instance().get(&DataKey::QuorumDefault).unwrap_or(0)
+}

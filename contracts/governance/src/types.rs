@@ -216,6 +216,15 @@ pub enum DataKey {
     /// Mandatory delay (seconds) between a proposal passing and it becoming executable (instance storage).
     /// Key space: singleton — only one `TimelockDuration` entry exists.
     TimelockDuration,
+
+    /// Minimum allowed voting duration in seconds (instance storage).
+    MinDuration,
+
+    /// Maximum allowed voting duration in seconds (instance storage).
+    MaxDuration,
+
+    /// Default quorum hint for UI/tooling; does not affect existing proposals (instance storage).
+    QuorumDefault,
 }
 
 #[contracttype]

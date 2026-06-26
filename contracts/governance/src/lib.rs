@@ -20,6 +20,8 @@ use storage::{
     set_contract_state, set_last_proposal, set_min_proposal_balance, set_paused,
     set_proposal_cooldown, set_restrict_admin_vote, set_timelock_duration, set_version,
     set_voting_token, get_vote_record,
+    set_min_duration, set_max_duration, get_min_duration, get_max_duration,
+    set_quorum_default, get_quorum_default,
 };
 use types::{ContractError, ContractState, DataKey, Proposal, ProposalState, Vote, VoteRecord};
 
@@ -449,6 +451,49 @@ impl GovernanceContract {
         events::quorum_updated(&env, proposal_id, new_quorum);
         Ok(())
     }
+
+    /// Updates the minimum allowed voting duration. Admin only.
+    pub fn update_min_duration(env: Env, admin: Address, new_min: u64) -> Result<(), ContractError> {
+        admin.require_auth();
+        require_non_zero_address(&env, &admin)?;
+        if get_admin(&env)? != admin { return Err(ContractError::NotAdmin); }
+        if new_min == 0 { return Err(ContractError::InvalidDuration); }
+        if new_min > get_max_duration(&env) { return Err(ContractError::InvalidDurationRange); }
+        set_min_duration(&env, new_min);
+        events::min_duration_updated(&env, new_min);
+        Ok(())
+    }
+
+    /// Updates the maximum allowed voting duration. Admin only.
+    pub fn update_max_duration(env: Env, admin: Address, new_max: u64) -> Result<(), ContractError> {
+        admin.require_auth();
+        require_non_zero_address(&env, &admin)?;
+        if get_admin(&env)? != admin { return Err(ContractError::NotAdmin); }
+        if new_max < get_min_duration(&env) { return Err(ContractError::InvalidDurationRange); }
+        set_max_duration(&env, new_max);
+        events::max_duration_updated(&env, new_max);
+        Ok(())
+    }
+
+    /// Updates the default quorum hint. Does not affect existing proposals. Admin only.
+    pub fn update_quorum_default(env: Env, admin: Address, new_default: i128) -> Result<(), ContractError> {
+        admin.require_auth();
+        require_non_zero_address(&env, &admin)?;
+        if get_admin(&env)? != admin { return Err(ContractError::NotAdmin); }
+        if new_default <= 0 { return Err(ContractError::InvalidQuorum); }
+        set_quorum_default(&env, new_default);
+        events::quorum_default_updated(&env, new_default);
+        Ok(())
+    }
+
+    /// Returns the configured minimum duration in seconds.
+    pub fn get_min_duration_config(env: Env) -> u64 { get_min_duration(&env) }
+
+    /// Returns the configured maximum duration in seconds.
+    pub fn get_max_duration_config(env: Env) -> u64 { get_max_duration(&env) }
+
+    /// Returns the default quorum (0 if not set).
+    pub fn get_quorum_default_config(env: Env) -> i128 { get_quorum_default(&env) }
 
     /// Transfers admin rights to a new address. Only the current admin may call this.
     ///
