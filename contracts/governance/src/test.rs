@@ -282,6 +282,130 @@ fn test_proposals_at_different_lifecycle_stages() {
 
 // ── end TEST-009 ─────────────────────────────────────────────────────────────
 
+// ── Issue #464: route handler error-path tests ───────────────────────────────
+
+#[test]
+#[should_panic]
+fn test_create_proposal_invalid_quorum() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let proposer = Address::generate(&env);
+    let token_id = setup_token(&env, &admin);
+    client.initialize(&admin, &token_id);
+    client.create_proposal(&proposer, &String::from_str(&env, "T"), &String::from_str(&env, "d"), &0, &3600);
+}
+
+#[test]
+#[should_panic]
+fn test_create_proposal_invalid_duration() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let proposer = Address::generate(&env);
+    let token_id = setup_token(&env, &admin);
+    client.initialize(&admin, &token_id);
+    client.create_proposal(&proposer, &String::from_str(&env, "T"), &String::from_str(&env, "d"), &100, &0);
+}
+
+#[test]
+#[should_panic]
+fn test_get_proposal_not_found() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let token_id = setup_token(&env, &admin);
+    client.initialize(&admin, &token_id);
+    client.get_proposal(&999);
+}
+
+#[test]
+#[should_panic]
+fn test_cast_vote_after_period_ended() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let voter = Address::generate(&env);
+    let token_id = setup_token(&env, &voter);
+    client.initialize(&admin, &token_id);
+    let id = client.create_proposal(&voter, &String::from_str(&env, "T"), &String::from_str(&env, "d"), &100, &3600);
+    env.ledger().with_mut(|l| l.timestamp += 3601);
+    client.cast_vote(&voter, &id, &Vote::Yes);
+}
+
+#[test]
+#[should_panic]
+fn test_cast_vote_proposal_not_found() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let voter = Address::generate(&env);
+    let token_id = setup_token(&env, &voter);
+    client.initialize(&admin, &token_id);
+    client.cast_vote(&voter, &999, &Vote::Yes);
+}
+
+#[test]
+#[should_panic]
+fn test_cast_vote_no_voting_power() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let proposer = Address::generate(&env);
+    let zero_voter = Address::generate(&env); // no tokens
+    let token_id = setup_token(&env, &admin);  // admin holds supply, not zero_voter
+    client.initialize(&admin, &token_id);
+    let id = client.create_proposal(&proposer, &String::from_str(&env, "T"), &String::from_str(&env, "d"), &100, &3600);
+    client.cast_vote(&zero_voter, &id, &Vote::Yes);
+}
+
+#[test]
+#[should_panic]
+fn test_finalise_voting_still_open() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let voter = Address::generate(&env);
+    let token_id = setup_token(&env, &voter);
+    client.initialize(&admin, &token_id);
+    let id = client.create_proposal(&voter, &String::from_str(&env, "T"), &String::from_str(&env, "d"), &100, &3600);
+    client.cast_vote(&voter, &id, &Vote::Yes);
+    client.finalise(&id); // period not ended
+}
+
+#[test]
+#[should_panic]
+fn test_finalise_proposal_not_found() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let token_id = setup_token(&env, &admin);
+    client.initialize(&admin, &token_id);
+    client.finalise(&999);
+}
+
+#[test]
+#[should_panic]
+fn test_execute_proposal_not_passed() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let voter = Address::generate(&env);
+    let token_id = setup_token(&env, &voter);
+    client.initialize(&admin, &token_id);
+    let id = client.create_proposal(&voter, &String::from_str(&env, "T"), &String::from_str(&env, "d"), &100, &3600);
+    client.cast_vote(&voter, &id, &Vote::No);
+    env.ledger().with_mut(|l| l.timestamp += 3601);
+    client.finalise(&id);
+    client.execute(&admin, &id); // status is Rejected, not Passed
+}
+
+#[test]
+#[should_panic]
+fn test_cancel_already_cancelled() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let proposer = Address::generate(&env);
+    let token_id = setup_token(&env, &admin);
+    client.initialize(&admin, &token_id);
+    let id = client.create_proposal(&proposer, &String::from_str(&env, "T"), &String::from_str(&env, "d"), &100, &3600);
+    client.cancel(&admin, &id);
+    client.cancel(&admin, &id); // already Cancelled, not Active
+}
+
+// ── end Issue #464 governance tests ──────────────────────────────────────────
+
 #[test]
 #[should_panic]
 fn test_cannot_vote_twice() {
