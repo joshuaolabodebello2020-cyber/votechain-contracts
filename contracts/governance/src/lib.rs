@@ -119,7 +119,7 @@ impl GovernanceContract {
         }
         proposal.status = ProposalStatus::Executed;
         save_proposal(&env, &proposal);
-        events::proposal_finalised(&env, proposal_id, &ProposalStatus::Executed);
+        events::proposal_executed(&env, proposal_id, &admin);
         Ok(())
     }
 
@@ -132,7 +132,7 @@ impl GovernanceContract {
         }
         proposal.status = ProposalStatus::Cancelled;
         save_proposal(&env, &proposal);
-        events::proposal_finalised(&env, proposal_id, &ProposalStatus::Cancelled);
+        events::proposal_cancelled(&env, proposal_id, &admin);
         Ok(())
     }
 

@@ -13,6 +13,14 @@ pub fn proposal_finalised(env: &Env, id: u64, status: &ProposalStatus) {
     env.events().publish((symbol_short!("final"), id), status.clone());
 }
 
+pub fn proposal_executed(env: &Env, id: u64, admin: &Address) {
+    env.events().publish((symbol_short!("executed"), id), admin.clone());
+}
+
+pub fn proposal_cancelled(env: &Env, id: u64, admin: &Address) {
+    env.events().publish((symbol_short!("cancelled"), id), admin.clone());
+}
+
 pub fn quorum_updated(env: &Env, id: u64, new_quorum: i128) {
     env.events().publish((symbol_short!("qupdate"), id), new_quorum);
 }

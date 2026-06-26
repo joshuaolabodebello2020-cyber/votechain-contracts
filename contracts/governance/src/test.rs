@@ -422,3 +422,81 @@ fn test_reinit_by_zero_address_reverts() {
 }
 
 // ── end SEC-009 ───────────────────────────────────────────────────────────────
+
+// ── Event-emission validation tests (issue #482) ─────────────────────────────
+
+#[test]
+fn test_event_proposal_created() {
+    use soroban_sdk::{symbol_short, testutils::Events, IntoVal};
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &proposer);
+    let events = t.env.events().all();
+    assert!(events.iter().any(|(_, topics, data)| {
+        topics == (symbol_short!("created"), id).into_val(&t.env)
+            && data == proposer.into_val(&t.env)
+    }));
+}
+
+#[test]
+fn test_event_vote_cast() {
+    use soroban_sdk::{symbol_short, testutils::Events, IntoVal};
+    let t = setup_env();
+    let voter = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &voter);
+    mint_and_vote(&t, &voter, id, Vote::Yes, 500_000);
+    let events = t.env.events().all();
+    assert!(events.iter().any(|(_, topics, data)| {
+        topics == (symbol_short!("vote"), id).into_val(&t.env)
+            && data == (voter.clone(), Vote::Yes, 500_000_i128).into_val(&t.env)
+    }));
+}
+
+#[test]
+fn test_event_proposal_finalised() {
+    use soroban_sdk::{symbol_short, testutils::Events, IntoVal};
+    let t = setup_env();
+    let voter = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &voter);
+    mint_and_vote(&t, &voter, id, Vote::Yes, 1_000_000);
+    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+    t.client.finalise(&id);
+    let events = t.env.events().all();
+    assert!(events.iter().any(|(_, topics, data)| {
+        topics == (symbol_short!("final"), id).into_val(&t.env)
+            && data == ProposalStatus::Passed.into_val(&t.env)
+    }));
+}
+
+#[test]
+fn test_event_proposal_executed() {
+    use soroban_sdk::{symbol_short, testutils::Events, IntoVal};
+    let t = setup_env();
+    let voter = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &voter);
+    mint_and_vote(&t, &voter, id, Vote::Yes, 1_000_000);
+    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+    t.client.finalise(&id);
+    t.client.execute(&t.admin, &id);
+    let events = t.env.events().all();
+    assert!(events.iter().any(|(_, topics, data)| {
+        topics == (symbol_short!("executed"), id).into_val(&t.env)
+            && data == t.admin.clone().into_val(&t.env)
+    }));
+}
+
+#[test]
+fn test_event_proposal_cancelled() {
+    use soroban_sdk::{symbol_short, testutils::Events, IntoVal};
+    let t = setup_env();
+    let proposer = Address::generate(&t.env);
+    let id = create_test_proposal(&t, &proposer);
+    t.client.cancel(&t.admin, &id);
+    let events = t.env.events().all();
+    assert!(events.iter().any(|(_, topics, data)| {
+        topics == (symbol_short!("cancelled"), id).into_val(&t.env)
+            && data == t.admin.clone().into_val(&t.env)
+    }));
+}
+
+// ── end event-emission validation tests ──────────────────────────────────────
