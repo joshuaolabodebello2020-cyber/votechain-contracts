@@ -1,0 +1,9 @@
+# Staging environment — mirrors mainnet config; use env vars for secrets
+[network]
+name = "staging"
+rpc_url = "https://soroban-testnet.stellar.org"
+network_passphrase = "Test SDF Network ; September 2015"
+
+[contracts]
+governance = ""
+token = ""
