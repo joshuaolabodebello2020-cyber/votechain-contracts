@@ -1507,6 +1507,7 @@ We welcome contributions from the community. Please see [CONTRIBUTING.md](CONTRI
 ### Documentation
 
 - **[GETTING_STARTED.md](docs/GETTING_STARTED.md)** — Step-by-step setup guide
+- **[Developer Onboarding Guide](docs/ONBOARDING.md)** — Onboarding guide for new contributors
 - **[DAO Integration Guide](docs/dao-integration-guide.md)** — Deploy, configure, and run governance for your DAO
 - **[Proposal Lifecycle](docs/lifecycle.md)** — Detailed state diagram and transitions
 - **[Storage Model](docs/storage.md)** — Storage tier strategy and optimization
