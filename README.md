@@ -1472,6 +1472,7 @@ See [docs/security/known-issues.md](docs/security/known-issues.md) for:
 ### Audit & Compliance
 
 - **Audit Status:** Completed (see [AUDIT.md](AUDIT.md))
+- **Audit Results & Mitigations:** [docs/security/AUDIT_RESULTS.md](docs/security/AUDIT_RESULTS.md)
 - **Vulnerability Disclosure:** See [SECURITY.md](SECURITY.md)
 - **Scope:** [docs/security/audit-scope.md](docs/security/audit-scope.md)
 
