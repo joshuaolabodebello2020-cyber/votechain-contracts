@@ -23,6 +23,10 @@ export async function connectRedis(url = process.env.REDIS_URL ?? "redis://local
   console.log("[redis] connected to", url);
 }
 
+export function isRedisReady(): boolean {
+  return redis?.isOpen ?? false;
+}
+
 // ── Metrics ────────────────────────────────────────────────────────────────
 
 const metrics = { hits: 0, misses: 0 };
