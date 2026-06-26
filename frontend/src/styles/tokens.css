@@ -201,6 +201,7 @@
     --color-text-muted:     var(--color-dark-text-muted);
     --color-primary:        var(--color-dark-primary);
     --color-primary-hover:  var(--color-dark-primary-hover);
+    --color-primary-text:   var(--color-neutral-900);
   }
 }
 
@@ -215,4 +216,5 @@ html.dark {
   --color-text-muted:     var(--color-dark-text-muted);
   --color-primary:        var(--color-dark-primary);
   --color-primary-hover:  var(--color-dark-primary-hover);
+  --color-primary-text:   var(--color-neutral-900);
 }
