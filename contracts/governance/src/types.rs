@@ -91,6 +91,14 @@ pub enum ContractError {
     ProposalAmendmentNotAllowed = 35,
     /// 36 – Only the original proposer may amend the proposal
     NotProposalOwner = 36,
+    /// 37 – Invalid duration configuration (min > max)
+    InvalidDurationConfig = 37,
+    /// 38 – Invalid veto threshold (must be >= 0 and <= total supply)
+    InvalidVetoThreshold = 38,
+    /// 39 – Invalid minimum proposal balance (must be >= 0)
+    InvalidMinProposalBalance = 39,
+    /// 40 – Migration failed (invalid state or preconditions)
+    MigrationFailed = 40,
 }
 
 /// Lifecycle state of the governance contract itself.
