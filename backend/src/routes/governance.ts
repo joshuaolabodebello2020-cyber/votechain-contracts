@@ -4,6 +4,7 @@
  */
 
 import { Router, Request, Response } from "express";
+import { sendSuccess, sendError } from "../middleware/response";
 
 const router = Router();
 
@@ -48,10 +49,10 @@ router.get("/governance/stats", async (_req: Request, res: Response) => {
       avgQuorumAchievement: 73,
     };
 
-    res.json(stats);
+    sendSuccess(res, stats);
   } catch (error) {
     console.error("Error fetching governance stats:", error);
-    res.status(500).json({ error: "Failed to fetch governance statistics" });
+    sendError(res, 500, "INTERNAL_ERROR", "Failed to fetch governance statistics");
   }
 });
 

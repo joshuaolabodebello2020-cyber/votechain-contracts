@@ -10,6 +10,7 @@ import {
   getCacheMetrics,
   invalidateProposalCache,
 } from "../middleware/redisCache";
+import { sendSuccess, sendError } from "../middleware/response";
 
 const router = Router();
 
@@ -17,26 +18,26 @@ const router = Router();
 router.get("/proposals", cacheProposalList, async (_req: Request, res: Response) => {
   // TODO: fetch from Stellar RPC / indexer
   const proposals: unknown[] = [];
-  res.json(proposals);
+  sendSuccess(res, proposals);
 });
 
 // GET /proposals/:id — cached 10 s
 router.get("/proposals/:id", cacheProposalItem, async (req: Request, res: Response) => {
   const { id } = req.params;
   // TODO: fetch single proposal from Stellar RPC / indexer
-  res.json({ id });
+  sendSuccess(res, { id });
 });
 
 // POST /proposals/invalidate — called by the event indexer on new on-chain events
 router.post("/proposals/invalidate", async (req: Request, res: Response) => {
   const { id } = req.body as { id?: string };
   await invalidateProposalCache(id);
-  res.json({ ok: true, invalidated: id ?? "list" });
+  sendSuccess(res, { invalidated: id ?? "list" });
 });
 
 // GET /metrics/cache — exposes hit/miss counters
 router.get("/metrics/cache", (_req: Request, res: Response) => {
-  res.json(getCacheMetrics());
+  sendSuccess(res, getCacheMetrics());
 });
 
 export default router;
