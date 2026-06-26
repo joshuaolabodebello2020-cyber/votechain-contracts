@@ -1507,6 +1507,7 @@ We welcome contributions from the community. Please see [CONTRIBUTING.md](CONTRI
 ### Documentation
 
 - **[GETTING_STARTED.md](docs/GETTING_STARTED.md)** — Step-by-step setup guide
+- **[API Reference](docs/api-reference.md)** — Backend and indexer REST API reference
 - **[DAO Integration Guide](docs/dao-integration-guide.md)** — Deploy, configure, and run governance for your DAO
 - **[Proposal Lifecycle](docs/lifecycle.md)** — Detailed state diagram and transitions
 - **[Storage Model](docs/storage.md)** — Storage tier strategy and optimization
