@@ -1,4 +1,18 @@
-use soroban_sdk::{contracterror, contracttype, Address, String};
+// Copyright 2024 VoteChain Contributors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use soroban_sdk::{contracterror, contracttype, Address, String, Vec};
 
 /// All revert conditions for the governance contract.
 #[contracterror]
@@ -63,6 +77,20 @@ pub enum ContractError {
     InvalidAddress = 28,
     /// 29 – Proposal ID counter overflowed (u64::MAX reached)
     ProposalCountOverflow = 29,
+    /// 30 – Timelock period has not yet expired
+    TimelockNotExpired = 30,
+    /// 31 – No pending admin transfer has been proposed
+    PendingAdminNotSet = 31,
+    /// 32 – The admin transfer window has expired; propose again
+    AdminTransferExpired = 32,
+    /// 33 – Caller is not the pending admin
+    NotPendingAdmin = 33,
+    /// 34 – Target version is lower than or equal to the current version (downgrade rejected)
+    DowngradeNotAllowed = 34,
+    /// 35 – Proposal amendment is not allowed after the amendment window or once voting has started
+    ProposalAmendmentNotAllowed = 35,
+    /// 36 – Only the original proposer may amend the proposal
+    NotProposalOwner = 36,
 }
 
 /// Lifecycle state of the governance contract itself.
@@ -97,6 +125,13 @@ pub enum Vote {
 }
 
 #[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct Translation {
+    pub title: String,
+    pub description: String,
+}
+
+#[contracttype]
 #[derive(Clone, Debug)]
 pub struct Proposal {
     pub id: u64,
@@ -106,13 +141,15 @@ pub struct Proposal {
     pub votes_yes: i128,
     pub votes_no: i128,
     pub votes_abstain: i128,
-    pub quorum: i128,       // minimum total votes required to pass
+    pub quorum: i128, // minimum total votes required to pass
     pub start_time: u64,
     pub end_time: u64,
     pub state: ProposalState,
     /// Earliest Unix timestamp at which the proposal may be executed.
     /// Set to `end_time + timelock_duration` when the proposal passes; 0 otherwise.
     pub execute_after: u64,
+    /// Optional category tags (max 5, each max 32 chars).
+    pub tags: Vec<String>,
 }
 
 /// Storage key enum for the governance contract.
@@ -200,6 +237,10 @@ pub enum DataKey {
     /// Key space: singleton — only one `Paused` entry exists.
     Paused,
 
+    /// Optional reason string explaining why the contract was paused (instance storage).
+    /// Key space: singleton — only one `PauseReason` entry exists.
+    PauseReason,
+
     /// Timestamp (Unix seconds) of `proposer`'s most recent proposal (persistent storage).
     /// Key space: one entry per unique proposer address.
     LastProposal(Address),
@@ -218,13 +259,33 @@ pub enum DataKey {
     TimelockDuration,
 
     /// Minimum allowed voting duration in seconds (instance storage).
+    /// Key space: singleton — only one `MinDuration` entry exists.
     MinDuration,
 
     /// Maximum allowed voting duration in seconds (instance storage).
+    /// Key space: singleton — only one `MaxDuration` entry exists.
     MaxDuration,
 
-    /// Default quorum hint for UI/tooling; does not affect existing proposals (instance storage).
-    QuorumDefault,
+    /// Absolute vote weight threshold that rejects a proposal immediately when
+    /// `votes_no >= veto_threshold`. Stored as instance storage.
+    /// Key space: singleton — only one `VetoThreshold` entry exists.
+    VetoThreshold,
+
+    /// Address nominated to become the next admin (instance storage).
+    /// Set by `propose_admin_transfer`; cleared on acceptance or expiry.
+    PendingAdmin,
+
+    /// Unix timestamp after which the pending admin nomination expires (instance storage).
+    AdminTransferExpiry,
+
+    /// Amendment window in seconds before voting begins.
+    /// Key space: singleton — only one `AmendWindow` entry exists.
+    AmendWindow,
+
+    /// TTL bump amount for persistent storage entries (measured in ledgers).
+    /// Controls how many ledgers into the future the TTL is extended on write operations.
+    /// Key space: singleton — only one `PersistentStorageTTL` entry exists.
+    PersistentStorageTTL,
 }
 
 #[contracttype]
@@ -232,4 +293,20 @@ pub enum DataKey {
 pub struct VoteRecord {
     pub vote_type: Vote,
     pub weight: i128,
+}
+
+/// Full contract configuration returned by [`get_config`].
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct GovernanceConfig {
+    pub voting_token: Address,
+    pub min_proposal_balance: i128,
+    pub proposal_cooldown: u64,
+    pub min_duration: u64,
+    pub max_duration: u64,
+    pub restrict_admin_vote: bool,
+    pub timelock_duration: u64,
+    pub paused: bool,
+    pub version: (u32, u32, u32),
+    pub persistent_storage_ttl: u32,
 }

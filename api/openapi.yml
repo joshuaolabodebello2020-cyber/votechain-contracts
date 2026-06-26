@@ -1,0 +1,173 @@
+openapi: 3.1.0
+info:
+  title: VoteChain Indexer API
+  version: 0.1.0
+  description: REST API backed by an event indexer for efficient proposal and vote queries.
+paths:
+  /proposals:
+    get:
+      summary: List proposals
+      parameters:
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 50
+        - name: state
+          in: query
+          schema:
+            type: string
+            enum: [active, passed, rejected, executed, cancelled]
+      responses:
+        '200':
+          description: A page of proposals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProposalSummary'
+  /proposals/{id}:
+    get:
+      summary: Get full proposal details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Proposal detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProposalDetail'
+        '404':
+          description: Proposal not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /proposals/{id}/votes:
+    get:
+      summary: List votes for a proposal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Vote records for a proposal
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VoteRecord'
+        '404':
+          description: Proposal not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /voters/{address}/votes:
+    get:
+      summary: Get vote history for a voter
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Voter vote history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VoteRecord'
+components:
+  schemas:
+    ProposalState:
+      type: string
+      enum: [active, passed, rejected, executed, cancelled]
+    ProposalSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        state:
+          $ref: '#/components/schemas/ProposalState'
+        quorum:
+          type: integer
+        start_time:
+          type: integer
+        end_time:
+          type: integer
+      required: [id, title, state, quorum, start_time, end_time]
+    ProposalDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        proposer:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        quorum:
+          type: integer
+        votes_yes:
+          type: integer
+        votes_no:
+          type: integer
+        votes_abstain:
+          type: integer
+        start_time:
+          type: integer
+        end_time:
+          type: integer
+        state:
+          $ref: '#/components/schemas/ProposalState'
+        execute_after:
+          type: integer
+      required: [id, proposer, title, description, quorum, votes_yes, votes_no, votes_abstain, start_time, end_time, state, execute_after]
+    VoteChoice:
+      type: string
+      enum: [yes, no, abstain]
+    VoteRecord:
+      type: object
+      properties:
+        proposal_id:
+          type: integer
+        voter:
+          type: string
+        vote:
+          $ref: '#/components/schemas/VoteChoice'
+        weight:
+          type: integer
+      required: [proposal_id, voter, vote, weight]
+    ApiError:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+      required: [code, message]

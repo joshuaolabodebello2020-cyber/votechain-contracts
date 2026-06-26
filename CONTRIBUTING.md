@@ -7,11 +7,13 @@ Thank you for contributing! VoteChain is an open-source governance protocol buil
 ## Table of Contents
 
 - [Getting Started](#getting-started)
+- [Branch Protection Rules](#branch-protection-rules)
 - [Branching Strategy](#branching-strategy)
 - [Commit Messages](#commit-messages)
 - [Development Workflow](#development-workflow)
 - [Pull Request Process](#pull-request-process)
 - [Code Review Expectations](#code-review-expectations)
+- [Changelog](#changelog)
 - [Reporting Bugs](#reporting-bugs)
 - [License](#license)
 
@@ -33,6 +35,53 @@ For a fully reproducible environment without a local Rust installation, use Dock
 ```bash
 docker compose run --rm dev make test
 ```
+
+---
+
+## Branch Protection Rules
+
+The `main` branch is protected. These rules are enforced via GitHub branch protection settings and cannot be bypassed by any contributor, including maintainers.
+
+### Enforced rules
+
+| Rule | Setting |
+| ---- | ------- |
+| Require CI to pass before merge | ✅ Enabled — all status checks must be green |
+| Require pull request before merging | ✅ Enabled — direct pushes to `main` are blocked |
+| Required approving reviews | **1** — at least one maintainer approval is required |
+| Dismiss stale reviews on new push | ✅ Enabled — approval is invalidated when new commits are pushed |
+| Force pushes | ❌ Disabled — history rewriting on `main` is not allowed |
+| Branch deletions | ❌ Disabled — `main` cannot be deleted |
+
+### Required status checks
+
+The following CI jobs must pass before a PR can be merged:
+
+- `test` — full test suite (`make test`)
+- `fmt-check` — formatting check (`make fmt-check`)
+- `lint` — Clippy warnings-as-errors (`make lint`)
+- `audit` — dependency vulnerability scan (`cargo audit`)
+
+### Configuring branch protection (maintainers only)
+
+To apply or update these rules on GitHub:
+
+1. Go to **Settings → Branches** in the repository.
+2. Under **Branch protection rules**, click **Add rule** (or edit the existing `main` rule).
+3. Set **Branch name pattern** to `main`.
+4. Enable the following options:
+   - ✅ **Require a pull request before merging**
+     - Set **Required approvals** to `1`
+     - ✅ **Dismiss stale pull request approvals when new commits are pushed**
+   - ✅ **Require status checks to pass before merging**
+     - ✅ **Require branches to be up to date before merging**
+     - Add the status checks: `test`, `fmt-check`, `lint`, `audit`
+   - ✅ **Do not allow bypassing the above settings**
+   - ❌ Leave **Allow force pushes** unchecked
+   - ❌ Leave **Allow deletions** unchecked
+5. Click **Save changes**.
+
+> **Note:** These settings apply to all contributors including administrators. If you need to make an emergency hotfix directly to `main`, temporarily disable the rule, apply the fix, then re-enable it and document the exception in the PR or commit message.
 
 ---
 
@@ -123,6 +172,20 @@ cargo test test_cast_vote_and_finalise_passed
 cargo test -- --nocapture
 ```
 
+### Pre-commit hooks
+
+The repository ships a pre-commit hook that runs `rustfmt` and `clippy` before every commit. To activate it:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+The hook runs automatically on `git commit`. To skip it in an emergency:
+
+```bash
+git commit --no-verify
+```
+
 ### Formatting and linting
 
 ```bash
@@ -178,7 +241,7 @@ Every contribution to the contract crates must follow these invariants or the CI
 - [ ] Events emitted for every state-changing operation
 - [ ] New public functions have tests
 - [ ] `README.md` updated if observable behaviour changed
-- [ ] `CHANGELOG.md` `[Unreleased]` section updated for user-visible changes
+- [ ] `CHANGELOG.md` `[Unreleased]` section updated for every user-visible change (see [Changelog](#changelog))
 
 ---
 
@@ -202,6 +265,42 @@ Every contribution to the contract crates must follow these invariants or the CI
   - The PR checklist has been completed.
 - Distinguish between blocking concerns (must fix) and suggestions (nice to have) when leaving comments.
 - Approve once all blocking concerns are addressed; do not block a merge on optional style preferences.
+
+---
+
+## Changelog
+
+Every pull request that introduces a user-visible change **must** update the `[Unreleased]` section of [CHANGELOG.md](CHANGELOG.md). This is a required step in the PR checklist.
+
+### What counts as a user-visible change
+
+| Requires a CHANGELOG entry | Does not require an entry |
+| -------------------------- | ------------------------- |
+| New contract function or parameter | Internal refactor with no behaviour change |
+| Changed or removed public API | Test-only additions |
+| Bug fix that affects contract output | CI / tooling / formatting changes |
+| Security fix or hardening | Typo fixes in comments |
+| New configuration option | |
+
+### How to add an entry
+
+1. Open `CHANGELOG.md`.
+2. Under `## [Unreleased]`, add a bullet under the appropriate subsection (`Added`, `Changed`, `Fixed`, `Security`, etc.). Create the subsection heading if it does not exist yet.
+3. Write one concise sentence in imperative mood and link the issue or PR.
+
+**Example:**
+
+```markdown
+## [Unreleased]
+
+### Added
+- Add `restrict_admin_vote` flag to `initialize` to prevent the admin from voting on their own proposals. ([#42](https://github.com/Vera3289/votechain-contracts/issues/42))
+
+### Fixed
+- Fix off-by-one in `proposal_cooldown` check that allowed a second proposal one second early. ([#57](https://github.com/Vera3289/votechain-contracts/issues/57))
+```
+
+See [CHANGELOG.md](CHANGELOG.md) for the full entry format reference and subsection types.
 
 ---
 

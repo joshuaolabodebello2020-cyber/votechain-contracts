@@ -26,8 +26,21 @@ VoteChain enables DAOs, protocols, and communities to create proposals, cast tok
 - [Development](#development)
 - [Testing](#testing)
 - [Security](#security)
+- [Live Demo](#live-demo)
 - [Contributing](#contributing)
 - [Resources](#resources)
+
+---
+
+## Live Demo
+
+A live instance of VoteChain is deployed on the Stellar Testnet for demonstration purposes.
+
+- **Demo URL:** [https://demo.votechain.io](https://demo.votechain.io)
+- **Governance Contract:** `CDO5V...V6P2`
+- **Token Contract:** `CAS3...K2M6`
+
+The demo environment includes pre-populated sample proposals in various states (Active, Passed, Rejected, Executed) to showcase the full governance lifecycle.
 
 ---
 
@@ -60,7 +73,7 @@ VoteChain consists of two complementary Soroban smart contracts:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    VoteChain System                          │
+│                    VoteChain System                          │k
 ├─────────────────────────────────────────────────────────────┤
 │                                                               │
 │  ┌──────────────────────┐      ┌──────────────────────┐     │
@@ -83,6 +96,14 @@ VoteChain consists of two complementary Soroban smart contracts:
 │                                                               │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+### Frontend–Contract Interaction
+
+The diagram below shows how the browser communicates with Soroban contracts via Stellar RPC, including the full vote submission flow:
+
+![Frontend–Contract Architecture](docs/frontend-contract-architecture.svg)
+
+See [`docs/frontend-contract-architecture.svg`](docs/frontend-contract-architecture.svg) for the full-resolution file.
 
 ### Key Design Decisions
 
@@ -158,8 +179,32 @@ Proposal reaches terminal state
 ### Prerequisites
 
 - Rust 1.75+ with `wasm32-unknown-unknown` target
-- Stellar CLI (optional, for deployment)
+- Stellar CLI **21.6.0** (pinned — see [Upgrading Stellar CLI](#upgrading-stellar-cli))
 - Docker & Docker Compose (optional, for reproducible environment)
+
+### Installing Stellar CLI
+
+```bash
+cargo install --locked stellar-cli@21.6.0 --features opt
+```
+
+Verify the installed version:
+
+```bash
+stellar --version   # must print 21.6.0
+# or
+make check-stellar-cli
+```
+
+### Upgrading Stellar CLI
+
+To upgrade to a new pinned version:
+
+1. Update `STELLAR_CLI_VERSION` in `Makefile`
+2. Update `STELLAR_CLI_VERSION` env var in `.github/workflows/ci.yml`
+3. Update the version in this README
+4. Run `make check-stellar-cli` to verify
+5. Commit all three files together
 
 ### Installation & Testing
 
@@ -224,13 +269,15 @@ votechain-contracts/
 │       └── Cargo.toml
 │
 ├── docs/
+│   ├── frontend-contract-architecture.svg  # Frontend↔Contract interaction diagram
 │   ├── adr/                          # Architecture Decision Records
 │   │   ├── ADR-001-stellar-soroban-platform.md
 │   │   ├── ADR-002-token-weighted-voting.md
 │   │   ├── ADR-003-live-balance-over-snapshot.md
 │   │   ├── ADR-004-three-way-vote.md
 │   │   ├── ADR-005-on-chain-events.md
-│   │   └── ADR-006-instance-vs-persistent-storage.md
+│   │   ├── ADR-006-instance-vs-persistent-storage.md
+│   │   └── ADR-007-vote-delegation.md
 │   ├── security/
 │   │   ├── threat-model.md
 │   │   ├── known-issues.md
@@ -242,6 +289,7 @@ votechain-contracts/
 │   │   ├── rust.md                   # Rust integration examples
 │   │   └── javascript.md             # JavaScript/TypeScript examples
 │   ├── GETTING_STARTED.md
+│   ├── dao-integration-guide.md         # DAO deployment & governance walkthrough
 │   ├── lifecycle.md
 │   ├── storage.md
 │   ├── upgrading.md
@@ -903,6 +951,12 @@ See [docs/examples/rust.md](docs/examples/rust.md) for more detailed examples.
 
 ### JavaScript/TypeScript Integration
 
+Install the packaged SDK for the easiest JavaScript/TypeScript integration:
+
+```bash
+npm install @votechain/sdk
+```
+
 Complete JavaScript examples for integrating VoteChain into web applications:
 
 ```javascript
@@ -928,6 +982,19 @@ const proposalId = result.result.retval;
 await governance.methods
   .cast_vote(voter, proposalId, { tag: 'Yes' })
   .simulate(server);
+```
+
+### Frontend demo
+
+A lightweight React + Vite frontend is available in `frontend/` for browsing proposals, searching by title/description, filtering by state, and viewing wallet vote history in a read-only mode.
+
+Run the following in the frontend directory:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
 // Check vote status
 const hasVoted = await governance.methods
@@ -1440,12 +1507,13 @@ We welcome contributions from the community. Please see [CONTRIBUTING.md](CONTRI
 ### Documentation
 
 - **[GETTING_STARTED.md](docs/GETTING_STARTED.md)** — Step-by-step setup guide
+- **[DAO Integration Guide](docs/dao-integration-guide.md)** — Deploy, configure, and run governance for your DAO
 - **[Proposal Lifecycle](docs/lifecycle.md)** — Detailed state diagram and transitions
 - **[Storage Model](docs/storage.md)** — Storage tier strategy and optimization
 - **[Upgrading](docs/upgrading.md)** — Contract upgrade procedures
 - **[Errors](docs/errors.md)** — Complete error reference
 - **[FAQ](docs/faq.md)** — Frequently asked questions
-- **[Roadmap](docs/roadmap.md)** — Future features and improvements
+- **[Roadmap](docs/roadmap.md)** — Public product milestones, release goals, and quarterly review cadence
 
 ### Architecture Decision Records
 
@@ -1455,6 +1523,7 @@ We welcome contributions from the community. Please see [CONTRIBUTING.md](CONTRI
 - **[ADR-004](docs/adr/ADR-004-three-way-vote.md)** — Three-way voting
 - **[ADR-005](docs/adr/ADR-005-on-chain-events.md)** — On-chain events
 - **[ADR-006](docs/adr/ADR-006-instance-vs-persistent-storage.md)** — Storage tier optimization
+- **[ADR-007](docs/adr/ADR-007-vote-delegation.md)** — Vote delegation (deferred)
 
 ### Examples
 
@@ -1510,5 +1579,29 @@ We welcome contributions from the community. Please see [CONTRIBUTING.md](CONTRI
 See [CHANGELOG.md](CHANGELOG.md) for version history and release notes.
 
 ---
+## Contributing Guide
+
+
+How to Contribute 
+
+• Fork the repository. 
+
+• Clone your fork to your local machine. 
+
+• Create a new branch for your task. 
+
+git checkout -b feature/your-task-name 
+
+• Make your changes. 
+
+• Commit clearly. 
+
+git commit -m "Add: short description" 
+
+• Push your branch. 
+
+git push origin feature/your-task-name 
+
+• Open a Pull Request.
 
 Built with ❤️ on Stellar

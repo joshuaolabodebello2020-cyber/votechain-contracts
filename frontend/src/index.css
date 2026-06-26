@@ -1,0 +1,530 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #0f172a;
+  color: #f8fafc;
+  line-height: 1.6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+a {
+  color: #38bdf8;
+}
+
+button,
+select,
+input {
+  font: inherit;
+}
+
+button {
+  border: 1px solid #334155;
+  background: #1e293b;
+  color: #f8fafc;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+button:hover,
+button:focus-visible {
+  background: #334155;
+  outline: 3px solid #7dd3fc;
+}
+
+input,
+select {
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: #f8fafc;
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.5rem;
+  min-width: 12rem;
+}
+
+input:focus,
+select:focus {
+  outline: 3px solid #7dd3fc;
+}
+
+.container {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.card {
+  background: #111827;
+  border: 1px solid #334155;
+  border-radius: 1rem;
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.table-wrapper {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+}
+
+thead {
+  background: #1e293b;
+}
+
+th,
+td {
+  padding: 0.9rem 0.75rem;
+  border: 1px solid #334155;
+  text-align: left;
+}
+
+th {
+  font-weight: 700;
+}
+
+tr:nth-child(even) {
+  background: #121827;
+}
+
+.status-chip {
+  display: inline-flex;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.status-active {
+  background: #334155;
+  color: #a5f3fc;
+}
+
+.status-passed {
+  background: #14532d;
+  color: #bbf7d0;
+}
+
+.status-rejected {
+  background: #7f1d1d;
+  color: #fecaca;
+}
+
+.status-executed {
+  background: #312e81;
+  color: #c7d2fe;
+}
+
+.status-cancelled {
+  background: #831843;
+  color: #fecdd3;
+}
+
+.proposal-list {
+  display: none;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  gap: 1rem;
+}
+
+.proposal-card {
+  background: #111827;
+  border: 1px solid #334155;
+  border-radius: 1rem;
+  padding: 1.25rem;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.proposal-card:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 12px 30px rgba(59, 130, 246, 0.12);
+}
+
+.card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.card-title-row {
+  flex: 1;
+  min-width: 0;
+}
+
+.proposal-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-bottom: 0.25rem;
+}
+
+.proposal-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #f8fafc;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.state-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 0.25rem 0.75rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.proposal-description {
+  margin: 0.75rem 0 1rem;
+  color: #94a3b8;
+  line-height: 1.75;
+}
+
+.vote-summary {
+  margin-bottom: 0.85rem;
+}
+
+.vote-counts {
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.vote-count-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: #cbd5e1;
+}
+
+.vote-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dot-yes {
+  background: #22c55e;
+}
+
+.dot-abstain {
+  background: #94a3b8;
+}
+
+.card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #334155;
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 3rem 1rem;
+  color: #cbd5e1;
+  text-align: center;
+}
+
+.empty-state-illustration {
+  font-size: 3rem;
+  background: #1e293b;
+  width: 5rem;
+  height: 5rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+}
+
+.empty-state-note {
+  color: #94a3b8;
+}
+
+@media (max-width: 768px) {
+  .proposal-list {
+    display: grid;
+  }
+
+  .table-wrapper {
+    display: none;
+  }
+}
+
+@media (min-width: 1280px) {
+  .container {
+    max-width: 1200px;
+  }
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.nav-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.active-tab {
+  background: #0ea5e9;
+  color: #000;
+}
+
+@media (max-width: 720px) {
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Skip navigation link (WCAG 2.4.1) ─────────────────────── */
+.skip-link {
+  position: absolute;
+  top: -3rem;
+  left: 1rem;
+  z-index: 9999;
+  background: #0ea5e9;
+  color: #000;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: top 0.15s;
+}
+.skip-link:focus {
+  top: 1rem;
+}
+
+/* ── Modal (WCAG 2.1.2 focus trap) ─────────────────────────── */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: #111827;
+  border: 1px solid #334155;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  max-width: 560px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+@media print {
+  :root {
+    color-scheme: light;
+    background: #ffffff;
+    color: #000000;
+  }
+
+  body {
+    background: #ffffff;
+    color: #000000;
+    margin: 0;
+  }
+
+  *,
+  *::before,
+  *::after {
+    background: transparent !important;
+    color: #000000 !important;
+    text-shadow: none !important;
+    box-shadow: none !important;
+  }
+
+  body,
+  .container,
+  .card,
+  .proposal-detail {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  nav,
+  .navbar,
+  .header,
+  .skip-link,
+  .nav-buttons,
+  .proposal-actions,
+  .footer,
+  .modal,
+  .toast,
+  button,
+  input,
+  select,
+  textarea,
+  .action-btn {
+    display: none !important;
+  }
+
+  a {
+    color: #000000 !important;
+    text-decoration: underline !important;
+  }
+
+  .proposal-meta,
+  .proposal-section,
+  .vote-stats,
+  .quorum-container {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  table,
+  th,
+  td {
+    color: #000000 !important;
+    border-color: #000000 !important;
+  }
+
+  .sr-only {
+    position: static !important;
+    width: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+    clip: auto !important;
+    white-space: normal !important;
+  }
+
+  .progress-bar,
+  .bar {
+    background: #000000 !important;
+  }
+
+  .bar.yes {
+    background-color: #111111 !important;
+  }
+
+  .bar.no {
+    background-color: #333333 !important;
+  }
+
+  .bar.abstain {
+    background-color: #666666 !important;
+  }
+
+  .proposal-status-badge {
+    background: #ffffff !important;
+    color: #000000 !important;
+    border: 1px solid #000000 !important;
+  }
+}
+
+.modal-close {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  min-width: auto;
+}
+
+.modal-close:hover,
+.modal-close:focus-visible {
+  background: #1e293b;
+  color: #f8fafc;
+  outline: 3px solid #7dd3fc;
+}
+
+.modal-body {
+  color: #e2e8f0;
+}
+
+/* ── Spinner (used by optimistic vote loading state) ────────── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spinner {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: middle;
+}
+
+/* ── Vote choice badges ─────────────────────────────────────── */
+.vote-for     { background: #14532d; color: #bbf7d0; }
+.vote-against { background: #7f1d1d; color: #fecaca; }
+.vote-abstain { background: #334155; color: #e2e8f0; }
+
+/* ── Optimistic pending row highlight ───────────────────────── */
+.optimistic-pending {
+  opacity: 0.75;
+  font-style: italic;
+}

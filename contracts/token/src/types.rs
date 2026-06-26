@@ -1,3 +1,17 @@
+// Copyright 2024 VoteChain Contributors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use soroban_sdk::{contracterror, contracttype, Address};
 
 /// All revert conditions for the token contract.
@@ -19,6 +33,8 @@ pub enum ContractError {
     InvalidNewAdmin = 6,
     /// 7 – Address parameter is the zero/default address
     InvalidAddress = 7,
+    /// 8 – Address is frozen and cannot send or receive tokens
+    AccountFrozen = 8,
 }
 
 /// Storage key enum for the token contract.
@@ -66,4 +82,8 @@ pub enum TokenDataKey {
     /// Contract version stored as a `(major, minor, patch)` semver tuple (instance storage).
     /// Key space: singleton — only one `Version` entry exists.
     Version,
+
+    /// Freeze flag for a specific address (persistent storage).
+    /// Key space: one entry per frozen address; absent means not frozen.
+    Frozen(Address),
 }

@@ -6,7 +6,28 @@ on:
     branches: [main, develop]
 env:
   CARGO_TERM_COLOR: always
+  STELLAR_CLI_VERSION: "21.6.0"
 jobs:
+  license-check:
+    name: License Headers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Apache 2.0 license header on all .rs files
+        run: |
+          missing=()
+          while IFS= read -r -d '' file; do
+            if ! head -3 "$file" | grep -q "Apache License\|Apache-2.0\|Licensed under the Apache"; then
+              missing+=("$file")
+            fi
+          done < <(find contracts -name "*.rs" -print0)
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "ERROR: Missing Apache 2.0 license header in:"
+            printf '  %s\n' "${missing[@]}"
+            exit 1
+          fi
+          echo "All .rs files have the license header."
+
   test:
     name: Build & Test
     runs-on: ubuntu-latest
@@ -56,17 +77,19 @@ jobs:
             --lcov --output-path lcov.info
       - name: Enforce 80% line coverage threshold
         run: |
-          cargo llvm-cov --all-features --workspace \
-            --summary-only 2>&1 | tee coverage-summary.txt
-          LINE_PCT=$(grep -oP 'Lines\s*:\s*\K[0-9]+\.[0-9]+' coverage-summary.txt | head -1)
-          echo "Line coverage: ${LINE_PCT}%"
-          awk -v pct="$LINE_PCT" 'BEGIN { if (pct+0 < 80) { print "Coverage " pct "% is below 80% threshold"; exit 1 } }'
+          PACKAGES=(votechain-governance votechain-token)
+          for pkg in "${PACKAGES[@]}"; do
+            cargo llvm-cov --package "$pkg" --all-features --summary-only 2>&1 | tee "${pkg}-coverage-summary.txt"
+            LINE_PCT=$(grep -oP 'Lines\s*:\s*\K[0-9]+\.[0-9]+' "${pkg}-coverage-summary.txt" | head -1)
+            echo "$pkg line coverage: ${LINE_PCT}%"
+            awk -v pct="$LINE_PCT" -v pkg="$pkg" 'BEGIN { if (pct+0 < 80) { print pkg " coverage " pct "% is below 80% threshold"; exit 1 } }'
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: coverage-report
           path: |
             lcov.info
-            coverage-summary.txt
+            *-coverage-summary.txt
 
   security-audit:
     name: Security Audit
@@ -158,7 +181,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
-      - run: cargo install --locked stellar-cli --features opt
+      - run: cargo install --locked stellar-cli@${{ env.STELLAR_CLI_VERSION }} --features opt
       - uses: actions/cache@v4
         with:
           path: |

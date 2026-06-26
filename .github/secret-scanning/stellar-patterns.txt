@@ -1,0 +1,3 @@
+# Stellar secret seeds begin with 'S' and are encoded in Base32.
+# This pattern catches typical secret seed formats like SXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+S[2-7A-Z]{55}
