@@ -281,6 +281,17 @@ pub enum DataKey {
     /// Amendment window in seconds before voting begins.
     /// Key space: singleton — only one `AmendWindow` entry exists.
     AmendWindow,
+
+    /// SC-006: Target TTL (ledger count) that a persistent entry is extended to on
+    /// each bump.  Stored in instance storage; defaults to `LEDGERS_TO_LIVE`.
+    /// Key space: singleton — only one `StorageBumpAmount` entry exists.
+    StorageBumpAmount,
+
+    /// SC-006: TTL floor (ledger count) below which a bump is triggered.
+    /// `extend_ttl` is a no-op when the entry's remaining TTL exceeds this value.
+    /// Stored in instance storage; defaults to `LEDGERS_TO_LIVE`.
+    /// Key space: singleton — only one `StorageBumpThreshold` entry exists.
+    StorageBumpThreshold,
 }
 
 #[contracttype]

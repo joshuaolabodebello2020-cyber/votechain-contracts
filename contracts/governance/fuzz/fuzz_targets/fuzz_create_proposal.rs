@@ -78,7 +78,11 @@ fuzz_target!(|data: &[u8]| {
         &60_u64,        // min duration
         &2_592_000_u64, // max duration (30 days)
         &false,
-        &0_u64,
+        &0_u64,         // amend_window
+        &0_u64,         // timelock_duration
+        &0_i128,        // veto_threshold
+        &0_u32,         // storage_bump_amount (use default)
+        &0_u32,         // storage_bump_threshold (use default)
     );
 
     let proposer = Address::generate(&env);

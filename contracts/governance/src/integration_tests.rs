@@ -42,7 +42,11 @@ fn setup<'a>() -> Setup<'a> {
         &60_u64,          // min_duration
         &2_592_000_u64,   // max_duration
         &false,           // restrict_admin_vote
+        &0_u64,           // amend_window
         &0_u64,           // timelock_duration
+        &0_i128,          // veto_threshold
+        &0_u32,           // storage_bump_amount (use default)
+        &0_u32,           // storage_bump_threshold (use default)
     );
 
     Setup { env, gov, token, admin }
