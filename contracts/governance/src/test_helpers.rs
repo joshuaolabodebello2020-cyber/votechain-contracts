@@ -14,17 +14,7 @@
 
 use soroban_sdk::{testutils::Address as _, Address, Env, String, Vec};
 use crate::{GovernanceContract, GovernanceContractClient};
-use crate::types::{GovernanceOptions, Vote};
-
-/// Default governance options for tests (no amend window, timelock, or veto).
-pub fn default_options() -> GovernanceOptions {
-    GovernanceOptions {
-        amend_window: 0,
-        timelock_duration: 0,
-        veto_threshold: 0,
-        persistent_storage_ttl: 0,
-    }
-}
+use crate::types::Vote;
 
 /// Returned by [`setup_env`] — holds every handle needed by a test.
 pub struct TestEnv {
@@ -54,12 +44,15 @@ pub fn setup_env() -> TestEnv {
     client.initialize(
         &admin,
         &tok_id,
-        &0_i128,
-        &0_u64,
-        &60_u64,
-        &2_592_000_u64,
-        &false,
-        &default_options(),
+        &0_i128,        // min_proposal_balance
+        &0_u64,         // proposal_cooldown
+        &60_u64,        // min_duration
+        &2_592_000_u64, // max_duration
+        &false,         // restrict_admin_vote
+        &0_u64,         // amend_window
+        &0_u64,         // timelock_duration
+        &0_i128,        // veto_threshold
+        &0_u32,         // persistent_storage_ttl
     );
 
     TestEnv {

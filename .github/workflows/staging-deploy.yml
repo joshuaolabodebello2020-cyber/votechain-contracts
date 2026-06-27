@@ -1,0 +1,189 @@
+name: Staging Deploy + Smoke Tests
+
+on:
+  push:
+    branches: [staging]
+  workflow_dispatch:
+    inputs:
+      staging_url:
+        description: 'Staging frontend URL'
+        required: false
+        default: ''
+      api_url:
+        description: 'Staging API URL'
+        required: false
+        default: ''
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build Contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-staging-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-staging-
+
+      - name: Install Stellar CLI
+        run: cargo install --locked stellar-cli --features opt
+
+      - name: Build WASM contracts
+        run: stellar contract build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wasm-contracts-staging-${{ github.run_id }}
+          path: target/wasm32-unknown-unknown/release/*.wasm
+          retention-days: 7
+          if-no-files-found: error
+
+  deploy:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: build
+    environment:
+      name: staging
+    outputs:
+      staging_url: ${{ steps.urls.outputs.staging_url }}
+      api_url: ${{ steps.urls.outputs.api_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-staging-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-staging-
+
+      - name: Install Stellar CLI
+        run: cargo install --locked stellar-cli --features opt
+
+      - name: Build WASM contracts
+        run: stellar contract build
+
+      - name: Deploy contracts to staging
+        env:
+          SOROBAN_ACCOUNT: ${{ secrets.SOROBAN_ACCOUNT }}
+          SOROBAN_SECRET_KEY: ${{ secrets.SOROBAN_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${SOROBAN_ACCOUNT:-}" || -z "${SOROBAN_SECRET_KEY:-}" ]]; then
+            echo "⚠️  Deployment secrets not configured — skipping contract deploy (smoke tests will still run)"
+          else
+            chmod +x scripts/deploy_staging.sh
+            ./scripts/deploy_staging.sh 2>&1 | tee staging-deploy.log
+            echo "✅ Contracts deployed to staging"
+          fi
+
+      - name: Resolve service URLs
+        id: urls
+        run: |
+          # Prefer explicit workflow_dispatch inputs, then secrets, then defaults
+          STAGING_URL="${{ github.event.inputs.staging_url }}"
+          API_URL="${{ github.event.inputs.api_url }}"
+
+          if [[ -z "$STAGING_URL" ]]; then
+            STAGING_URL="${{ secrets.STAGING_URL }}"
+          fi
+          if [[ -z "$STAGING_URL" ]]; then
+            STAGING_URL="http://localhost:4173"
+          fi
+
+          if [[ -z "$API_URL" ]]; then
+            API_URL="${{ secrets.STAGING_API_URL }}"
+          fi
+          if [[ -z "$API_URL" ]]; then
+            API_URL="${STAGING_URL}/api"
+          fi
+
+          echo "staging_url=$STAGING_URL" >> "$GITHUB_OUTPUT"
+          echo "api_url=$API_URL"         >> "$GITHUB_OUTPUT"
+          echo "Staging URL : $STAGING_URL"
+          echo "API URL     : $API_URL"
+
+      - name: Upload deploy logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-deploy-logs-${{ github.run_id }}
+          path: staging-deploy.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  smoke-tests:
+    name: Smoke Tests
+    runs-on: ubuntu-latest
+    needs: deploy
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Make smoke-test script executable
+        run: chmod +x scripts/smoke-test.sh
+
+      - name: Run smoke tests
+        env:
+          STAGING_URL: ${{ needs.deploy.outputs.staging_url }}
+          API_URL: ${{ needs.deploy.outputs.api_url }}
+          TIMEOUT: '15'
+          RETRIES: '3'
+          RETRY_DELAY: '5'
+        run: ./scripts/smoke-test.sh
+
+      - name: Write smoke test summary
+        if: always()
+        run: |
+          echo "## 🔬 Staging Smoke Test Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| | |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Frontend URL** | ${{ needs.deploy.outputs.staging_url }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **API URL** | ${{ needs.deploy.outputs.api_url }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Commit** | \`${{ github.sha }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Run** | [Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> "$GITHUB_STEP_SUMMARY"
+
+  notify:
+    name: Notify
+    runs-on: ubuntu-latest
+    needs: [build, deploy, smoke-tests]
+    if: always()
+    steps:
+      - name: Pipeline summary
+        run: |
+          echo "## Staging Pipeline Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Job | Result |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-----|--------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Build     | ${{ needs.build.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Deploy    | ${{ needs.deploy.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Smoke Tests | ${{ needs.smoke-tests.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Commit:** \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail pipeline on smoke test failure
+        if: needs.smoke-tests.result == 'failure'
+        run: |
+          echo "❌ Smoke tests failed — staging deployment is unhealthy"
+          echo "Check the smoke-tests job logs and the staging environment."
+          exit 1

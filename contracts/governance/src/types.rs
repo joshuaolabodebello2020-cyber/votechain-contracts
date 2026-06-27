@@ -51,72 +51,54 @@ pub enum ContractError {
     InsufficientBalance = 15,
     /// 16 – Proposer must wait for the cooldown period to expire
     ProposalCooldown = 16,
-    /// 17 – Proposal title is empty or exceeds maximum byte length
-    InvalidTitle = 17,
-    /// 18 – Proposal description is empty or exceeds maximum byte length
-    InvalidDescription = 18,
-    /// 19 – Duration is outside the allowed [MIN_DURATION, MAX_DURATION] range
-    InvalidDurationRange = 19,
-    /// 20 – Quorum exceeds the total token supply
-    QuorumExceedsSupply = 20,
-    /// 21 – Voting period has not yet started
-    VotingNotStarted = 21,
-    /// 22 – New admin address is invalid (e.g. zero address)
-    InvalidNewAdmin = 22,
-    /// 23 – Admin is not permitted to vote on their own proposals
-    AdminVoteRestricted = 23,
-    /// 24 – Contract is paused; state-changing operations are blocked
-    ContractPaused = 24,
-    /// 25 – Contract is not paused
-    NotPaused = 25,
-    /// 26 – Address parameter is the zero/default address
-    InvalidAddress = 26,
-    /// 27 – Proposal ID counter overflowed (u64::MAX reached)
-    ProposalCountOverflow = 27,
-    /// 28 – Timelock period has not yet expired
-    TimelockNotExpired = 28,
-    /// 29 – No pending admin transfer has been proposed
-    PendingAdminNotSet = 29,
-    /// 30 – The admin transfer window has expired; propose again
-    AdminTransferExpired = 30,
-    /// 31 – Caller is not the pending admin
-    NotPendingAdmin = 31,
-    /// 32 – Target version is lower than or equal to the current version (downgrade rejected)
-    DowngradeNotAllowed = 32,
-    /// 33 – Proposal amendment is not allowed after the amendment window or once voting has started
-    ProposalAmendmentNotAllowed = 33,
-    /// 34 – Only the original proposer may amend the proposal
-    NotProposalOwner = 34,
-    /// 35 – Migration failed due to unexpected storage state
-    MigrationFailed = 35,
-    /// 36 – Multi-sig config is not set
-    MultiSigNotConfigured = 36,
-    /// 37 – Threshold must be >= 1 and <= number of admins
-    InvalidThreshold = 37,
-    /// 38 – Admin list must be non-empty
-    EmptyAdminList = 38,
-    /// 39 – Multi-sig action not found
-    ActionNotFound = 39,
-    /// 40 – Caller has already approved this action
-    AlreadyApproved = 40,
-    /// 41 – Caller is not in the multi-sig admin list
-    NotMultiSigAdmin = 41,
-    /// 42 – Multi-sig action has already been executed
-    ActionAlreadyExecuted = 42,
-    /// 43 – Voting token contract failed the SEP-41 interface check
-    InvalidTokenContract = 43,
-    /// 44 – Veto threshold is negative or exceeds total supply
-    InvalidVetoThreshold = 44,
-    /// 45 – Proposal ID already exists (defense-in-depth)
-    ProposalAlreadyExists = 45,
-    /// 46 – Too many tags on a proposal
-    TooManyTags = 46,
-    /// 47 – A single tag exceeds the maximum length
-    TagTooLong = 47,
-    /// 48 – Delegation would create a cycle in the delegate chain
-    DelegationCycle = 48,
-    /// 49 – Voter has delegated their power and cannot vote directly
-    VotingPowerDelegated = 49,
+    /// 17 – Proposal title exceeds maximum byte length
+    TitleTooLong = 17,
+    /// 18 – Proposal description exceeds maximum byte length
+    DescriptionTooLong = 18,
+    /// 19 – Proposal title is empty or exceeds maximum byte length
+    InvalidTitle = 19,
+    /// 20 – Proposal description is empty or exceeds maximum byte length
+    InvalidDescription = 20,
+    /// 21 – Duration is outside the allowed [MIN_DURATION, MAX_DURATION] range
+    InvalidDurationRange = 21,
+    /// 22 – Quorum exceeds the total token supply
+    QuorumExceedsSupply = 22,
+    /// 23 – Voting period has not yet started
+    VotingNotStarted = 23,
+    /// 24 – New admin address is invalid (e.g. zero address)
+    InvalidNewAdmin = 24,
+    /// 25 – Admin is not permitted to vote on their own proposals
+    AdminVoteRestricted = 25,
+    /// 26 – Contract is paused; state-changing operations are blocked
+    ContractPaused = 26,
+    /// 27 – Contract is not paused
+    NotPaused = 27,
+    /// 28 – Address parameter is the zero/default address
+    InvalidAddress = 28,
+    /// 29 – Proposal ID counter overflowed (u64::MAX reached)
+    ProposalCountOverflow = 29,
+    /// 30 – Timelock period has not yet expired
+    TimelockNotExpired = 30,
+    /// 31 – No pending admin transfer has been proposed
+    PendingAdminNotSet = 31,
+    /// 32 – The admin transfer window has expired; propose again
+    AdminTransferExpired = 32,
+    /// 33 – Caller is not the pending admin
+    NotPendingAdmin = 33,
+    /// 34 – Target version is lower than or equal to the current version (downgrade rejected)
+    DowngradeNotAllowed = 34,
+    /// 35 – Proposal amendment is not allowed after the amendment window or once voting has started
+    ProposalAmendmentNotAllowed = 35,
+    /// 36 – Only the original proposer may amend the proposal
+    NotProposalOwner = 36,
+    /// 37 – Invalid duration configuration (min > max)
+    InvalidDurationConfig = 37,
+    /// 38 – Invalid veto threshold (must be >= 0 and <= total supply)
+    InvalidVetoThreshold = 38,
+    /// 39 – Invalid minimum proposal balance (must be >= 0)
+    InvalidMinProposalBalance = 39,
+    /// 40 – Migration failed (invalid state or preconditions)
+    MigrationFailed = 40,
 }
 
 /// Lifecycle state of the governance contract itself.
@@ -151,12 +133,20 @@ pub enum Vote {
 }
 
 #[contracttype]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct Translation {
     pub title: String,
     pub description: String,
 }
 
+/// A governance proposal.
+///
+/// `metadata_version` identifies the schema version this proposal was created
+/// under (#547). Indexers and clients use this field to select the correct
+/// deserialization path when the proposal format evolves across contract
+/// upgrades. Version 1 is the initial schema; future `migrate()` calls bump
+/// the contract-level metadata version so newly created proposals carry the
+/// updated version number while old proposals retain their original value.
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct Proposal {
@@ -167,7 +157,7 @@ pub struct Proposal {
     pub votes_yes: i128,
     pub votes_no: i128,
     pub votes_abstain: i128,
-    pub quorum: i128, // minimum total votes required to pass
+    pub quorum: i128,
     pub start_time: u64,
     pub end_time: u64,
     pub state: ProposalState,
@@ -176,6 +166,9 @@ pub struct Proposal {
     pub execute_after: u64,
     /// Optional category tags (max 5, each max 32 chars).
     pub tags: Vec<String>,
+    /// Schema version for this proposal's metadata (#547).
+    /// Allows clients to handle format changes across contract upgrades safely.
+    pub metadata_version: u32,
 }
 
 /// Storage key enum for the governance contract.
@@ -184,154 +177,93 @@ pub struct Proposal {
 /// serialises the variant discriminant as part of the XDR key, each variant
 /// occupies a completely separate key space — two variants with the same
 /// payload can never collide.
-///
-/// ## Key-space map (SEC-006 collision analysis)
-///
-/// | Variant                          | Storage tier | Description                                         |
-/// |----------------------------------|--------------|-----------------------------------------------------|
-/// | `Proposal(u64)`                  | Persistent   | Full proposal struct, keyed by proposal ID          |
-/// | `ProposalCount`                  | Instance     | Monotonic counter used to assign proposal IDs       |
-/// | `HasVoted(u64, Address)`         | Persistent   | Boolean flag: has this voter voted on this proposal |
-/// | `VoteRecord(u64, Address)`       | Persistent   | Detailed vote record (type + weight) per voter      |
-/// | `VoterSnapshot(u64, Address)`    | Persistent   | Token-balance snapshot captured at vote time        |
-/// | `LastProposal(Address)`          | Persistent   | Timestamp of a proposer's most recent proposal      |
-/// | `Admin`                          | Instance     | Contract administrator address                      |
-/// | `VotingToken`                    | Instance     | Governance token contract address                   |
-/// | `MinProposalBalance`             | Instance     | Minimum token balance required to create a proposal |
-/// | `ProposalCooldown`               | Instance     | Seconds a proposer must wait between proposals      |
-/// | `ContractState`                  | Instance     | Lifecycle state (Uninitialized / Ready)             |
-/// | `RestrictAdminVote`              | Instance     | Whether admin vote on own proposals is blocked      |
-/// | `Paused`                         | Instance     | Whether the contract is currently paused            |
-/// | `Version`                        | Instance     | Semver tuple `(major, minor, patch)`                |
-///
-/// ## Collision safety
-///
-/// Soroban serialises each `DataKey` variant by encoding the enum discriminant
-/// **before** any payload into the XDR key.  This means:
-///
-/// - `HasVoted(id, addr)`, `VoteRecord(id, addr)`, and `VoterSnapshot(id, addr)`
-///   share the same payload shape `(u64, Address)` but have distinct discriminants,
-///   so they can never alias each other regardless of the argument values.
-/// - Singleton variants (`Admin`, `VotingToken`, `ProposalCount`, …) have no
-///   payload, so their keys are fixed and globally unique within this contract.
-/// - No two distinct variants can produce the same serialised key because the
-///   discriminant is always the first element of the encoding.
 #[contracttype]
 pub enum DataKey {
     /// Full [`Proposal`] struct, keyed by proposal ID (persistent storage).
-    /// Key space: one entry per unique `u64` proposal ID.
     Proposal(u64),
 
     /// Monotonic counter used to derive the next proposal ID (instance storage).
-    /// Key space: singleton — only one `ProposalCount` entry exists.
     ProposalCount,
 
     /// Boolean flag recording whether `voter` has voted on `proposal_id` (persistent storage).
-    /// Key space: one entry per `(proposal_id, voter)` pair.
-    /// Kept separate from `VoteRecord` so existence checks are cheap.
     HasVoted(u64, Address),
 
     /// Detailed vote record (vote type + weight) for `voter` on `proposal_id` (persistent storage).
-    /// Key space: one entry per `(proposal_id, voter)` pair.
     VoteRecord(u64, Address),
 
     /// Contract administrator address (instance storage).
-    /// Key space: singleton — only one `Admin` entry exists.
     Admin,
 
     /// Address of the governance token contract (instance storage).
-    /// Key space: singleton — only one `VotingToken` entry exists.
     VotingToken,
 
     /// Minimum token balance a proposer must hold to create a proposal (instance storage).
-    /// Key space: singleton — only one `MinProposalBalance` entry exists.
     MinProposalBalance,
 
     /// Minimum seconds a proposer must wait between consecutive proposals (instance storage).
-    /// Key space: singleton — only one `ProposalCooldown` entry exists.
     ProposalCooldown,
 
     /// Lifecycle state of the governance contract (instance storage).
-    /// Key space: singleton — only one `ContractState` entry exists.
     ContractState,
 
     /// Whether admin is restricted from voting on their own proposals (instance storage).
-    /// Key space: singleton — only one `RestrictAdminVote` entry exists.
     RestrictAdminVote,
 
     /// Whether the contract is currently paused (instance storage).
-    /// Key space: singleton — only one `Paused` entry exists.
     Paused,
 
     /// Optional reason string explaining why the contract was paused (instance storage).
-    /// Key space: singleton — only one `PauseReason` entry exists.
     PauseReason,
 
     /// Timestamp (Unix seconds) of `proposer`'s most recent proposal (persistent storage).
-    /// Key space: one entry per unique proposer address.
     LastProposal(Address),
 
     /// Contract version stored as a `(major, minor, patch)` semver tuple (instance storage).
-    /// Key space: singleton — only one `Version` entry exists.
     Version,
 
     /// Token-balance snapshot for `voter` on `proposal_id`, captured at vote time (persistent storage).
-    /// Key space: one entry per `(proposal_id, voter)` pair.
-    /// Kept separate from `VoteRecord` to allow independent querying of vote weight.
     VoterSnapshot(u64, Address),
 
     /// Mandatory delay (seconds) between a proposal passing and it becoming executable (instance storage).
-    /// Key space: singleton — only one `TimelockDuration` entry exists.
     TimelockDuration,
 
     /// Minimum allowed voting duration in seconds (instance storage).
-    /// Key space: singleton — only one `MinDuration` entry exists.
     MinDuration,
 
     /// Maximum allowed voting duration in seconds (instance storage).
-    /// Key space: singleton — only one `MaxDuration` entry exists.
     MaxDuration,
 
     /// Absolute vote weight threshold that rejects a proposal immediately when
     /// `votes_no >= veto_threshold`. Stored as instance storage.
-    /// Key space: singleton — only one `VetoThreshold` entry exists.
     VetoThreshold,
 
     /// Address nominated to become the next admin (instance storage).
-    /// Set by `propose_admin_transfer`; cleared on acceptance or expiry.
     PendingAdmin,
 
     /// Unix timestamp after which the pending admin nomination expires (instance storage).
     AdminTransferExpiry,
 
     /// Amendment window in seconds before voting begins.
-    /// Key space: singleton — only one `AmendWindow` entry exists.
     AmendWindow,
 
     /// TTL bump amount for persistent storage entries (measured in ledgers).
-    /// Controls how many ledgers into the future the TTL is extended on write operations.
-    /// Key space: singleton — only one `PersistentStorageTTL` entry exists.
     PersistentStorageTTL,
 
-    /// Multi-sig admin configuration (instance storage).
+    /// Multi-sig admin configuration (admins list + threshold) (instance storage).
     MultiSigConfig,
 
     /// Monotonic counter for multi-sig action IDs (instance storage).
     MultiSigActionCount,
 
-    /// A pending multi-sig action, keyed by action ID (persistent storage).
+    /// Multi-sig action struct, keyed by action ID (persistent storage).
     MultiSigAction(u64),
 
-    /// Approval flag: has `Address` approved multi-sig action `u64` (persistent storage).
+    /// Boolean flag: has `approver` approved multi-sig `action_id` (persistent storage).
     MultiSigApproval(u64, Address),
 
-    /// Delegatee address for a delegator's voting power (persistent storage).
-    /// Key space: one entry per delegator address.
-    Delegation(Address),
-
-    /// Aggregate delegated token weight received by a delegatee (persistent storage).
-    /// Key space: one entry per delegatee address.
-    DelegatedWeight(Address),
+    /// Current metadata schema version for newly created proposals (instance storage).
+    /// Bumped by `migrate()` when the proposal data format changes (#547).
+    MetadataVersion,
 }
 
 #[contracttype]
@@ -397,4 +329,49 @@ pub struct GovernanceConfig {
     pub paused: bool,
     pub version: (u32, u32, u32),
     pub persistent_storage_ttl: u32,
+}
+
+/// Spam-prevention configuration returned by [`get_spam_config`] (#548).
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct SpamConfig {
+    /// Minimum token balance required to create a proposal (0 = disabled).
+    pub min_proposal_balance: i128,
+    /// Minimum seconds between consecutive proposals per address (0 = disabled).
+    pub proposal_cooldown: u64,
+}
+
+// =============================================================================
+// Multi-sig types (SC-003)
+// =============================================================================
+
+/// Multi-sig admin configuration.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct MultiSigConfig {
+    pub admins: Vec<Address>,
+    pub threshold: u32,
+}
+
+/// Type of privileged action that requires multi-sig approval.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub enum MultiSigActionType {
+    ExecuteProposal,
+    CancelProposal,
+    UpdateMultiSig,
+    Pause,
+    Unpause,
+}
+
+/// A pending or executed multi-sig action.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct MultiSigAction {
+    pub id: u64,
+    pub action_type: MultiSigActionType,
+    pub proposal_id: u64,
+    pub new_config: Option<MultiSigConfig>,
+    pub approvals: u32,
+    pub executed: bool,
 }

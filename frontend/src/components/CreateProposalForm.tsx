@@ -1,5 +1,12 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { PROPOSAL_TEMPLATES, type ProposalTemplate } from '../utils/proposalTemplates';
+import { 
+  validateTitle, 
+  validateDescription, 
+  validateQuorum, 
+  validateDuration,
+  type ValidationResult 
+} from '../utils/validation';
 
 interface FormValues {
   title: string;
@@ -15,6 +22,13 @@ interface Props {
 
 const EMPTY: FormValues = { title: '', description: '', quorum: '', duration: '' };
 
+interface ValidationErrors {
+  title: ValidationResult;
+  description: ValidationResult;
+  quorum: ValidationResult;
+  duration: ValidationResult;
+}
+
 /**
  * Proposal creation form with pre-filled templates.
  *
@@ -24,6 +38,24 @@ const EMPTY: FormValues = { title: '', description: '', quorum: '', duration: ''
 export default function CreateProposalForm({ onSubmit }: Props) {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('custom');
   const [values, setValues] = useState<FormValues>(EMPTY);
+  const [touched, setTouched] = useState<Record<keyof FormValues, boolean>>({
+    title: false,
+    description: false,
+    quorum: false,
+    duration: false,
+  });
+
+  const validationErrors: ValidationErrors = useMemo(() => ({
+    title: validateTitle(values.title),
+    description: validateDescription(values.description),
+    quorum: validateQuorum(values.quorum),
+    duration: validateDuration(values.duration),
+  }), [values]);
+
+  const hasErrors = !validationErrors.title.valid ||
+                    !validationErrors.description.valid ||
+                    !validationErrors.quorum.valid ||
+                    !validationErrors.duration.valid;
 
   function applyTemplate(template: ProposalTemplate) {
     setSelectedTemplateId(template.id);
@@ -42,10 +74,13 @@ export default function CreateProposalForm({ onSubmit }: Props) {
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
     const { name, value } = e.target;
     setValues((prev) => ({ ...prev, [name]: value }));
+    setTouched((prev) => ({ ...prev, [name]: true }));
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setTouched({ title: true, description: true, quorum: true, duration: true });
+    if (hasErrors) return;
     onSubmit?.(values);
   }
 
@@ -111,8 +146,15 @@ export default function CreateProposalForm({ onSubmit }: Props) {
             maxLength={128}
             required
             aria-required="true"
-            style={{ width: '100%' }}
+            aria-invalid={touched.title && !validationErrors.title.valid}
+            aria-describedby={touched.title && !validationErrors.title.valid ? 'proposal-title-error' : undefined}
+            style={{ width: '100%', borderColor: touched.title && !validationErrors.title.valid ? '#ef4444' : undefined }}
           />
+          {touched.title && !validationErrors.title.valid && (
+            <p id="proposal-title-error" role="alert" style={{ color: '#fca5a5', fontSize: '0.85rem', marginTop: '0.25rem' }}>
+              {validationErrors.title.error}
+            </p>
+          )}
         </div>
 
         {/* Description */}
@@ -129,9 +171,25 @@ export default function CreateProposalForm({ onSubmit }: Props) {
             maxLength={1024}
             required
             aria-required="true"
+            aria-invalid={touched.description && !validationErrors.description.valid}
+            aria-describedby={touched.description && !validationErrors.description.valid ? 'proposal-description-error' : undefined}
             rows={6}
-            style={{ width: '100%', resize: 'vertical', background: '#0f172a', color: '#f8fafc', border: '1px solid #334155', borderRadius: '0.5rem', padding: '0.75rem', font: 'inherit' }}
+            style={{ 
+              width: '100%', 
+              resize: 'vertical', 
+              background: '#0f172a', 
+              color: '#f8fafc', 
+              border: '1px solid ' + (touched.description && !validationErrors.description.valid ? '#ef4444' : '#334155'), 
+              borderRadius: '0.5rem', 
+              padding: '0.75rem', 
+              font: 'inherit' 
+            }}
           />
+          {touched.description && !validationErrors.description.valid && (
+            <p id="proposal-description-error" role="alert" style={{ color: '#fca5a5', fontSize: '0.85rem', marginTop: '0.25rem' }}>
+              {validationErrors.description.error}
+            </p>
+          )}
         </div>
 
         {/* Quorum */}
@@ -149,7 +207,15 @@ export default function CreateProposalForm({ onSubmit }: Props) {
             min={1}
             required
             aria-required="true"
+            aria-invalid={touched.quorum && !validationErrors.quorum.valid}
+            aria-describedby={touched.quorum && !validationErrors.quorum.valid ? 'proposal-quorum-error' : undefined}
+            style={{ borderColor: touched.quorum && !validationErrors.quorum.valid ? '#ef4444' : undefined }}
           />
+          {touched.quorum && !validationErrors.quorum.valid && (
+            <p id="proposal-quorum-error" role="alert" style={{ color: '#fca5a5', fontSize: '0.85rem', marginTop: '0.25rem' }}>
+              {validationErrors.quorum.error}
+            </p>
+          )}
         </div>
 
         {/* Duration */}
@@ -167,10 +233,18 @@ export default function CreateProposalForm({ onSubmit }: Props) {
             min={60}
             required
             aria-required="true"
+            aria-invalid={touched.duration && !validationErrors.duration.valid}
+            aria-describedby={touched.duration && !validationErrors.duration.valid ? 'proposal-duration-error' : undefined}
+            style={{ borderColor: touched.duration && !validationErrors.duration.valid ? '#ef4444' : undefined }}
           />
+          {touched.duration && !validationErrors.duration.valid && (
+            <p id="proposal-duration-error" role="alert" style={{ color: '#fca5a5', fontSize: '0.85rem', marginTop: '0.25rem' }}>
+              {validationErrors.duration.error}
+            </p>
+          )}
         </div>
 
-        <button type="submit" aria-label="Submit governance proposal">Submit Proposal</button>
+        <button type="submit" aria-label="Submit governance proposal" disabled={hasErrors}>Submit Proposal</button>
       </form>
     </section>
   );

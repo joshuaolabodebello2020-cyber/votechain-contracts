@@ -31,28 +31,29 @@ pub mod test_helpers;
 // #[cfg(test)]
 // mod integration_tests;
 #[cfg(test)]
-mod delegation_tests;
+mod integration_tests;
+#[cfg(test)]
+mod e2e_lifecycle_tests;
 
 use soroban_sdk::{contract, contractclient, contractimpl, token, Address, Env, String, Vec};
 use storage::{
-    get_admin as storage_get_admin, get_contract_state,
-    get_delegated_weight as storage_get_delegated_weight, get_delegatee, get_last_proposal,
-    get_min_duration, get_min_proposal_balance,
-    get_multisig_config as storage_get_multisig_config, get_proposal_cooldown,
-    get_restrict_admin_vote, get_timelock_duration, get_version, get_amend_window,
-    get_voter_snapshot, get_voting_token, has_multisig_approval, has_voted, is_initialized,
-    is_paused, load_multisig_action, load_proposal, mark_voted, next_id, next_multisig_action_id,
-    save_multisig_action, save_proposal, save_vote_record, save_voter_snapshot, set_admin,
-    set_amend_window, set_contract_state, set_last_proposal, set_min_duration, set_max_duration,
-    set_min_proposal_balance, set_multisig_approval, set_multisig_config, set_paused,
-    set_proposal_cooldown, set_restrict_admin_vote, set_timelock_duration, set_version,
-    set_veto_threshold, set_voting_token, get_vote_record, get_max_duration, set_pending_admin,
-    get_pending_admin, clear_pending_admin, set_admin_transfer_expiry, get_admin_transfer_expiry,
-    set_pause_reason, set_persistent_storage_ttl, get_veto_threshold,
+    get_admin as storage_get_admin, get_contract_state, get_last_proposal, get_min_duration,
+    get_min_proposal_balance, get_proposal_cooldown, get_restrict_admin_vote, get_timelock_duration,
+    get_version, get_amend_window, get_voter_snapshot, get_voting_token, get_veto_threshold,
+    has_voted, is_initialized, is_paused, load_proposal, mark_voted, next_id, save_proposal,
+    save_vote_record, save_voter_snapshot, set_admin, set_contract_state, set_last_proposal,
+    set_min_duration, set_max_duration, set_min_proposal_balance, set_paused, set_proposal_cooldown,
+    set_restrict_admin_vote, set_timelock_duration, set_version, set_veto_threshold, set_voting_token,
+    get_vote_record, get_max_duration, set_pending_admin, get_pending_admin, clear_pending_admin,
+    set_admin_transfer_expiry, get_admin_transfer_expiry, set_pause_reason,
+    set_persistent_storage_ttl, get_persistent_storage_ttl,
+    get_multisig_config, set_multisig_config, save_multisig_action, load_multisig_action,
+    set_multisig_approval, has_multisig_approval, next_multisig_action_id,
+    get_metadata_version, set_metadata_version,
 };
 use types::{
-    ContractError, ContractState, DataKey, GovernanceOptions, MultiSigAction, MultiSigActionType,
-    MultiSigConfig, Proposal, ProposalState, Vote, VoteRecord,
+    ContractError, ContractState, DataKey, GovernanceConfig, MultiSigAction, MultiSigActionType,
+    MultiSigConfig, Proposal, ProposalState, SpamConfig, Vote, VoteRecord,
 };
 
 const MAX_TITLE_LEN: u32 = 128;
@@ -160,6 +161,7 @@ fn execute_multisig_action(
         }
         MultiSigActionType::Pause => {
             set_paused(env, true);
+            // Emit using the stored admin address as the actor.
             if let Ok(admin) = storage_get_admin(env) {
                 events::contract_paused(env, &admin, None);
             }
@@ -212,8 +214,10 @@ impl GovernanceContract {
     ///     3_600,      // min 1-hour voting window
     ///     2_592_000,  // max 30-day voting window
     ///     true,       // restrict admin voting
-    ///     GovernanceOptions { amend_window: 0, timelock_duration: 0,
-    ///                           veto_threshold: 0, persistent_storage_ttl: 535_680 },
+    ///     0,          // no amend window
+    ///     0,          // no timelock
+    ///     0,          // veto threshold disabled
+    ///     535_680,    // TTL: ~60 days
     /// )?;
     /// ```
     pub fn initialize(
@@ -243,6 +247,14 @@ impl GovernanceContract {
         if TokenSupplyClient::new(&env, &voting_token).try_total_supply().is_err() {
             return Err(ContractError::InvalidTokenContract);
         }
+        // Validate parameters
+        if min_proposal_balance < 0 {
+            return Err(ContractError::InvalidMinProposalBalance);
+        }
+        if min_duration > max_duration {
+            return Err(ContractError::InvalidDurationConfig);
+        }
+        
         set_admin(&env, &admin);
         set_voting_token(&env, &voting_token);
         let supply = TokenSupplyClient::new(&env, &voting_token).total_supply();
@@ -266,10 +278,12 @@ impl GovernanceContract {
             set_timelock_duration(&env, options.timelock_duration);
         }
         set_veto_threshold(&env, veto_threshold);
-        if options.persistent_storage_ttl > 0 {
-            set_persistent_storage_ttl(&env, options.persistent_storage_ttl);
+
+      if persistent_storage_ttl > 0 {
+            set_persistent_storage_ttl(&env, persistent_storage_ttl);
         }
         set_version(&env, (1, 0, 0));
+        set_metadata_version(&env, 1);
         set_contract_state(&env, &ContractState::Ready);
         events::contract_initialized(&env, &admin);
         Ok(())
@@ -400,6 +414,7 @@ impl GovernanceContract {
             return Err(ContractError::ProposalAlreadyExists);
         }
 
+        let metadata_version = get_metadata_version(&env);
         let proposal = Proposal {
             id,
             proposer: proposer.clone(),
@@ -414,10 +429,11 @@ impl GovernanceContract {
             state: ProposalState::Active,
             execute_after: 0,
             tags,
+            metadata_version,
         };
         save_proposal(&env, &proposal);
         set_last_proposal(&env, &proposer, now);
-        events::proposal_created(&env, id, &proposer);
+        events::proposal_created(&env, id, &proposer, metadata_version);
         Ok(id)
     }
 
@@ -553,6 +569,8 @@ impl GovernanceContract {
         // re-entry, a second cast_vote for the same voter would be rejected.
         mark_voted(&env, proposal_id, &voter);
 
+        let token_client = token::Client::new(&env, &get_voting_token(&env)?);
+        // Snapshot: capture the voter's balance at vote time and persist it.
         let weight = match get_voter_snapshot(&env, proposal_id, &voter) {
             Some(w) => w,
             None => {
@@ -602,10 +620,8 @@ impl GovernanceContract {
         );
         save_proposal(&env, &proposal);
         events::vote_cast(&env, proposal_id, &voter, &vote, weight);
-        if proposal.state == ProposalState::Rejected
-            && veto_threshold > 0
-            && vote == Vote::No
-        {
+        let veto_threshold = get_veto_threshold(&env);
+        if veto_threshold > 0 && proposal.votes_no >= veto_threshold {
             events::proposal_vetoed(&env, proposal_id, proposal.votes_no, veto_threshold);
         }
         Ok(())
@@ -661,6 +677,181 @@ impl GovernanceContract {
     /// Returns `None` for non-voters without reverting. Read-only.
     pub fn get_vote(env: Env, proposal_id: u64, voter: Address) -> Option<VoteRecord> {
         get_vote_record(&env, proposal_id, &voter)
+    }
+
+    // ── Issue #486: Vote delegation / proxy voting ────────────────────────────
+
+    /// Delegates the caller's voting power to `delegatee`.
+    ///
+    /// After delegation, when `delegatee` calls `cast_vote_as_delegate` on a
+    /// proposal, the delegator's token balance is added to the vote weight.
+    ///
+    /// Restrictions:
+    /// - Cannot delegate to oneself.
+    /// - Cannot delegate to the zero address.
+    /// - A new call overwrites any previous delegation (redelegation).
+    ///
+    /// # Errors
+    /// - [`ContractError::ContractPaused`] if the contract is paused.
+    /// - [`ContractError::CannotDelegateToSelf`] if `delegator == delegatee`.
+    /// - [`ContractError::InvalidDelegatee`] if `delegatee` is the zero address.
+    pub fn delegate(
+        env: Env,
+        delegator: Address,
+        delegatee: Address,
+    ) -> Result<(), ContractError> {
+        delegator.require_auth();
+        require_non_zero_address(&env, &delegator)?;
+        if is_paused(&env) {
+            return Err(ContractError::ContractPaused);
+        }
+        if delegator == delegatee {
+            return Err(ContractError::CannotDelegateToSelf);
+        }
+        require_non_zero_address(&env, &delegatee).map_err(|_| ContractError::InvalidDelegatee)?;
+        set_delegation(&env, &delegator, &delegatee);
+        events::delegation_set(&env, &delegator, &delegatee);
+        Ok(())
+    }
+
+    /// Removes the caller's delegation.
+    ///
+    /// # Errors
+    /// - [`ContractError::ContractPaused`] if the contract is paused.
+    /// - [`ContractError::NoDelegationExists`] if no delegation is currently set.
+    pub fn undelegate(env: Env, delegator: Address) -> Result<(), ContractError> {
+        delegator.require_auth();
+        require_non_zero_address(&env, &delegator)?;
+        if is_paused(&env) {
+            return Err(ContractError::ContractPaused);
+        }
+        if get_delegation(&env, &delegator).is_none() {
+            return Err(ContractError::NoDelegationExists);
+        }
+        clear_delegation(&env, &delegator);
+        events::delegation_cleared(&env, &delegator);
+        Ok(())
+    }
+
+    /// Returns the address that `delegator` has delegated to, or `None`.
+    pub fn get_delegate(env: Env, delegator: Address) -> Option<Address> {
+        get_delegation(&env, &delegator)
+    }
+
+    /// Casts a vote on behalf of `voter` and optionally includes weight from
+    /// a list of delegators who have delegated to `voter`.
+    ///
+    /// For each address in `delegators`:
+    /// - The delegation to `voter` is verified on-chain.
+    /// - If the delegator has not already voted, their token balance is added to
+    ///   the vote weight and they are marked as having voted (via delegation).
+    ///
+    /// # Errors
+    /// Same as `cast_vote`, plus:
+    /// - [`ContractError::NoVotingPower`] if combined weight is zero.
+    pub fn cast_vote_as_delegate(
+        env: Env,
+        voter: Address,
+        proposal_id: u64,
+        vote: Vote,
+        delegators: Vec<Address>,
+    ) -> Result<(), ContractError> {
+        voter.require_auth();
+        require_non_zero_address(&env, &voter)?;
+        if is_paused(&env) {
+            return Err(ContractError::ContractPaused);
+        }
+
+        let proposal = load_proposal(&env, proposal_id)?;
+        if proposal.state != ProposalState::Active {
+            return Err(ContractError::ProposalNotActive);
+        }
+        let now = env.ledger().timestamp();
+        if now < proposal.start_time {
+            return Err(ContractError::VotingNotStarted);
+        }
+        if now >= proposal.end_time {
+            return Err(ContractError::VotingPeriodEnded);
+        }
+        if has_voted(&env, proposal_id, &voter) {
+            return Err(ContractError::AlreadyVoted);
+        }
+
+        if get_restrict_admin_vote(&env) {
+            let admin = storage_get_admin(&env)?;
+            if voter == admin && proposal.proposer == admin {
+                return Err(ContractError::AdminVoteRestricted);
+            }
+        }
+
+        // Mark delegate as voted before cross-contract calls (SEC-010).
+        mark_voted(&env, proposal_id, &voter);
+
+        let token_client = token::Client::new(&env, &get_voting_token(&env)?);
+        let own_weight = token_client.balance(&voter);
+        save_voter_snapshot(&env, proposal_id, &voter, own_weight);
+
+        // Accumulate delegated weight.
+        let mut delegated_weight: i128 = 0;
+        for delegator in delegators.iter() {
+            // Verify the delegator actually delegated to this voter.
+            let registered = get_delegation(&env, &delegator);
+            if registered.as_ref() != Some(&voter) {
+                continue; // skip invalid entries silently
+            }
+            // Skip if the delegator already voted on their own.
+            if has_voted(&env, proposal_id, &delegator) {
+                continue;
+            }
+            let d_weight = token_client.balance(&delegator);
+            if d_weight > 0 {
+                delegated_weight = delegated_weight
+                    .checked_add(d_weight)
+                    .ok_or(ContractError::VoteTallyOverflow)?;
+                // Mark delegator as voted so they cannot double-vote.
+                mark_voted(&env, proposal_id, &delegator);
+                save_voter_snapshot(&env, proposal_id, &delegator, d_weight);
+            }
+        }
+
+        let weight = own_weight
+            .checked_add(delegated_weight)
+            .ok_or(ContractError::VoteTallyOverflow)?;
+        if weight <= 0 {
+            return Err(ContractError::NoVotingPower);
+        }
+
+        let mut proposal = proposal;
+        match vote {
+            Vote::Yes => {
+                proposal.votes_yes = proposal
+                    .votes_yes
+                    .checked_add(weight)
+                    .ok_or(ContractError::VoteTallyOverflow)?
+            }
+            Vote::No => {
+                proposal.votes_no = proposal
+                    .votes_no
+                    .checked_add(weight)
+                    .ok_or(ContractError::VoteTallyOverflow)?
+            }
+            Vote::Abstain => {
+                proposal.votes_abstain = proposal
+                    .votes_abstain
+                    .checked_add(weight)
+                    .ok_or(ContractError::VoteTallyOverflow)?
+            }
+        }
+
+        save_vote_record(
+            &env,
+            proposal_id,
+            &voter,
+            &VoteRecord { vote_type: vote.clone(), weight },
+        );
+        save_proposal(&env, &proposal);
+        events::vote_cast(&env, proposal_id, &voter, &vote, weight);
+        Ok(())
     }
 
     /// Finalises a proposal after its voting period has ended.
@@ -804,6 +995,49 @@ impl GovernanceContract {
         events::quorum_updated(&env, proposal_id, new_quorum);
         Ok(())
     }
+
+    /// Updates the minimum allowed voting duration. Admin only.
+    pub fn update_min_duration(env: Env, admin: Address, new_min: u64) -> Result<(), ContractError> {
+        admin.require_auth();
+        require_non_zero_address(&env, &admin)?;
+        if get_admin(&env)? != admin { return Err(ContractError::NotAdmin); }
+        if new_min == 0 { return Err(ContractError::InvalidDuration); }
+        if new_min > get_max_duration(&env) { return Err(ContractError::InvalidDurationRange); }
+        set_min_duration(&env, new_min);
+        events::min_duration_updated(&env, new_min);
+        Ok(())
+    }
+
+    /// Updates the maximum allowed voting duration. Admin only.
+    pub fn update_max_duration(env: Env, admin: Address, new_max: u64) -> Result<(), ContractError> {
+        admin.require_auth();
+        require_non_zero_address(&env, &admin)?;
+        if get_admin(&env)? != admin { return Err(ContractError::NotAdmin); }
+        if new_max < get_min_duration(&env) { return Err(ContractError::InvalidDurationRange); }
+        set_max_duration(&env, new_max);
+        events::max_duration_updated(&env, new_max);
+        Ok(())
+    }
+
+    /// Updates the default quorum hint. Does not affect existing proposals. Admin only.
+    pub fn update_quorum_default(env: Env, admin: Address, new_default: i128) -> Result<(), ContractError> {
+        admin.require_auth();
+        require_non_zero_address(&env, &admin)?;
+        if get_admin(&env)? != admin { return Err(ContractError::NotAdmin); }
+        if new_default <= 0 { return Err(ContractError::InvalidQuorum); }
+        set_quorum_default(&env, new_default);
+        events::quorum_default_updated(&env, new_default);
+        Ok(())
+    }
+
+    /// Returns the configured minimum duration in seconds.
+    pub fn get_min_duration_config(env: Env) -> u64 { get_min_duration(&env) }
+
+    /// Returns the configured maximum duration in seconds.
+    pub fn get_max_duration_config(env: Env) -> u64 { get_max_duration(&env) }
+
+    /// Returns the default quorum (0 if not set).
+    pub fn get_quorum_default_config(env: Env) -> i128 { get_quorum_default(&env) }
 
     /// Transfers admin rights to a new address. Only the current admin may call this.
     ///
@@ -964,6 +1198,26 @@ impl GovernanceContract {
         load_proposal(&env, proposal_id)
     }
 
+    /// Returns the compact metadata summary for a proposal (issue #485).
+    ///
+    /// The summary contains the title, a 256-byte description preview, a
+    /// FNV-1a checksum of the full description, and the full description length.
+    /// It is cheaper to load than the full [`Proposal`] entry and suitable for
+    /// list-view rendering.
+    ///
+    /// Returns `None` for proposals created before this feature was deployed.
+    ///
+    /// # Errors
+    /// - [`ContractError::ProposalNotFound`] if `proposal_id` does not exist.
+    pub fn get_metadata_summary(
+        env: Env,
+        proposal_id: u64,
+    ) -> Result<types::ProposalMetadata, ContractError> {
+        // Verify the proposal exists first.
+        load_proposal(&env, proposal_id)?;
+        storage::load_metadata_summary(&env, proposal_id).ok_or(ContractError::ProposalNotFound)
+    }
+
     /// Returns the total number of proposals ever created.
     pub fn proposal_count(env: Env) -> u64 {
         env.storage()
@@ -982,6 +1236,14 @@ impl GovernanceContract {
     /// Returns the contract version as a `(major, minor, patch)` semver tuple.
     pub fn get_version(env: Env) -> (u32, u32, u32) {
         get_version(&env)
+    }
+
+    /// SC-006: Returns the configured persistent storage TTL bump parameters.
+    ///
+    /// Returns `(bump_amount, bump_threshold)` — both in ledger counts.
+    /// When not explicitly set at `initialize`, both default to `LEDGERS_TO_LIVE` (~31 days).
+    pub fn get_storage_ttl_config(env: Env) -> (u32, u32) {
+        (get_storage_bump_amount(&env), get_storage_bump_threshold(&env))
     }
 
     /// Returns the contract lifecycle state.
@@ -1013,9 +1275,9 @@ impl GovernanceContract {
             return Err(ContractError::MigrationFailed);
         }
 
-        // Place migration logic here. Currently no structural key renames are
-        // necessary; this is the canonical place to transform any values that
-        // need reshaping between versions.
+        // Bump metadata version so proposals created after this migration carry
+        // version 2, while existing proposals retain version 1 (#547).
+        set_metadata_version(&env, 2);
 
         // Bump version to v2.0.0 and emit event.
         set_version(&env, (2, 0, 0));
@@ -1248,5 +1510,72 @@ impl GovernanceContract {
     /// Returns the current multi-sig configuration, or `None` if not configured.
     pub fn get_multisig_config(env: Env) -> Option<MultiSigConfig> {
         storage_get_multisig_config(&env)
+    }
+
+    // =========================================================================
+    // Metadata versioning (#547)
+    // =========================================================================
+
+    /// Returns the current metadata schema version for newly created proposals.
+    ///
+    /// Each proposal stores its own `metadata_version` at creation time, allowing
+    /// indexers and clients to identify the correct deserialization path across
+    /// contract upgrades. This function returns the version that NEWLY created
+    /// proposals will receive; existing proposals retain the version they were
+    /// created with.
+    pub fn get_metadata_version(env: Env) -> u32 {
+        get_metadata_version(&env)
+    }
+
+    // =========================================================================
+    // Anti-spam guard admin controls (#548)
+    // =========================================================================
+
+    /// Updates the spam-prevention parameters. Only the admin may call this.
+    ///
+    /// Both parameters are optional; pass the current value to leave it unchanged.
+    /// A value of `0` disables the corresponding guard.
+    ///
+    /// # Parameters
+    /// - `admin` – Contract administrator.
+    /// - `min_proposal_balance` – New minimum token balance required to create
+    ///   a proposal. Set to `0` to remove the balance requirement.
+    /// - `proposal_cooldown` – New minimum seconds a proposer must wait between
+    ///   consecutive proposals. Set to `0` to remove the cooldown.
+    ///
+    /// # Errors
+    /// - [`ContractError::InvalidAddress`] if `admin` is the zero address.
+    /// - [`ContractError::NotAdmin`] if `admin` does not match the stored admin.
+    /// - [`ContractError::ContractPaused`] if the contract is paused.
+    /// - [`ContractError::InvalidSpamConfig`] if `min_proposal_balance` is negative.
+    pub fn update_spam_config(
+        env: Env,
+        admin: Address,
+        min_proposal_balance: i128,
+        proposal_cooldown: u64,
+    ) -> Result<(), ContractError> {
+        admin.require_auth();
+        require_non_zero_address(&env, &admin)?;
+        if is_paused(&env) {
+            return Err(ContractError::ContractPaused);
+        }
+        if storage_get_admin(&env)? != admin {
+            return Err(ContractError::NotAdmin);
+        }
+        if min_proposal_balance < 0 {
+            return Err(ContractError::InvalidSpamConfig);
+        }
+        set_min_proposal_balance(&env, min_proposal_balance);
+        set_proposal_cooldown(&env, proposal_cooldown);
+        events::spam_config_updated(&env, min_proposal_balance, proposal_cooldown);
+        Ok(())
+    }
+
+    /// Returns the current spam-prevention configuration.
+    pub fn get_spam_config(env: Env) -> SpamConfig {
+        SpamConfig {
+            min_proposal_balance: get_min_proposal_balance(&env),
+            proposal_cooldown: get_proposal_cooldown(&env),
+        }
     }
 }

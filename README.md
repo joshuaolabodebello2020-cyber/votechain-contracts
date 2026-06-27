@@ -176,68 +176,69 @@ Proposal reaches terminal state
 
 ## Quick Start
 
-### Prerequisites
+Choose the path that matches your goal:
 
-- Rust 1.75+ with `wasm32-unknown-unknown` target
-- Stellar CLI **21.6.0** (pinned — see [Upgrading Stellar CLI](#upgrading-stellar-cli))
-- Docker & Docker Compose (optional, for reproducible environment)
+### Option A — Contracts only (no Docker)
 
-### Installing Stellar CLI
+**Prerequisites:** Rust 1.75+, `wasm32-unknown-unknown` target, Stellar CLI 21.6.0
 
 ```bash
+# Install Rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Add WASM target and Stellar CLI
+rustup target add wasm32-unknown-unknown
 cargo install --locked stellar-cli@21.6.0 --features opt
-```
 
-Verify the installed version:
-
-```bash
-stellar --version   # must print 21.6.0
-# or
-make check-stellar-cli
-```
-
-### Upgrading Stellar CLI
-
-To upgrade to a new pinned version:
-
-1. Update `STELLAR_CLI_VERSION` in `Makefile`
-2. Update `STELLAR_CLI_VERSION` env var in `.github/workflows/ci.yml`
-3. Update the version in this README
-4. Run `make check-stellar-cli` to verify
-5. Commit all three files together
-
-### Installation & Testing
-
-```bash
-# Clone the repository
+# Clone and test
 git clone https://github.com/Vera3289/votechain-contracts.git
 cd votechain-contracts
-
-# Add WASM target
-rustup target add wasm32-unknown-unknown
-
-# Run tests
-make test
-
-# Build WASM binaries
-make build
-
-# View generated documentation
-cargo doc --no-deps --open
+make test        # run all contract tests
+make build       # compile WASM binaries
 ```
 
-### Verify Installation
+### Option B — Full stack with Docker
+
+**Prerequisites:** Docker and Docker Compose
 
 ```bash
-# Check Rust version
-rustc --version
+git clone https://github.com/Vera3289/votechain-contracts.git
+cd votechain-contracts
+docker compose up          # starts local Stellar node + dev container
 
-# Check WASM target
-rustup target list | grep wasm32-unknown-unknown
-
-# Run a quick test
-make test 2>&1 | head -20
+# In another terminal:
+docker compose run --rm dev make test    # run contract tests
+docker compose run --rm dev make build   # build WASM
 ```
+
+### Option C — Frontend development
+
+**Prerequisites:** Node.js 18+
+
+```bash
+cd frontend
+npm install
+npm run dev    # starts Vite dev server at http://localhost:5173
+```
+
+### Option D — Backend / indexer
+
+```bash
+cd backend
+npm install
+npm run dev    # starts Express API server
+```
+
+### Verify your contract setup
+
+```bash
+rustc --version                              # 1.75.0+
+stellar --version                            # 21.6.0
+rustup target list | grep wasm32             # installed
+make test 2>&1 | tail -5                     # all tests pass
+```
+
+> For a full walkthrough see [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) and [docs/ONBOARDING.md](docs/ONBOARDING.md).
 
 ---
 
@@ -1472,6 +1473,7 @@ See [docs/security/known-issues.md](docs/security/known-issues.md) for:
 ### Audit & Compliance
 
 - **Audit Status:** Completed (see [AUDIT.md](AUDIT.md))
+- **Audit Results & Mitigations:** [docs/security/AUDIT_RESULTS.md](docs/security/AUDIT_RESULTS.md)
 - **Vulnerability Disclosure:** See [SECURITY.md](SECURITY.md)
 - **Scope:** [docs/security/audit-scope.md](docs/security/audit-scope.md)
 
@@ -1507,6 +1509,7 @@ We welcome contributions from the community. Please see [CONTRIBUTING.md](CONTRI
 ### Documentation
 
 - **[GETTING_STARTED.md](docs/GETTING_STARTED.md)** — Step-by-step setup guide
+- **[API Reference](docs/api-reference.md)** — Backend and indexer REST API reference
 - **[DAO Integration Guide](docs/dao-integration-guide.md)** — Deploy, configure, and run governance for your DAO
 - **[Proposal Lifecycle](docs/lifecycle.md)** — Detailed state diagram and transitions
 - **[Storage Model](docs/storage.md)** — Storage tier strategy and optimization

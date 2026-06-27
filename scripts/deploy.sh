@@ -9,7 +9,7 @@ CONFIG="config/${NETWORK}.toml"
 ENV_FILE=".env.${NETWORK}"
 
 if [[ ! -f "$CONFIG" ]]; then
-  echo "Error: config file '$CONFIG' not found. Valid values: local, testnet, mainnet" >&2
+  echo "Error: config file '$CONFIG' not found. Valid values: local, testnet, staging, mainnet" >&2
   exit 1
 fi
 

@@ -1,0 +1,26 @@
+{
+  "onboarding": {
+    "welcome":         { "title": "Bienvenido a VoteChain", "body": "VoteChain permite que tu comunidad cree propuestas, vote con peso de tokens y ejecute decisiones de forma transparente en la blockchain de Stellar.", "cta": "Comenzar" },
+    "connect-wallet":  { "title": "Conecta tu billetera",   "body": "Conecta una billetera compatible con Stellar (p. ej. Freighter) para participar en la gobernanza. Tu peso de voto equivale a tu saldo de tokens.", "cta": "Siguiente" },
+    "create-proposal": { "title": "Crea una propuesta",     "body": "Cualquier dirección puede enviar una propuesta. Proporciona un título, descripción, quórum mínimo y duración de la votación en segundos.", "cta": "Siguiente" },
+    "cast-vote":       { "title": "Emite tu voto",           "body": "Durante el período activo de votación, elige Sí, No o Abstención. Cada dirección puede votar exactamente una vez por propuesta.", "cta": "Siguiente" },
+    "lifecycle":       { "title": "Ciclo de vida",           "body": "Al finalizar el período de votación, cualquiera puede cerrar la propuesta. Se aprueba cuando total_votos ≥ quórum Y sí > no; luego un administrador puede ejecutarla.", "cta": "Siguiente" },
+    "done":            { "title": "Listo para gobernar",     "body": "Puedes revisar este tutorial en cualquier momento desde el menú Ayuda.", "cta": "Listo" }
+  },
+  "glossary": {
+    "proposal":    "Un elemento de gobernanza en cadena con título, descripción, quórum y ventana de votación. Cualquier dirección puede crearlo.",
+    "quorum":      "El mínimo de votos totales necesarios para que una propuesta sea válida.",
+    "vote-weight": "La cantidad de tokens de gobernanza que posee el votante al momento de votar.",
+    "abstain":     "Opción de voto que cuenta para el quórum pero no apoya ni rechaza la propuesta.",
+    "finalise":    "Cerrar una propuesta tras expirar el período de votación. El contrato la marca Aprobada o Rechazada.",
+    "execute":     "Acción del administrador que marca una propuesta Aprobada como Ejecutada.",
+    "cancel":      "Acción del administrador que detiene una propuesta Activa antes de que venza.",
+    "lifecycle":   "Activa → Aprobada/Rechazada → Ejecutada, o Activa → Cancelada."
+  },
+  "common": {
+    "dismiss": "Cerrar",
+    "reopen":  "Ayuda",
+    "close":   "Cerrar",
+    "step":    "Paso {{current}} de {{total}}"
+  }
+}

@@ -1,24 +1,28 @@
 /**
  * Governance routes - provides dashboard metrics and statistics.
- * Replace stub handlers with real Stellar RPC / indexer calls.
+ * RPC calls are wrapped with a circuit breaker so upstream failures degrade
+ * gracefully instead of cascading.
  */
 
 import { Router, Request, Response } from "express";
+import { validate } from "../middleware/requestValidator";
 
 const router = Router();
 
 interface ProposalStats {
   byState: Record<string, number>;
-  participationOverTime: Array<{ date: string; rate: number }>;
-  topVoters: Array<{ address: string; total_weight: number }>;
-  avgQuorumAchievement: number;
+  totalProposals: number;
 }
 
-// GET /governance/stats — returns governance health metrics
-router.get("/governance/stats", async (_req: Request, res: Response) => {
+// GET /governance/stats — returns governance health metrics (no inputs expected)
+router.get(
+  "/governance/stats",
+  validate({}),
+  async (_req: Request, res: Response) => {
   try {
-    // TODO: Replace with real API calls to Stellar RPC / indexer
-    const stats: ProposalStats = {
+    // Wrap the upstream RPC call in the circuit breaker.
+    // Swap the lambda body for a real Stellar RPC / indexer call.
+    const stats: ProposalStats = await rpcCircuitBreaker.call(async () => ({
       byState: {
         Active: 3,
         Passed: 12,
@@ -46,12 +50,36 @@ router.get("/governance/stats", async (_req: Request, res: Response) => {
         { address: "GCDE...7890", total_weight: 1_500_000 },
       ],
       avgQuorumAchievement: 73,
-    };
+    }));
 
+    const proposals = (
+      await Promise.all(
+        ids.map((id) =>
+          readContractData(
+            getGovernanceContractId(),
+            xdr.ScVal.scvMap([
+              new xdr.ScMapEntry({
+                key: nativeToScVal("Proposal"),
+                val: nativeToScVal(id, { type: "u64" }),
+              }),
+            ])
+          )
+        )
+      )
+    ).filter(Boolean) as Array<Record<string, unknown>>;
+
+    const byState: Record<string, number> = {};
+    for (const p of proposals) {
+      const state = String(p.state ?? "Unknown");
+      byState[state] = (byState[state] ?? 0) + 1;
+    }
+
+    const stats: ProposalStats = { byState, totalProposals: count };
     res.json(stats);
-  } catch (error) {
+  } catch (err) {
+    const error = wrapRpcError(err);
     console.error("Error fetching governance stats:", error);
-    res.status(500).json({ error: "Failed to fetch governance statistics" });
+    res.status(500).json(withCorrelationId(res, { error: "Failed to fetch governance statistics" }));
   }
 });
 
