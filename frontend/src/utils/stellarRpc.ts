@@ -3,6 +3,7 @@
  */
 
 import type { Network } from '../store';
+import { api, ApiClient } from '../api/ApiClient';
 
 export interface RpcValidationResult {
   isValid: boolean;
@@ -52,18 +53,23 @@ export function validateRpcUrl(url: string): RpcValidationResult {
  */
 export async function checkRpcHealth(rpcUrl: string): Promise<boolean> {
   try {
-    const response = await fetch(rpcUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    // Temporarily override the base URL for this specific health check
+    // In a more complex scenario, you might pass a custom ApiClient instance
+    const healthApi = new ApiClient(rpcUrl);
+    await healthApi.post(
+      '', // Empty endpoint as rpcUrl is the full path
+      {
         jsonrpc: '2.0',
         id: 1,
         method: 'getHealth',
         params: {},
-      }),
-      signal: AbortSignal.timeout(5000),
-    });
-    return response.ok;
+      },
+      {
+        signal: AbortSignal.timeout(5000),
+        skipErrorNotification: true, // Don't show a notification for this specific check
+      }
+    );
+    return true;
   } catch {
     return false;
   }

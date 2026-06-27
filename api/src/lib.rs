@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fs::{File, OpenOptions};
+use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::path::PathBuf;
 use utoipa::{IntoParams, OpenApi, ToSchema};
 
 /// Local proposal state mirror used by the REST indexer.
@@ -100,20 +103,91 @@ pub struct ProposalListParams {
     pub state: Option<ProposalState>,
 }
 
-/// In-memory event indexer for proposal and vote query patterns.
-#[derive(Debug, Default)]
+/// In-memory event indexer with persistent event log backing.
+#[derive(Debug)]
 pub struct Indexer {
     proposals: HashMap<u64, ProposalDetail>,
     votes_by_proposal: HashMap<u64, Vec<VoteRecord>>,
     votes_by_voter: HashMap<String, Vec<VoteRecord>>,
+    log_path: PathBuf,
+}
+
+impl Default for Indexer {
+    fn default() -> Self {
+        Self::new("indexer_events.log")
+    }
 }
 
 impl Indexer {
-    pub fn new() -> Self {
-        Self::default()
+    /// Create new indexer with persistence to the given path.
+    pub fn new(log_path: impl Into<PathBuf>) -> Self {
+        let log_path = log_path.into();
+        let mut indexer = Self {
+            proposals: HashMap::new(),
+            votes_by_proposal: HashMap::new(),
+            votes_by_voter: HashMap::new(),
+            log_path,
+        };
+        
+        // Load existing events from log
+        if let Err(e) = indexer.load_from_log() {
+            eprintln!("Warning: Failed to load events from log: {}", e);
+        }
+        
+        indexer
     }
 
+    /// Load events from the persistent log.
+    fn load_from_log(&mut self) -> std::io::Result<()> {
+        if !self.log_path.exists() {
+            return Ok(());
+        }
+        
+        let file = File::open(&self.log_path)?;
+        let reader = BufReader::new(file);
+        
+        for line in reader.lines() {
+            let line = line?;
+            if line.trim().is_empty() {
+                continue;
+            }
+            match serde_json::from_str::<Event>(&line) {
+                Ok(event) => {
+                    // Ingest without writing to log again (to prevent loops)
+                    self.ingest_without_log(event);
+                }
+                Err(e) => {
+                    eprintln!("Warning: Skipping invalid event in log: {}", e);
+                }
+            }
+        }
+        
+        Ok(())
+    }
+
+    /// Append event to the persistent log.
+    fn append_to_log(&self, event: &Event) -> std::io::Result<()> {
+        let file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.log_path)?;
+        let mut writer = BufWriter::new(file);
+        serde_json::to_writer(&mut writer, event)?;
+        writer.write_all(b"\n")?;
+        writer.flush()?;
+        Ok(())
+    }
+
+    /// Ingest an event and persist it to the log.
     pub fn ingest(&mut self, event: Event) {
+        if let Err(e) = self.append_to_log(&event) {
+            eprintln!("Warning: Failed to persist event to log: {}", e);
+        }
+        self.ingest_without_log(event);
+    }
+
+    /// Ingest an event without persisting to log (used for loading from log).
+    fn ingest_without_log(&mut self, event: Event) {
         match event {
             Event::ProposalCreated {
                 id,
