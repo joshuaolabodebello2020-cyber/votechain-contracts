@@ -31,6 +31,8 @@ Every entry belongs under a release heading and one of the following subsection 
 - Short description of a security fix or hardening measure.
 ```
 
+> For the full contribution and release process see [docs/CHANGELOG_PROCESS.md](docs/CHANGELOG_PROCESS.md).
+
 **Rules:**
 - Use plain English, present tense, imperative mood: "Add", "Fix", "Remove".
 - Each bullet is one logical change; keep it to one or two sentences.

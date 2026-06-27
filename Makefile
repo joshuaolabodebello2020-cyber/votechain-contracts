@@ -1,4 +1,4 @@
-.PHONY: build test fmt fmt-check lint clean deploy-testnet check-stellar-cli help
+.PHONY: build test coverage coverage-frontend coverage-backend coverage-all fmt fmt-check lint clean deploy-testnet check-stellar-cli help
 
 STELLAR_CLI_VERSION := 21.6.0
 
@@ -9,6 +9,22 @@ build:
 ## test: Run all unit tests
 test:
 	cargo test
+
+## coverage: Generate Rust coverage report (requires cargo-llvm-cov)
+coverage:
+	cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
+	cargo llvm-cov --all-features --workspace --summary-only
+
+## coverage-frontend: Generate frontend coverage report
+coverage-frontend:
+	cd frontend && npm run test:coverage
+
+## coverage-backend: Generate backend coverage report
+coverage-backend:
+	cd backend && npm run test:coverage
+
+## coverage-all: Run all coverage reports
+coverage-all: coverage coverage-frontend coverage-backend
 
 ## fmt: Auto-format all source files
 fmt:
@@ -44,6 +60,14 @@ check-stellar-cli:
 	else \
 		echo "stellar-cli $(STELLAR_CLI_VERSION) OK"; \
 	fi
+
+## load-test-backend: Run k6 load test against the backend API (requires k6)
+load-test-backend:
+	k6 run load-tests/backend.js
+
+## load-test-indexer: Run k6 load test against the indexer (requires k6)
+load-test-indexer:
+	k6 run load-tests/indexer.js
 
 ## help: List all available targets
 help:

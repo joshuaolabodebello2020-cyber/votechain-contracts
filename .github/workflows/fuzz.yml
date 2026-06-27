@@ -1,11 +1,10 @@
 name: Fuzz (nightly, optional)
 
 # Runs nightly on main, or on-demand via workflow_dispatch.
-# This job is intentionally non-blocking — failures are surfaced as
-# annotations but do not gate merges.
+# Non-blocking — failures are surfaced as annotations but do not gate merges.
 on:
   schedule:
-    - cron: "0 2 * * *"   # 02:00 UTC every day
+    - cron: "0 2 * * *"
   workflow_dispatch:
     inputs:
       fuzz_duration:
@@ -13,11 +12,22 @@ on:
         required: false
         default: "120"
 
+env:
+  FUZZ_DIR: contracts/governance
+
 jobs:
-  fuzz-create-proposal:
-    name: Fuzz create_proposal
+  fuzz:
+    name: Fuzz ${{ matrix.target }}
     runs-on: ubuntu-latest
-    continue-on-error: true   # non-blocking
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - fuzz_create_proposal
+          - fuzz_cast_vote
+          - fuzz_finalise
+
     steps:
       - uses: actions/checkout@v4
 
@@ -29,22 +39,23 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-fuzz-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-fuzz-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
+            ${{ runner.os }}-fuzz-${{ matrix.target }}-
             ${{ runner.os }}-fuzz-
 
       - name: Install cargo-fuzz
         run: cargo install --locked cargo-fuzz
 
-      - name: Run fuzz target
-        working-directory: contracts/governance
+      - name: Run fuzz target — ${{ matrix.target }}
+        working-directory: ${{ env.FUZZ_DIR }}
         run: |
           DURATION="${{ github.event.inputs.fuzz_duration || '120' }}"
-          cargo fuzz run fuzz_create_proposal -- -max_total_time="$DURATION"
+          cargo fuzz run ${{ matrix.target }} -- -max_total_time="$DURATION"
 
       - name: Upload crash artifacts
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: fuzz-crashes
-          path: contracts/governance/fuzz/artifacts/fuzz_create_proposal/
+          name: fuzz-crashes-${{ matrix.target }}
+          path: ${{ env.FUZZ_DIR }}/fuzz/artifacts/${{ matrix.target }}/

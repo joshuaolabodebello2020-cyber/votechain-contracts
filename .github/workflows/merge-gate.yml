@@ -1,0 +1,62 @@
+name: Merge Gate Enforcement
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+jobs:
+  merge-gate:
+    name: Enforce Merge Gate
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+      statuses: read
+
+    steps:
+      - name: Check required status checks
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            
+            const requiredChecks = [
+              'CI / test',
+              'CI / build-wasm',
+              'CodeQL'
+            ];
+            
+            console.log('PR Status:', {
+              number: pr.number,
+              title: pr.title,
+              state: pr.state,
+              mergeable: pr.mergeable,
+              draft: pr.draft
+            });
+            
+            // Note: This is informational only
+            // Actual enforcement is handled by GitHub's branch protection rules
+
+      - name: Validate commit messages
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const title = pr.title;
+            
+            // Conventional Commits format: type(scope): description
+            const pattern = /^(feat|fix|docs|style|refactor|test|chore|ci|devops|perf)(\(.+\))?!?: .{1,}$/;
+            
+            if (!pattern.test(title)) {
+              core.setFailed(
+                `PR title does not follow Conventional Commits format.\n` +
+                `Current: "${title}"\n` +
+                `Expected: "type(scope): description"\n` +
+                `Valid types: feat, fix, docs, style, refactor, test, chore, ci, devops, perf`
+              );
+            } else {
+              console.log(`✓ PR title follows Conventional Commits format: "${title}"`);
+            }

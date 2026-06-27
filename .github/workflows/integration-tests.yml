@@ -1,0 +1,102 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+      stellar-node:
+        image: stellar/quickstart:latest
+        ports:
+          - 8000:8000
+        env:
+          ENABLE_SOROBAN_RPC: "true"
+        options: >-
+          --health-cmd "curl -sf http://localhost:8000/"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+          --health-start-period 15s
+
+    env:
+      NETWORK: local
+      STELLAR_RPC_URL: http://localhost:8000/soroban/rpc
+      STELLAR_NETWORK_PASSPHRASE: "Standalone Network ; February 2017"
+      REDIS_URL: redis://localhost:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: rustfmt, clippy
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-integration-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-integration-
+
+      - name: Install Stellar CLI
+        run: cargo install --locked stellar-cli --features opt
+
+      - name: Generate integration deployer key
+        run: |
+          stellar keys generate --network local integration-deployer 2>/dev/null || true
+          echo "STELLAR_SECRET_KEY=$(stellar keys show integration-deployer --secret-key)" >> "$GITHUB_ENV"
+
+      - name: Build contracts
+        run: stellar contract build
+
+      - name: Deploy contracts to local network
+        run: |
+          NETWORK=local ./scripts/deploy.sh 2>&1 | tee /tmp/deploy.log
+          # Extract contract IDs and export for subsequent steps
+          GOV_ID=$(grep -oE 'GOVERNANCE_CONTRACT_ID=[A-Z0-9]{56}' /tmp/deploy.log \
+                    | tail -1 | cut -d= -f2 || true)
+          TOKEN_ID=$(grep -oE 'TOKEN_CONTRACT_ID=[A-Z0-9]{56}' /tmp/deploy.log \
+                      | tail -1 | cut -d= -f2 || true)
+          echo "VOTECHAIN_GOVERNANCE_CONTRACT_ID=$GOV_ID" >> "$GITHUB_ENV"
+          echo "VOTECHAIN_TOKEN_CONTRACT_ID=$TOKEN_ID"    >> "$GITHUB_ENV"
+
+      - name: Run contract integration tests
+        run: cargo test --test '*' -- --nocapture
+
+      - name: Run backend integration tests
+        working-directory: backend
+        run: |
+          npm ci
+          npx vitest run --reporter=verbose
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: /tmp/deploy.log
+          retention-days: 7
