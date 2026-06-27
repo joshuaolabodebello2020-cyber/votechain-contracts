@@ -61,6 +61,14 @@ check-stellar-cli:
 		echo "stellar-cli $(STELLAR_CLI_VERSION) OK"; \
 	fi
 
+## load-test-backend: Run k6 load test against the backend API (requires k6)
+load-test-backend:
+	k6 run load-tests/backend.js
+
+## load-test-indexer: Run k6 load test against the indexer (requires k6)
+load-test-indexer:
+	k6 run load-tests/indexer.js
+
 ## help: List all available targets
 help:
 	@grep -E '^## ' Makefile | sed 's/^## //' | column -t -s ':'
