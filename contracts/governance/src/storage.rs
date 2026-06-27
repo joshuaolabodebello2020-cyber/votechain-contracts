@@ -38,8 +38,7 @@
 //! collide even when called with identical arguments.
 
 use soroban_sdk::{Env, Address, String};
-use crate::types::{ContractError, ContractState, DataKey, Proposal, VoteRecord};
-use soroban_sdk::{Address, Env};
+use crate::types::{ContractError, ContractState, DataKey, MultiSigAction, MultiSigConfig, Proposal, VoteRecord};
 
 // =============================================================================
 // SC-006: Storage TTL bump helpers
@@ -614,4 +613,22 @@ pub fn bump_multisig_approval_ttl(env: &Env, action_id: u64, approver: &Address)
     env.storage()
         .persistent()
         .bump(&DataKey::MultiSigApproval(action_id, approver.clone()), ttl);
+}
+
+// =============================================================================
+// Metadata version storage (#547)
+// =============================================================================
+
+/// Stores the current metadata schema version for newly created proposals.
+/// Bumped by `migrate()` when the proposal data format evolves.
+pub fn set_metadata_version(env: &Env, v: u32) {
+    env.storage().instance().set(&DataKey::MetadataVersion, &v);
+}
+
+/// Returns the stored metadata version, defaulting to 1 (initial schema).
+pub fn get_metadata_version(env: &Env) -> u32 {
+    env.storage()
+        .instance()
+        .get(&DataKey::MetadataVersion)
+        .unwrap_or(1)
 }

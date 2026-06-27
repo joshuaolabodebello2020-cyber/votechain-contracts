@@ -1,0 +1,29 @@
+# GitHub CODEOWNERS file
+# This file specifies the owners/reviewers for different parts of the repository
+# Ref: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Global owners - required for all changes
+* @Vera3289
+
+# Contract governance module
+contracts/governance/ @Vera3289
+
+# Contract token module
+contracts/token/ @Vera3289
+
+# All documentation files
+*.md @Vera3289
+docs/ @Vera3289
+
+# CI/CD and DevOps
+.github/ @Vera3289
+scripts/ @Vera3289
+Dockerfile @Vera3289
+docker-compose.yml @Vera3289
+Makefile @Vera3289
+
+# Configuration files
+Cargo.toml @Vera3289
+Cargo.lock @Vera3289
+*.yml @Vera3289
+*.yaml @Vera3289

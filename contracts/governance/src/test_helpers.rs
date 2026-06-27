@@ -15,8 +15,6 @@
 use soroban_sdk::{testutils::Address as _, Address, Env, String, Vec};
 use crate::{GovernanceContract, GovernanceContractClient};
 use crate::types::Vote;
-use crate::{GovernanceContract, GovernanceContractClient};
-use soroban_sdk::{testutils::Address as _, Address, Env, String};
 
 /// Returned by [`setup_env`] — holds every handle needed by a test.
 pub struct TestEnv {
@@ -43,7 +41,19 @@ pub fn setup_env() -> TestEnv {
     let tok = votechain_token::TokenContractClient::new(&env, &tok_id);
     tok.initialize(&admin, &10_000_000);
 
-    client.initialize(&admin, &tok_id, &0_i128, &0_u64, &60_u64, &2_592_000_u64, &false, &0_u64, &0_u64, &0_i128, &0_u32, &0_u32);
+    client.initialize(
+        &admin,
+        &tok_id,
+        &0_i128,        // min_proposal_balance
+        &0_u64,         // proposal_cooldown
+        &60_u64,        // min_duration
+        &2_592_000_u64, // max_duration
+        &false,         // restrict_admin_vote
+        &0_u64,         // amend_window
+        &0_u64,         // timelock_duration
+        &0_i128,        // veto_threshold
+        &0_u32,         // persistent_storage_ttl
+    );
 
     TestEnv {
         env,

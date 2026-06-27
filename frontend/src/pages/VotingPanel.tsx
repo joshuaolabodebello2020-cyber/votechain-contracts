@@ -1,4 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, lazy, Suspense } from 'react';
+import VotingPanelSkeleton from './VotingPanelSkeleton';
+
+const LazyVotingPanelContent = lazy(() => import('./VotingPanelContent'));
+
+export default function VotingPanel() {
+  return (
+    <Suspense fallback={<VotingPanelSkeleton />}>
+      <LazyVotingPanelContent />
+    </Suspense>
+  );
+}
+
+// ── Original content moved to VotingPanelContent.tsx ───────────────────────
+
 import { useTranslation } from 'react-i18next';
 import type { Proposal, VoteRecord } from '../types';
 import { useWalletStore, useProposalStore } from '../store';
@@ -50,13 +64,6 @@ function VoteButton({ choice, selected, disabled, onClick, label }: VoteButtonPr
 }
 
 // ── Proposal voting card ───────────────────────────────────────────────────
-
-interface ProposalVoteCardProps {
-  proposal: Proposal;
-  walletWeight: number;
-  onVote: (proposalId: string, choice: VoteChoice) => Promise<void>;
-  isPending: boolean;
-}
 
 interface ProposalVoteCardProps {
   proposal: Proposal;
@@ -165,7 +172,7 @@ function ProposalVoteCard({ proposal, walletWeight, onVote, isPending, optimisti
 
 // ── Page ───────────────────────────────────────────────────────────────────
 
-export default function VotingPanel() {
+function VotingPanelContent() {
   const { t } = useTranslation();
   const { address, connected } = useWalletStore();
   const { getAllProposals, optimisticVotes } = useProposalStore();
