@@ -1,59 +1,43 @@
 #!/usr/bin/env bash
-# Deploy contracts using config for the selected NETWORK, with env var overrides.
+# Deploy governance and token contracts to the selected NETWORK.
 # Usage: NETWORK=testnet ./scripts/deploy.sh
-#        Copy .env.example to .env and fill in secrets before running.
+# Contract IDs are written to .env.<NETWORK> after a successful deploy.
 set -euo pipefail
 
 NETWORK="${NETWORK:-local}"
 CONFIG="config/${NETWORK}.toml"
+ENV_FILE=".env.${NETWORK}"
 
 if [[ ! -f "$CONFIG" ]]; then
   echo "Error: config file '$CONFIG' not found. Valid values: local, testnet, staging, mainnet" >&2
   exit 1
 fi
 
-# Load .env if present (does not override already-exported vars)
-if [[ -f .env ]]; then
-  set -o allexport
-  # shellcheck disable=SC1091
-  source .env
-  set +o allexport
-fi
+rpc_url=$(grep 'rpc_url' "$CONFIG" | sed 's/.*= *"\(.*\)"/\1/')
+passphrase=$(grep 'network_passphrase' "$CONFIG" | sed 's/.*= *"\(.*\)"/\1/')
 
-# Read TOML values as defaults
-_toml_rpc=$(grep 'rpc_url' "$CONFIG" | sed 's/.*= *"\(.*\)"/\1/')
-_toml_pass=$(grep 'network_passphrase' "$CONFIG" | sed 's/.*= *"\(.*\)"/\1/')
-
-# Apply env var overrides (env wins over TOML)
-rpc_url="${STELLAR_RPC_URL:-$_toml_rpc}"
-passphrase="${STELLAR_NETWORK_PASSPHRASE:-$_toml_pass}"
-
-# Validate required variables
-missing=()
-[[ -z "$rpc_url" ]]   && missing+=("STELLAR_RPC_URL (or network.rpc_url in $CONFIG)")
-[[ -z "$passphrase" ]] && missing+=("STELLAR_NETWORK_PASSPHRASE (or network.network_passphrase in $CONFIG)")
-[[ -z "${STELLAR_SECRET_KEY:-}" ]] && missing+=("STELLAR_SECRET_KEY")
-
-if [[ ${#missing[@]} -gt 0 ]]; then
-  echo "Error: the following required variables are not set:" >&2
-  printf '  - %s\n' "${missing[@]}" >&2
-  echo "Copy .env.example to .env and fill in the missing values." >&2
-  exit 1
-fi
-
-echo "Deploying to: $NETWORK"
-echo "RPC: $rpc_url"
+echo "Deploying to: $NETWORK  (RPC: $rpc_url)"
 
 stellar contract build
 
-stellar contract deploy \
-  --wasm target/wasm32-unknown-unknown/release/votechain_token.wasm \
-  --rpc-url "$rpc_url" \
-  --network-passphrase "$passphrase" \
-  --source "$STELLAR_SECRET_KEY"
+_deploy() {
+  local wasm="$1"
+  stellar contract deploy \
+    --wasm "$wasm" \
+    --rpc-url "$rpc_url" \
+    --network-passphrase "$passphrase"
+}
 
-stellar contract deploy \
-  --wasm target/wasm32-unknown-unknown/release/votechain_governance.wasm \
-  --rpc-url "$rpc_url" \
-  --network-passphrase "$passphrase" \
-  --source "$STELLAR_SECRET_KEY"
+TOKEN_ID=$(_deploy target/wasm32-unknown-unknown/release/votechain_token.wasm)
+GOVERNANCE_ID=$(_deploy target/wasm32-unknown-unknown/release/votechain_governance.wasm)
+
+# Write (or overwrite) the env file — idempotent
+cat > "$ENV_FILE" <<EOF
+NETWORK=${NETWORK}
+TOKEN_CONTRACT_ID=${TOKEN_ID}
+GOVERNANCE_CONTRACT_ID=${GOVERNANCE_ID}
+EOF
+
+echo "Contract IDs saved to $ENV_FILE"
+echo "  TOKEN_CONTRACT_ID=${TOKEN_ID}"
+echo "  GOVERNANCE_CONTRACT_ID=${GOVERNANCE_ID}"

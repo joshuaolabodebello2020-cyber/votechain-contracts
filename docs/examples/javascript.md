@@ -7,6 +7,12 @@ These examples use `@stellar/stellar-sdk` to interact with a deployed VoteChain 
 ## Setup
 
 ```bash
+npm install @votechain/sdk
+```
+
+> The `@votechain/sdk` package provides typed wrappers for VoteChain governance contract calls and installs `@stellar/stellar-sdk` as a dependency.
+
+```bash
 npm install @stellar/stellar-sdk
 ```
 

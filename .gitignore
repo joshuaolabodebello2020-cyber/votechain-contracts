@@ -1,5 +1,29 @@
 target/
 .env
-.env.*
-!.env.example
+.env.local
+.env.testnet
+.env.mainnet
 *.wasm
+
+# Coverage reports
+lcov.info
+coverage/
+
+# Node.js
+node_modules/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.eslintcache
+
+# Performance benchmark run output (committed baseline excluded)
+perf/api-results.json
+
+# Rust
+**/*.rs.bk
+Cargo.lock
+
+# OS
+.DS_Store
+Thumbs.db
