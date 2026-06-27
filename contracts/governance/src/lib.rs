@@ -218,6 +218,7 @@ impl GovernanceContract {
     ///     3_600,      // min 1-hour voting window
     ///     2_592_000,  // max 30-day voting window
     ///     true,       // restrict admin voting
+    ///     0,          // no amend window
     ///     0,          // no timelock
     ///     0,          // veto threshold disabled
     ///     535_680,    // TTL: ~60 days
@@ -283,7 +284,8 @@ impl GovernanceContract {
             set_timelock_duration(&env, timelock_duration);
         }
         set_veto_threshold(&env, veto_threshold);
-        if persistent_storage_ttl > 0 {
+
+      if persistent_storage_ttl > 0 {
             set_persistent_storage_ttl(&env, persistent_storage_ttl);
         }
         set_version(&env, (1, 0, 0));
@@ -1124,6 +1126,14 @@ impl GovernanceContract {
     /// Returns the contract version as a `(major, minor, patch)` semver tuple.
     pub fn get_version(env: Env) -> (u32, u32, u32) {
         get_version(&env)
+    }
+
+    /// SC-006: Returns the configured persistent storage TTL bump parameters.
+    ///
+    /// Returns `(bump_amount, bump_threshold)` — both in ledger counts.
+    /// When not explicitly set at `initialize`, both default to `LEDGERS_TO_LIVE` (~31 days).
+    pub fn get_storage_ttl_config(env: Env) -> (u32, u32) {
+        (get_storage_bump_amount(&env), get_storage_bump_threshold(&env))
     }
 
     /// Returns the contract lifecycle state.
