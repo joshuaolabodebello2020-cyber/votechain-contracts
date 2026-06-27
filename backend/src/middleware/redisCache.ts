@@ -41,7 +41,12 @@ const TTL = {
 // ── Cache key helpers ──────────────────────────────────────────────────────
 
 const KEY = {
-  list: () => "proposals:list",
+  list: (limit?: number, offset?: number) => {
+    const parts = ["proposals:list"];
+    if (limit !== undefined) parts.push(`limit:${limit}`);
+    if (offset !== undefined) parts.push(`offset:${offset}`);
+    return parts.join(":");
+  },
   item: (id: string | number) => `proposals:item:${id}`,
 };
 
@@ -87,7 +92,14 @@ function cacheMiddleware(keyFn: (req: Request) => string, ttl: number) {
 }
 
 /** Middleware for GET /proposals — 30-second TTL */
-export const cacheProposalList = cacheMiddleware(() => KEY.list(), TTL.PROPOSAL_LIST);
+export const cacheProposalList = cacheMiddleware(
+  (req) => {
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
+    const offset = req.query.offset ? parseInt(req.query.offset as string) : undefined;
+    return KEY.list(limit, offset);
+  },
+  TTL.PROPOSAL_LIST
+);
 
 /** Middleware for GET /proposals/:id — 10-second TTL */
 export const cacheProposalItem = cacheMiddleware(
@@ -99,19 +111,28 @@ export const cacheProposalItem = cacheMiddleware(
 
 /**
  * Invalidate cache entries.
- * - No argument: clears the proposal list cache.
- * - With id: clears both the list and the specific item cache.
+ * - No argument: clears all proposal list caches.
+ * - With id: clears all list caches and the specific item cache.
  *
  * Call this from your event indexer when new on-chain events arrive.
  */
 export async function invalidateProposalCache(id?: string | number) {
   if (!redis?.isOpen) return;
-  const keys = [KEY.list()];
-  if (id !== undefined) keys.push(KEY.item(id));
+  const keys: string[] = [];
+  // Get all proposal list keys
   try {
-    await redis.del(keys);
-    console.log("[redis] invalidated keys:", keys);
+    const listKeys = await redis.keys("proposals:list*");
+    keys.push(...listKeys);
   } catch (err) {
-    console.error("[redis] del error:", err);
+    console.error("[redis] keys error:", err);
+  }
+  if (id !== undefined) keys.push(KEY.item(id));
+  if (keys.length > 0) {
+    try {
+      await redis.del(keys);
+      console.log("[redis] invalidated keys:", keys);
+    } catch (err) {
+      console.error("[redis] del error:", err);
+    }
   }
 }
