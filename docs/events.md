@@ -381,3 +381,31 @@ All topics and data are XDR-encoded. Use the Stellar SDK for your language to de
 ### Self-transfer suppression
 
 The token contract does **not** emit a `transfer` event when `from == to`. Indexers should not expect a transfer event for self-transfers.
+
+---
+
+## Version History
+
+### v1.0.0
+
+Initial release. All events listed in this document were introduced in v1.0.0.
+
+| Contract   | Event symbol    | Introduced |
+|------------|-----------------|------------|
+| Governance | `init`          | v1.0.0     |
+| Governance | `created`       | v1.0.0     |
+| Governance | `vote`          | v1.0.0     |
+| Governance | `final`         | v1.0.0     |
+| Governance | `executed`      | v1.0.0     |
+| Governance | `cancelled`     | v1.0.0     |
+| Governance | `qupdate`       | v1.0.0     |
+| Governance | `admxfer`       | v1.0.0     |
+| Governance | `paused`        | v1.0.0     |
+| Governance | `unpaused`      | v1.0.0     |
+| Governance | `durationupdate`| v1.0.0     |
+| Token      | `mint`          | v1.0.0     |
+| Token      | `transfer`      | v1.0.0     |
+| Token      | `burn`          | v1.0.0     |
+| Token      | `admxfer`       | v1.0.0     |
+
+For ABI-level changes (function signatures, parameters, return types) see [abi-reference.md](abi-reference.md#abi-changelog).

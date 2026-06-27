@@ -8,4 +8,5 @@ axum = { version = "0.8.1", features = ["macros"] }
 tower_governor = { version = "0.8.0", features = ["axum"] }
 tokio = { version = "1.44.2", features = ["rt-multi-thread", "macros"] }
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 utoipa = { version = "5.5.0", features = ["axum_extras"] }
