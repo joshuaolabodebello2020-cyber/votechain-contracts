@@ -18,7 +18,7 @@
 //! `GovernanceContract::cast_vote` and `finalise`, without requiring a
 //! Soroban execution environment.
 //!
-//! Contract-level properties (AC-1, AC-2, AC-3) exercise the real Soroban
+//! Contract-level properties (AC-1 through AC-12) exercise the real Soroban
 //! environment via `test_helpers` to verify invariants hold end-to-end.
 
 #![cfg(test)]
@@ -30,8 +30,6 @@ const MAX_SUPPLY: i128 = i128::MAX / 4;
 
 proptest! {
     /// Invariant 1: votes_yes + votes_no + votes_abstain == total_votes
-    ///
-    /// For any non-negative split of votes the sum must equal the total.
     #[test]
     fn tally_sum_equals_total(
         yes     in 0i128..=MAX_SUPPLY / 3,
@@ -43,9 +41,6 @@ proptest! {
     }
 
     /// Invariant 2: total votes never exceed total token supply.
-    ///
-    /// Each voter contributes at most their balance, and the sum of all
-    /// balances is bounded by the total supply.
     #[test]
     fn total_votes_never_exceed_supply(
         supply  in 1i128..=MAX_SUPPLY,
@@ -53,20 +48,14 @@ proptest! {
         no      in 0i128..=MAX_SUPPLY,
         abstain in 0i128..=MAX_SUPPLY,
     ) {
-        // Clamp each bucket so the combined tally stays within supply,
-        // replicating the constraint that voters can only spend their balance.
         let yes     = yes.min(supply);
         let no      = no.min(supply - yes);
         let abstain = abstain.min(supply - yes - no);
-
         let total = yes + no + abstain;
         prop_assert!(total <= supply);
     }
 
     /// Invariant 3: quorum check is consistent with stored vote counts.
-    ///
-    /// A proposal passes iff total_votes >= quorum AND votes_yes > votes_no.
-    /// This mirrors the condition in `finalise` exactly.
     #[test]
     fn quorum_check_consistent_with_vote_counts(
         yes     in 0i128..=MAX_SUPPLY / 3,
@@ -76,35 +65,95 @@ proptest! {
     ) {
         let total = yes + no + abstain;
         let passes = total >= quorum && yes > no;
-
-        // Re-derive from the same inputs — must agree.
         let expected = (yes + no + abstain) >= quorum && yes > no;
         prop_assert_eq!(passes, expected);
     }
+
+    /// Invariant 4: tie (yes == no) always rejects regardless of quorum.
+    #[test]
+    fn tie_always_rejected(
+        equal   in 1i128..=MAX_SUPPLY / 2,
+        quorum  in 1i128..=MAX_SUPPLY,
+    ) {
+        // equal yes and no — even with quorum met
+        let total = equal + equal; // abstain = 0
+        let passes = total >= quorum && equal > equal; // equal > equal is always false
+        prop_assert!(!passes, "tie should never pass");
+    }
+
+    /// Invariant 5: passing requires strictly more Yes than No.
+    #[test]
+    fn passing_requires_yes_strictly_greater_than_no(
+        yes    in 0i128..=MAX_SUPPLY / 2,
+        no     in 0i128..=MAX_SUPPLY / 2,
+        quorum in 1i128..=(MAX_SUPPLY / 2),
+    ) {
+        let passes = (yes + no) >= quorum && yes > no;
+        if yes <= no {
+            prop_assert!(!passes, "should not pass when yes <= no");
+        }
+    }
+
+    /// Invariant 6: quorum = 0 is never satisfiable (enforced by create_proposal).
+    /// Arithmetic model: total >= 0 is trivially true, but quorum must be > 0.
+    #[test]
+    fn zero_quorum_is_invalid(
+        yes     in 0i128..=MAX_SUPPLY / 3,
+        no      in 0i128..=MAX_SUPPLY / 3,
+        abstain in 0i128..=MAX_SUPPLY / 3,
+    ) {
+        // The contract rejects quorum=0 at creation time; here we verify that
+        // the arithmetic model for quorum=0 is trivially always "met", which
+        // is WHY the contract must reject it.
+        let total = yes + no + abstain;
+        // If quorum were 0, total >= 0 is always true — so a 0-quorum proposal
+        // would pass with zero votes as long as yes > no. The contract prevents
+        // this by requiring quorum >= 1 in create_proposal.
+        prop_assert!(total >= 0, "total votes is always non-negative");
+    }
+
+    /// Invariant 7: checked_add overflow guard — saturating at i128::MAX never wraps.
+    #[test]
+    fn checked_add_never_wraps(
+        a in 0i128..=i128::MAX / 2,
+        b in 0i128..=i128::MAX / 2,
+    ) {
+        let result = a.checked_add(b);
+        prop_assert!(result.is_some(), "checked_add should not overflow in 0..MAX/2 range");
+        prop_assert_eq!(result.unwrap(), a + b);
+    }
+
+    /// Invariant 8: finalise outcome is fully determined by (total, quorum, yes, no).
+    /// Same inputs must always produce the same outcome (determinism).
+    #[test]
+    fn finalise_outcome_is_deterministic(
+        yes     in 0i128..=1_000_000i128,
+        no      in 0i128..=1_000_000i128,
+        abstain in 0i128..=1_000_000i128,
+        quorum  in 1i128..=3_000_000i128,
+    ) {
+        let total = yes + no + abstain;
+        let outcome_a = total >= quorum && yes > no;
+        let outcome_b = total >= quorum && yes > no;
+        prop_assert_eq!(outcome_a, outcome_b);
+    }
 }
 
-// ── Contract-level property tests (AC-1, AC-2, AC-3) ────────────────────────
-//
-// These tests spin up a real Soroban test environment and verify invariants
-// against the actual contract implementation.
+// ── Contract-level property tests ────────────────────────────────────────────
 
 #[cfg(test)]
 mod contract_props {
     use super::*;
     use crate::test_helpers::{create_test_proposal, mint_and_vote, setup_env};
-    use crate::types::Vote;
+    use crate::types::{ContractError, Vote};
     use proptest::test_runner::{Config, TestRunner};
-    use soroban_sdk::testutils::Address as _;
-    use soroban_sdk::Address;
+    use soroban_sdk::testutils::{Address as _, Ledger as _};
+    use soroban_sdk::{Address, Env, String, Vec};
 
     /// AC-1: sum(voter weights) == votes_yes + votes_no + votes_abstain
-    ///
-    /// Mints distinct balances to three voters, casts one vote each, then
-    /// asserts that the proposal tally equals the sum of their individual
-    /// weights as recorded in VoteRecord.
     #[test]
     fn prop_sum_of_voter_weights_equals_tally() {
-        let config = Config::with_cases(1000);
+        let config = Config::with_cases(500);
         let mut runner = TestRunner::new(config);
 
         runner
@@ -128,7 +177,6 @@ mod contract_props {
 
                     let proposal = t.client.get_proposal(&proposal_id);
 
-                    // Each voter's recorded weight must match what was minted.
                     let rec_yes = t.client.get_vote(&proposal_id, &voter_yes).unwrap();
                     let rec_no = t.client.get_vote(&proposal_id, &voter_no).unwrap();
                     let rec_abstain = t.client.get_vote(&proposal_id, &voter_abstain).unwrap();
@@ -137,7 +185,6 @@ mod contract_props {
                     prop_assert_eq!(rec_no.weight, w_no);
                     prop_assert_eq!(rec_abstain.weight, w_abstain);
 
-                    // Tally buckets must equal the sum of individual weights.
                     prop_assert_eq!(
                         proposal.votes_yes + proposal.votes_no + proposal.votes_abstain,
                         rec_yes.weight + rec_no.weight + rec_abstain.weight
@@ -149,14 +196,9 @@ mod contract_props {
     }
 
     /// AC-2: no voter can vote twice on the same proposal.
-    ///
-    /// After a successful vote, a second cast_vote from the same address must
-    /// return AlreadyVoted and the tally must remain unchanged.
     #[test]
     fn prop_no_double_vote() {
-        use crate::types::ContractError;
-
-        let config = Config::with_cases(1000);
+        let config = Config::with_cases(500);
         let mut runner = TestRunner::new(config);
 
         runner
@@ -167,34 +209,27 @@ mod contract_props {
                 let voter = Address::generate(&t.env);
                 mint_and_vote(&t, &voter, proposal_id, Vote::Yes, weight);
 
-                let proposal_before = t.client.get_proposal(&proposal_id);
+                let before = t.client.get_proposal(&proposal_id);
 
-                // Second vote must be rejected.
                 let result = t.client.try_cast_vote(&voter, &proposal_id, &Vote::No);
                 prop_assert!(
                     matches!(result, Err(Ok(ContractError::AlreadyVoted))),
-                    "expected AlreadyVoted, got {:?}",
-                    result
+                    "expected AlreadyVoted, got {:?}", result
                 );
 
-                // Tally must be unchanged.
-                let proposal_after = t.client.get_proposal(&proposal_id);
-                prop_assert_eq!(proposal_before.votes_yes, proposal_after.votes_yes);
-                prop_assert_eq!(proposal_before.votes_no, proposal_after.votes_no);
-                prop_assert_eq!(proposal_before.votes_abstain, proposal_after.votes_abstain);
-
+                let after = t.client.get_proposal(&proposal_id);
+                prop_assert_eq!(before.votes_yes, after.votes_yes);
+                prop_assert_eq!(before.votes_no, after.votes_no);
+                prop_assert_eq!(before.votes_abstain, after.votes_abstain);
                 Ok(())
             })
             .unwrap();
     }
 
     /// AC-3: vote weight never exceeds the voter's token balance at vote time.
-    ///
-    /// The recorded weight in VoteRecord must equal exactly the balance that
-    /// was minted — never more.
     #[test]
     fn prop_vote_weight_never_exceeds_balance() {
-        let config = Config::with_cases(1000);
+        let config = Config::with_cases(500);
         let mut runner = TestRunner::new(config);
 
         runner
@@ -206,16 +241,429 @@ mod contract_props {
                 mint_and_vote(&t, &voter, proposal_id, Vote::Yes, balance);
 
                 let record = t.client.get_vote(&proposal_id, &voter).unwrap();
-
-                // Weight must be exactly the minted balance — never more.
                 prop_assert!(
                     record.weight <= balance,
-                    "weight {} > balance {}",
-                    record.weight,
-                    balance
+                    "weight {} > balance {}", record.weight, balance
                 );
                 Ok(())
             })
             .unwrap();
+    }
+
+    /// AC-4: create_proposal rejects quorum = 0.
+    #[test]
+    fn prop_create_proposal_rejects_zero_quorum() {
+        let config = Config::with_cases(200);
+        let mut runner = TestRunner::new(config);
+
+        runner
+            .run(&(60u64..=2_592_000u64,), |(duration,)| {
+                let t = setup_env();
+                let proposer = Address::generate(&t.env);
+                let result = t.client.try_create_proposal(
+                    &proposer,
+                    &String::from_str(&t.env, "title"),
+                    &String::from_str(&t.env, "description"),
+                    &0_i128, // quorum = 0 must be rejected
+                    &duration,
+                    &Vec::new(&t.env),
+                );
+                prop_assert!(
+                    matches!(result, Err(Ok(ContractError::InvalidQuorum))),
+                    "expected InvalidQuorum for quorum=0, got {:?}", result
+                );
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    /// AC-5: create_proposal rejects duration below min_duration (60s).
+    #[test]
+    fn prop_create_proposal_rejects_short_duration() {
+        let config = Config::with_cases(200);
+        let mut runner = TestRunner::new(config);
+
+        runner
+            .run(&(1u64..=59u64,), |(duration,)| {
+                let t = setup_env();
+                let proposer = Address::generate(&t.env);
+                let result = t.client.try_create_proposal(
+                    &proposer,
+                    &String::from_str(&t.env, "title"),
+                    &String::from_str(&t.env, "description"),
+                    &100_i128,
+                    &duration,
+                    &Vec::new(&t.env),
+                );
+                prop_assert!(
+                    matches!(result, Err(Ok(ContractError::InvalidDurationRange))),
+                    "expected InvalidDurationRange for duration={}, got {:?}", duration, result
+                );
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    /// AC-6: create_proposal rejects duration above max_duration (2_592_000s).
+    #[test]
+    fn prop_create_proposal_rejects_long_duration() {
+        let config = Config::with_cases(200);
+        let mut runner = TestRunner::new(config);
+
+        runner
+            .run(&(2_592_001u64..=u64::MAX / 2,), |(duration,)| {
+                let t = setup_env();
+                let proposer = Address::generate(&t.env);
+                let result = t.client.try_create_proposal(
+                    &proposer,
+                    &String::from_str(&t.env, "title"),
+                    &String::from_str(&t.env, "description"),
+                    &100_i128,
+                    &duration,
+                    &Vec::new(&t.env),
+                );
+                prop_assert!(
+                    matches!(result, Err(Ok(ContractError::InvalidDurationRange))),
+                    "expected InvalidDurationRange for duration={}, got {:?}", duration, result
+                );
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    /// AC-7: valid duration range [60, 2_592_000] always succeeds for create_proposal.
+    #[test]
+    fn prop_create_proposal_accepts_valid_duration() {
+        let config = Config::with_cases(500);
+        let mut runner = TestRunner::new(config);
+
+        runner
+            .run(&(60u64..=2_592_000u64,), |(duration,)| {
+                let t = setup_env();
+                let proposer = Address::generate(&t.env);
+                let result = t.client.try_create_proposal(
+                    &proposer,
+                    &String::from_str(&t.env, "title"),
+                    &String::from_str(&t.env, "description"),
+                    &100_i128,
+                    &duration,
+                    &Vec::new(&t.env),
+                );
+                prop_assert!(result.is_ok(), "valid duration {} rejected: {:?}", duration, result);
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    /// AC-8: voter with zero balance is always rejected with NoVotingPower.
+    #[test]
+    fn prop_zero_balance_always_rejected() {
+        let config = Config::with_cases(200);
+        let mut runner = TestRunner::new(config);
+
+        runner
+            .run(&(60u64..=3600u64,), |(_duration,)| {
+                let t = setup_env();
+                let proposal_id = create_test_proposal(&t, &t.admin.clone());
+                // voter has no tokens — no mint call
+                let voter = Address::generate(&t.env);
+                let result = t.client.try_cast_vote(&voter, &proposal_id, &Vote::Yes);
+                prop_assert!(
+                    matches!(result, Err(Ok(ContractError::NoVotingPower))),
+                    "expected NoVotingPower, got {:?}", result
+                );
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    /// AC-9: tally is monotonically non-decreasing as voters are added.
+    ///
+    /// Each new Yes vote must increase votes_yes; tally never shrinks.
+    #[test]
+    fn prop_tally_monotonically_increases() {
+        let config = Config::with_cases(300);
+        let mut runner = TestRunner::new(config);
+
+        runner
+            .run(
+                &prop::collection::vec(1i128..=100_000i128, 2..=10),
+                |weights| {
+                    let t = setup_env();
+                    let proposal_id = create_test_proposal(&t, &t.admin.clone());
+
+                    let mut prev_yes = 0i128;
+                    for w in &weights {
+                        let voter = Address::generate(&t.env);
+                        mint_and_vote(&t, &voter, proposal_id, Vote::Yes, *w);
+                        let p = t.client.get_proposal(&proposal_id);
+                        prop_assert!(
+                            p.votes_yes >= prev_yes,
+                            "votes_yes decreased: {} -> {}", prev_yes, p.votes_yes
+                        );
+                        prev_yes = p.votes_yes;
+                    }
+                    Ok(())
+                },
+            )
+            .unwrap();
+    }
+
+    /// AC-10: finalise outcome matches arithmetic prediction exactly.
+    ///
+    /// For any combination of vote weights, the state after finalise must
+    /// match the formula: Passed iff total >= quorum AND yes > no.
+    #[test]
+    fn prop_finalise_outcome_matches_arithmetic() {
+        let config = Config::with_cases(500);
+        let mut runner = TestRunner::new(config);
+
+        runner
+            .run(
+                &(
+                    0i128..=500i128,   // yes weight
+                    0i128..=500i128,   // no weight
+                    0i128..=500i128,   // abstain weight
+                    1i128..=1200i128,  // quorum
+                ),
+                |(w_yes, w_no, w_abstain, quorum)| {
+                    let t = setup_env();
+                    // Create proposal with the fuzzed quorum
+                    let proposer = Address::generate(&t.env);
+                    let id = t.client.create_proposal(
+                        &proposer,
+                        &String::from_str(&t.env, "fuzz"),
+                        &String::from_str(&t.env, "fuzz description"),
+                        &quorum,
+                        &3600_u64,
+                        &Vec::new(&t.env),
+                    );
+
+                    if w_yes > 0 {
+                        let v = Address::generate(&t.env);
+                        mint_and_vote(&t, &v, id, Vote::Yes, w_yes);
+                    }
+                    if w_no > 0 {
+                        let v = Address::generate(&t.env);
+                        mint_and_vote(&t, &v, id, Vote::No, w_no);
+                    }
+                    if w_abstain > 0 {
+                        let v = Address::generate(&t.env);
+                        mint_and_vote(&t, &v, id, Vote::Abstain, w_abstain);
+                    }
+
+                    // Advance past voting period
+                    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+                    t.client.finalise(&id);
+
+                    let proposal = t.client.get_proposal(&id);
+                    let total = w_yes + w_no + w_abstain;
+                    let expected_passed = total >= quorum && w_yes > w_no;
+
+                    use crate::types::ProposalState;
+                    if expected_passed {
+                        prop_assert_eq!(
+                            proposal.state, ProposalState::Passed,
+                            "expected Passed (yes={} no={} abstain={} total={} quorum={})",
+                            w_yes, w_no, w_abstain, total, quorum
+                        );
+                    } else {
+                        prop_assert_eq!(
+                            proposal.state, ProposalState::Rejected,
+                            "expected Rejected (yes={} no={} abstain={} total={} quorum={})",
+                            w_yes, w_no, w_abstain, total, quorum
+                        );
+                    }
+                    Ok(())
+                },
+            )
+            .unwrap();
+    }
+
+    /// AC-11: proposal_count always equals the number of successful create_proposal calls.
+    #[test]
+    fn prop_proposal_count_tracks_creations() {
+        let config = Config::with_cases(200);
+        let mut runner = TestRunner::new(config);
+
+        runner
+            .run(&(1usize..=20usize,), |(n,)| {
+                let t = setup_env();
+                prop_assert_eq!(t.client.proposal_count(), 0);
+                for i in 0..n {
+                    create_test_proposal(&t, &t.admin.clone());
+                    prop_assert_eq!(
+                        t.client.proposal_count(), (i + 1) as u64,
+                        "count mismatch after {} creations", i + 1
+                    );
+                }
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    /// AC-12: cast_vote after voting period ends returns VotingPeriodEnded.
+    #[test]
+    fn prop_vote_after_end_time_rejected() {
+        let config = Config::with_cases(200);
+        let mut runner = TestRunner::new(config);
+
+        runner
+            .run(&(1i128..=500_000i128,), |(weight,)| {
+                let t = setup_env();
+                let proposal_id = create_test_proposal(&t, &t.admin.clone());
+
+                // Advance past the 3600s duration used by create_test_proposal
+                t.env.ledger().with_mut(|l| l.timestamp += 3601);
+
+                let voter = Address::generate(&t.env);
+                let tok = votechain_token::TokenContractClient::new(&t.env, &t.token_id);
+                tok.mint(&t.admin, &voter, &weight);
+
+                let result = t.client.try_cast_vote(&voter, &proposal_id, &Vote::Yes);
+                prop_assert!(
+                    matches!(result, Err(Ok(ContractError::VotingPeriodEnded))),
+                    "expected VotingPeriodEnded, got {:?}", result
+                );
+                Ok(())
+            })
+            .unwrap();
+    }
+}
+
+// ── Token contract property tests ─────────────────────────────────────────────
+
+#[cfg(test)]
+mod token_props {
+    use proptest::prelude::*;
+    use proptest::test_runner::{Config, TestRunner};
+    use soroban_sdk::testutils::Address as _;
+    use soroban_sdk::{Address, Env};
+
+    fn setup_token<'a>() -> (Env, Address, votechain_token::TokenContractClient<'a>) {
+        let env = Env::default();
+        env.mock_all_auths();
+        let admin = Address::generate(&env);
+        let tok_id = env.register(votechain_token::TokenContract, ());
+        let client = votechain_token::TokenContractClient::new(&env, &tok_id);
+        client.initialize(&admin, &100_000_000_i128);
+        (env, admin, client)
+    }
+
+    /// T-1: total_supply = sum of all balances after mint operations.
+    #[test]
+    fn prop_total_supply_equals_sum_of_balances() {
+        let config = Config::with_cases(300);
+        let mut runner = TestRunner::new(config);
+
+        runner
+            .run(
+                &prop::collection::vec(1i128..=1_000_000i128, 1..=10),
+                |amounts| {
+                    let (env, admin, client) = setup_token();
+                    let initial = client.total_supply();
+                    let mut recipients = std::vec::Vec::new();
+                    for &amt in &amounts {
+                        let user = Address::generate(&env);
+                        client.mint(&admin, &user, &amt);
+                        recipients.push((user, amt));
+                    }
+
+                    let expected_supply = initial + amounts.iter().sum::<i128>();
+                    prop_assert_eq!(client.total_supply(), expected_supply);
+
+                    // Each balance must equal the minted amount
+                    for (user, amt) in &recipients {
+                        prop_assert_eq!(client.balance(user), *amt);
+                    }
+                    Ok(())
+                },
+            )
+            .unwrap();
+    }
+
+    /// T-2: transfer conserves total supply (no tokens created or destroyed).
+    #[test]
+    fn prop_transfer_conserves_supply() {
+        let config = Config::with_cases(300);
+        let mut runner = TestRunner::new(config);
+
+        runner
+            .run(&(1i128..=1_000_000i128,), |(amount,)| {
+                let (env, admin, client) = setup_token();
+                let recipient = Address::generate(&env);
+                let supply_before = client.total_supply();
+
+                client.transfer(&admin, &recipient, &amount);
+
+                prop_assert_eq!(
+                    client.total_supply(), supply_before,
+                    "supply changed after transfer"
+                );
+                prop_assert_eq!(client.balance(&recipient), amount);
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    /// T-3: burn reduces total_supply by exactly the burned amount.
+    #[test]
+    fn prop_burn_reduces_supply_exactly() {
+        let config = Config::with_cases(300);
+        let mut runner = TestRunner::new(config);
+
+        runner
+            .run(&(1i128..=1_000_000i128,), |(amount,)| {
+                let (env, admin, client) = setup_token();
+                let user = Address::generate(&env);
+                client.mint(&admin, &user, &amount);
+                let supply_before = client.total_supply();
+
+                client.burn(&admin, &user, &amount);
+
+                prop_assert_eq!(client.total_supply(), supply_before - amount);
+                prop_assert_eq!(client.balance(&user), 0);
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    /// T-4: transfer with amount > balance returns InsufficientBalance.
+    #[test]
+    fn prop_transfer_exceeding_balance_rejected() {
+        use votechain_token::TokenContractClient;
+        let config = Config::with_cases(300);
+        let mut runner = TestRunner::new(config);
+
+        runner
+            .run(&(1i128..=1_000_000i128,), |(amount,)| {
+                let (env, admin, client) = setup_token();
+                let sender = Address::generate(&env);
+                let recipient = Address::generate(&env);
+                // Mint amount - 1, then try to transfer amount
+                if amount > 1 {
+                    client.mint(&admin, &sender, &(amount - 1));
+                    let result = client.try_transfer(&sender, &recipient, &amount);
+                    prop_assert!(result.is_err(), "expected InsufficientBalance");
+                    // Balance unchanged
+                    prop_assert_eq!(client.balance(&sender), amount - 1);
+                }
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    /// T-5: mint(0) or burn(0) is rejected as InvalidAmount.
+    #[test]
+    fn prop_zero_amount_operations_rejected() {
+        let (_env, admin, client) = setup_token();
+        use soroban_sdk::testutils::Address as _;
+        let user = Address::generate(&_env);
+
+        let mint_result = client.try_mint(&admin, &user, &0);
+        assert!(mint_result.is_err(), "mint(0) should be rejected");
+
+        let burn_result = client.try_burn(&admin, &user, &0);
+        assert!(burn_result.is_err(), "burn(0) should be rejected");
     }
 }

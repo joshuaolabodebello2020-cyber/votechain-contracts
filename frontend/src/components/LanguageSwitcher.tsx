@@ -21,10 +21,10 @@ export default function LanguageSwitcher() {
       onChange={handleChange}
       aria-label={t('languageSwitcher.ariaLabel')}
       style={{
-        background: '#1e293b',
-        color: '#f8fafc',
-        border: '1px solid #334155',
-        borderRadius: '0.375rem',
+        background: 'var(--color-surface)',
+        color: 'var(--color-text-primary)',
+        border: '1px solid var(--color-border)',
+        borderRadius: 'var(--radius-sm)',
         padding: '0.25rem 0.5rem',
         fontSize: '0.875rem',
         cursor: 'pointer',

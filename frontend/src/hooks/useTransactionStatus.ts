@@ -1,4 +1,6 @@
 import { useCallback, useRef, useState } from "react";
+import { api, ApiClient } from '../api/ApiClient';
+import { ApiError, NetworkError } from '../api/apiErrors';
 
 const HORIZON_BASE = "https://horizon-testnet.stellar.org";
 const EXPLORER_BASE = "https://stellar.expert/explorer/testnet/tx";
@@ -34,14 +36,31 @@ export function useTransactionStatus() {
   const pollStatus = useCallback(
     async (hash: string) => {
       try {
-        const res = await fetch(`${HORIZON_BASE}/transactions/${hash}`);
-        if (res.ok) {
-          stopPolling();
-          setTx((prev) => ({ ...prev, status: "confirmed" }));
+        // Create a temporary ApiClient instance for the Horizon base URL
+        const horizonApi = new ApiClient(HORIZON_BASE);
+        const response = await horizonApi.get<any>(`/transactions/${hash}`, {
+          skipErrorNotification: true, // Don't show a notification for this specific check
+        });
+
+        // If we get a successful response, the transaction is confirmed
+        stopPolling();
+        setTx((prev) => ({ ...prev, status: "confirmed" }));
+        return;
+      } catch (e) {
+        if (e instanceof NetworkError) {
+          // Network error, retry
+          pollCount.current += 1;
+          if (pollCount.current >= MAX_POLLS) {
+            stopPolling();
+            setTx((prev) => ({
+              ...prev,
+              status: "failed",
+              error: "Network error: Transaction not confirmed after 60 seconds.",
+            }));
+          }
           return;
-        }
-        if (res.status === 404) {
-          // Still pending
+        } else if (e instanceof ApiError && e.statusCode === 404) {
+          // Transaction not found yet, still pending
           pollCount.current += 1;
           if (pollCount.current >= MAX_POLLS) {
             stopPolling();
@@ -52,21 +71,15 @@ export function useTransactionStatus() {
             }));
           }
           return;
+        } else {
+          // Unexpected error
+          stopPolling();
+          setTx((prev) => ({
+            ...prev,
+            status: "failed",
+            error: e instanceof Error ? e.message : "An unexpected error occurred.",
+          }));
         }
-        // Unexpected error
-        stopPolling();
-        setTx((prev) => ({
-          ...prev,
-          status: "failed",
-          error: `Unexpected response: ${res.status}`,
-        }));
-      } catch (e: any) {
-        stopPolling();
-        setTx((prev) => ({
-          ...prev,
-          status: "failed",
-          error: e?.message ?? "Network error while checking transaction.",
-        }));
       }
     },
     [stopPolling]

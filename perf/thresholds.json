@@ -1,0 +1,20 @@
+{
+  "_doc": "Regression thresholds for VoteChain. Adjust after establishing a stable baseline on target hardware.",
+  "api": {
+    "regression_multiplier": 2.0,
+    "absolute_max_ms": {
+      "GET /api/proposals":        200,
+      "GET /api/proposals/:id":    100,
+      "GET /api/governance/stats": 200,
+      "GET /metrics/cache":         50
+    }
+  },
+  "contract": {
+    "regression_multiplier": 2.0,
+    "absolute_max_us": {
+      "create_proposal": 5000,
+      "cast_vote":       5000,
+      "finalise":        5000
+    }
+  }
+}

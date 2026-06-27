@@ -30,7 +30,7 @@
 //! - **Temporary** – short-lived allowances (`Allowance`).
 //!   Automatically expires; no manual TTL management required.
 
-use crate::types::{ContractError, TokenDataKey};
+use crate::types::{ContractError, SalePhase, TokenDataKey};
 use soroban_sdk::{Address, Env};
 
 // =============================================================================
@@ -142,4 +142,27 @@ pub fn is_frozen(env: &Env, addr: &Address) -> bool {
 /// Sets the frozen flag for `addr`.
 pub fn set_frozen(env: &Env, addr: &Address, frozen: bool) {
     env.storage().persistent().set(&TokenDataKey::Frozen(addr.clone()), &frozen);
+}
+
+/// Returns the stored Merkle root as a 32-byte array, or `None` if not set.
+pub fn get_merkle_root(env: &Env) -> Option<[u8; 32]> {
+    env.storage().instance().get(&TokenDataKey::MerkleRoot)
+}
+
+/// Stores the Merkle root (32 bytes).
+pub fn set_merkle_root(env: &Env, root: [u8; 32]) {
+    env.storage().instance().set(&TokenDataKey::MerkleRoot, &root);
+}
+
+/// Returns the current sale phase. Defaults to `Public` if never set.
+pub fn get_sale_phase(env: &Env) -> SalePhase {
+    env.storage()
+        .instance()
+        .get(&TokenDataKey::SalePhase)
+        .unwrap_or(SalePhase::Public)
+}
+
+/// Stores the sale phase.
+pub fn set_sale_phase(env: &Env, phase: &SalePhase) {
+    env.storage().instance().set(&TokenDataKey::SalePhase, phase);
 }

@@ -1,4 +1,30 @@
 services:
+  backend:
+    build: ./backend
+    ports:
+      - "3001:3001"
+    environment:
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    # Readiness probe: /ready ensures backend + Redis are connected
+    # Liveness probe:  /live ensures the process is alive
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   dev:
     build: .
     volumes:

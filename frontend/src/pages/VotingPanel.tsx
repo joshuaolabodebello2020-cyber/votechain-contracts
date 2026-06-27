@@ -1,9 +1,22 @@
-import { useState } from 'react';
+import React, { useState, lazy, Suspense } from 'react';
+import VotingPanelSkeleton from './VotingPanelSkeleton';
+
+const LazyVotingPanelContent = lazy(() => import('./VotingPanelContent'));
+
+export default function VotingPanel() {
+  return (
+    <Suspense fallback={<VotingPanelSkeleton />}>
+      <LazyVotingPanelContent />
+    </Suspense>
+  );
+}
+
+// ── Original content moved to VotingPanelContent.tsx ───────────────────────
+
 import { useTranslation } from 'react-i18next';
 import type { Proposal, VoteRecord } from '../types';
-import { useWalletStore } from '../store';
+import { useWalletStore, useProposalStore } from '../store';
 import { useOptimisticVote, type VoteChoice } from '../hooks/useOptimisticVote';
-import { useTransactionStatus } from '../hooks/useTransactionStatus';
 import { TransactionToast } from '../components/TransactionToast';
 
 // ── Stub tx broadcaster ────────────────────────────────────────────────────
@@ -13,33 +26,6 @@ async function broadcastVoteTx(_proposalId: string, _choice: VoteChoice): Promis
   // Return a fake hash for now — swap with real Freighter + Soroban SDK call.
   return Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
 }
-
-// ── Placeholder data ───────────────────────────────────────────────────────
-// Replace with real API / store data when the backend is wired up.
-const MOCK_PROPOSALS: Proposal[] = [
-  {
-    id: '1',
-    title: 'Increase validator reward by 5%',
-    description: 'Proposal to increase the base validator reward from 10% to 15% APY.',
-    state: 'Active',
-    createdAt: '2026-05-01',
-    endAt: '2026-06-15',
-    votesCount: 42,
-    totalWeight: 1_200_000,
-    votes: [],
-  },
-  {
-    id: '2',
-    title: 'Add new governance parameter: max_proposals_per_epoch',
-    description: 'Introduce a cap on the number of active proposals per epoch.',
-    state: 'Active',
-    createdAt: '2026-05-10',
-    endAt: '2026-06-20',
-    votesCount: 17,
-    totalWeight: 540_000,
-    votes: [],
-  },
-];
 
 // ── Vote choice button ─────────────────────────────────────────────────────
 
@@ -84,11 +70,20 @@ interface ProposalVoteCardProps {
   walletWeight: number;
   onVote: (proposalId: string, choice: VoteChoice) => Promise<void>;
   isPending: boolean;
+  optimisticVote?: { choice: VoteChoice; status: 'pending' | 'confirmed' | 'failed' };
 }
 
-function ProposalVoteCard({ proposal, walletWeight, onVote, isPending }: ProposalVoteCardProps) {
+function ProposalVoteCard({ proposal, walletWeight, onVote, isPending, optimisticVote }: ProposalVoteCardProps) {
   const { t } = useTranslation();
-  const [selected, setSelected] = useState<VoteChoice | null>(null);
+  // Use optimisticVote as the selected choice if it exists
+  const [selected, setSelected] = useState<VoteChoice | null>(optimisticVote?.choice || null);
+
+  // Update selected if optimisticVote changes
+  React.useEffect(() => {
+    if (optimisticVote?.choice) {
+      setSelected(optimisticVote.choice);
+    }
+  }, [optimisticVote?.choice]);
 
   async function handleSubmit() {
     if (!selected) return;
@@ -102,6 +97,18 @@ function ProposalVoteCard({ proposal, walletWeight, onVote, isPending }: Proposa
         <p style={{ color: '#94a3b8', fontSize: '0.9rem', margin: '0.25rem 0 0' }}>
           {proposal.description}
         </p>
+        {optimisticVote && (
+          <p style={{ 
+            color: optimisticVote.status === 'confirmed' ? '#4ade80' : 
+                   optimisticVote.status === 'failed' ? '#fca5a5' : '#7dd3fc',
+            fontSize: '0.8rem',
+            marginTop: '0.25rem'
+          }}>
+            {optimisticVote.status === 'confirmed' ? '✓ Vote confirmed' :
+             optimisticVote.status === 'failed' ? '✗ Vote failed' :
+             'Vote pending...'}
+          </p>
+        )}
       </div>
 
       {/* Live vote counts — updated optimistically */}
@@ -122,24 +129,29 @@ function ProposalVoteCard({ proposal, walletWeight, onVote, isPending }: Proposa
 
       {/* Vote choice buttons */}
       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
-        {(['For', 'Against', 'Abstain'] as VoteChoice[]).map((choice) => (
-          <VoteButton
-            key={choice}
-            choice={choice}
-            selected={selected === choice}
-            disabled={isPending}
-            onClick={() => setSelected(choice)}
-            label={t(`votingPanel.vote${choice}`)}
-          />
-        ))}
+        {(['For', 'Against', 'Abstain'] as VoteChoice[]).map((choice) => {
+          const buttonProps = {
+            choice,
+            selected: selected === choice,
+            disabled: isPending || (optimisticVote?.status === 'confirmed'),
+            onClick: () => setSelected(choice),
+            label: t(`votingPanel.vote${choice}`),
+          };
+          return (
+            <VoteButton
+              key={choice}
+              {...buttonProps}
+            />
+          );
+        })}
       </div>
 
       {/* Submit */}
       <button
         type="button"
         onClick={handleSubmit}
-        disabled={!selected || isPending}
-        aria-disabled={!selected || isPending}
+        disabled={!selected || isPending || (optimisticVote?.status === 'confirmed')}
+        aria-disabled={!selected || isPending || (optimisticVote?.status === 'confirmed')}
         aria-label={t('votingPanel.submitAriaLabel', { type: selected ?? '', id: proposal.id })}
         style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
       >
@@ -148,6 +160,8 @@ function ProposalVoteCard({ proposal, walletWeight, onVote, isPending }: Proposa
             <span className="spinner" aria-hidden="true" />
             {t('votingPanel.confirming')}
           </>
+        ) : optimisticVote?.status === 'confirmed' ? (
+          '✓ Vote Cast'
         ) : (
           t('votingPanel.castVote')
         )}
@@ -158,11 +172,11 @@ function ProposalVoteCard({ proposal, walletWeight, onVote, isPending }: Proposa
 
 // ── Page ───────────────────────────────────────────────────────────────────
 
-export default function VotingPanel() {
+function VotingPanelContent() {
   const { t } = useTranslation();
   const { address, connected } = useWalletStore();
-  const { status, error, applyPatch, vote, reset } = useOptimisticVote();
-  const { tx, reset: resetTx } = useTransactionStatus();
+  const { getAllProposals, optimisticVotes } = useProposalStore();
+  const { getProposal, getStatus, isConfirming, castVote, tx, resetTx, resetProposal } = useOptimisticVote();
 
   // Wallet weight — replace with real on-chain balance lookup.
   const WALLET_WEIGHT = 10_000;
@@ -173,7 +187,7 @@ export default function VotingPanel() {
 
   async function handleVote(proposalId: string, choice: VoteChoice) {
     setActiveProposalId(proposalId);
-    await vote(
+    await castVote(
       proposalId,
       choice,
       WALLET_WEIGHT,
@@ -190,12 +204,15 @@ export default function VotingPanel() {
     );
   }
 
+  // Get proposals from the store (will be updated optimistically)
+  const proposals = getAllProposals().filter((p: Proposal) => p.state === 'Active');
+
   return (
     <section aria-labelledby="voting-panel-heading" style={{ padding: '1.5rem' }}>
       <h2 id="voting-panel-heading">{t('votingPanel.heading')}</h2>
 
       {/* Error banner — shown when tx fails and optimistic update is reverted */}
-      {status === 'failed' && error && (
+      {tx.status === 'failed' && activeProposalId && (
         <div
           role="alert"
           style={{
@@ -213,7 +230,7 @@ export default function VotingPanel() {
           <span>{t('votingPanel.voteFailed')}</span>
           <button
             type="button"
-            onClick={() => { reset(); setActiveProposalId(null); }}
+            onClick={() => { resetProposal(activeProposalId); resetTx(); setActiveProposalId(null); }}
             style={{ background: 'transparent', border: '1px solid #fecaca', color: '#fecaca', padding: '0.25rem 0.75rem' }}
           >
             {t('errorBoundary.retry')}
@@ -222,18 +239,22 @@ export default function VotingPanel() {
       )}
 
       {/* Proposal cards */}
-      {MOCK_PROPOSALS.map((raw) => {
-        // Apply the optimistic patch only to the proposal being voted on.
-        const proposal = applyPatch(raw);
-        const isPending = status === 'pending' && activeProposalId === raw.id;
+      {proposals.map((raw: Proposal) => {
+        const proposal = getProposal(raw.id) || raw;
+        const isPending = isConfirming(raw.id);
+        const optimisticVote = optimisticVotes[raw.id];
+        const cardProps = {
+          proposal,
+          walletWeight: WALLET_WEIGHT,
+          onVote: handleVote,
+          isPending,
+          optimisticVote,
+        };
 
         return (
           <ProposalVoteCard
             key={proposal.id}
-            proposal={proposal}
-            walletWeight={WALLET_WEIGHT}
-            onVote={handleVote}
-            isPending={isPending}
+            {...cardProps}
           />
         );
       })}

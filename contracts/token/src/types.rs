@@ -35,6 +35,22 @@ pub enum ContractError {
     InvalidAddress = 7,
     /// 8 – Address is frozen and cannot send or receive tokens
     AccountFrozen = 8,
+    /// 9 – Allowlist phase is not active; use public mint
+    AllowlistNotEnabled = 9,
+    /// 10 – Merkle proof is missing or invalid for this address
+    InvalidMerkleProof = 10,
+    /// 11 – Merkle root has not been set by admin
+    MerkleRootNotSet = 11,
+}
+
+/// Sale phase controlling which minting path is open.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub enum SalePhase {
+    /// Only addresses with a valid Merkle proof may mint.
+    Allowlist,
+    /// Anyone may mint (Merkle proof not required).
+    Public,
 }
 
 /// Storage key enum for the token contract.
@@ -86,4 +102,12 @@ pub enum TokenDataKey {
     /// Freeze flag for a specific address (persistent storage).
     /// Key space: one entry per frozen address; absent means not frozen.
     Frozen(Address),
+
+    /// Merkle root for allowlist verification (instance storage).
+    /// Key space: singleton — only one `MerkleRoot` entry exists.
+    MerkleRoot,
+
+    /// Current sale phase: Allowlist or Public (instance storage).
+    /// Key space: singleton — only one `SalePhase` entry exists.
+    SalePhase,
 }
