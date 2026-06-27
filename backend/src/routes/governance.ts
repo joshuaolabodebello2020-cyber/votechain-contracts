@@ -4,6 +4,7 @@
  */
 
 import { Router, Request, Response } from "express";
+import { withCorrelationId } from "../middleware/requestLogger";
 
 const router = Router();
 
@@ -51,7 +52,7 @@ router.get("/governance/stats", async (_req: Request, res: Response) => {
     res.json(stats);
   } catch (error) {
     console.error("Error fetching governance stats:", error);
-    res.status(500).json({ error: "Failed to fetch governance statistics" });
+    res.status(500).json(withCorrelationId(res, { error: "Failed to fetch governance statistics" }));
   }
 });
 
