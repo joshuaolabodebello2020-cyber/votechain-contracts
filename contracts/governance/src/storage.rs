@@ -38,8 +38,7 @@
 //! collide even when called with identical arguments.
 
 use soroban_sdk::{Env, Address, String};
-use crate::types::{ContractError, ContractState, DataKey, Proposal, VoteRecord};
-use soroban_sdk::{Address, Env};
+use crate::types::{ContractError, ContractState, DataKey, MultiSigAction, MultiSigConfig, Proposal, VoteRecord};
 
 // =============================================================================
 // Storage Strategy
@@ -530,29 +529,20 @@ pub fn bump_multisig_approval_ttl(env: &Env, action_id: u64, approver: &Address)
         .bump(&DataKey::MultiSigApproval(action_id, approver.clone()), ttl);
 }
 
-// ── Issue #486: Vote delegation storage ──────────────────────────────────────
+// =============================================================================
+// Metadata version storage (#547)
+// =============================================================================
 
-/// Records that `delegator` has delegated their voting power to `delegatee`.
-pub fn set_delegation(env: &Env, delegator: &Address, delegatee: &Address) {
-    env.storage()
-        .persistent()
-        .set(&DataKey::Delegation(delegator.clone()), delegatee);
-    let ttl = get_persistent_storage_ttl(env);
-    env.storage()
-        .persistent()
-        .bump(&DataKey::Delegation(delegator.clone()), ttl);
+/// Stores the current metadata schema version for newly created proposals.
+/// Bumped by `migrate()` when the proposal data format evolves.
+pub fn set_metadata_version(env: &Env, v: u32) {
+    env.storage().instance().set(&DataKey::MetadataVersion, &v);
 }
 
-/// Returns the address that `delegator` has delegated to, or `None` if no delegation is set.
-pub fn get_delegation(env: &Env, delegator: &Address) -> Option<Address> {
+/// Returns the stored metadata version, defaulting to 1 (initial schema).
+pub fn get_metadata_version(env: &Env) -> u32 {
     env.storage()
-        .persistent()
-        .get(&DataKey::Delegation(delegator.clone()))
-}
-
-/// Removes any existing delegation for `delegator`.
-pub fn clear_delegation(env: &Env, delegator: &Address) {
-    env.storage()
-        .persistent()
-        .remove(&DataKey::Delegation(delegator.clone()));
+        .instance()
+        .get(&DataKey::MetadataVersion)
+        .unwrap_or(1)
 }
