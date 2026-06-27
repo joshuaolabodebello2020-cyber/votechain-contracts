@@ -33,18 +33,24 @@ mod e2e_lifecycle_tests;
 
 use soroban_sdk::{contract, contractclient, contractimpl, token, Address, Env, String, Vec};
 use storage::{
-    get_admin as storage_get_admin, get_contract_state, get_last_proposal, get_min_duration, get_min_proposal_balance,
-    get_proposal_cooldown, get_restrict_admin_vote, get_timelock_duration, get_version,
-    get_amend_window, get_voter_snapshot, get_voting_token, has_voted, is_initialized, is_paused, load_proposal,
-    mark_voted, next_id, save_proposal, save_vote_record, save_voter_snapshot, set_admin,
-    set_contract_state, set_last_proposal, set_min_duration, set_max_duration,
-    set_min_proposal_balance, set_paused, set_proposal_cooldown, set_restrict_admin_vote,
-    set_timelock_duration, set_version, set_veto_threshold, set_voting_token, get_vote_record, get_max_duration,
-    set_pending_admin, get_pending_admin, clear_pending_admin,
-    set_admin_transfer_expiry, get_admin_transfer_expiry,
-    set_pause_reason, set_persistent_storage_ttl, get_persistent_storage_ttl,
+    get_admin as storage_get_admin, get_contract_state, get_last_proposal, get_min_duration,
+    get_min_proposal_balance, get_proposal_cooldown, get_restrict_admin_vote, get_timelock_duration,
+    get_version, get_amend_window, get_voter_snapshot, get_voting_token, get_veto_threshold,
+    has_voted, is_initialized, is_paused, load_proposal, mark_voted, next_id, save_proposal,
+    save_vote_record, save_voter_snapshot, set_admin, set_contract_state, set_last_proposal,
+    set_min_duration, set_max_duration, set_min_proposal_balance, set_paused, set_proposal_cooldown,
+    set_restrict_admin_vote, set_timelock_duration, set_version, set_veto_threshold, set_voting_token,
+    get_vote_record, get_max_duration, set_pending_admin, get_pending_admin, clear_pending_admin,
+    set_admin_transfer_expiry, get_admin_transfer_expiry, set_pause_reason,
+    set_persistent_storage_ttl, get_persistent_storage_ttl,
+    get_multisig_config, set_multisig_config, save_multisig_action, load_multisig_action,
+    set_multisig_approval, has_multisig_approval, next_multisig_action_id,
+    get_metadata_version, set_metadata_version,
 };
-use types::{ContractError, ContractState, DataKey, GovernanceConfig, Proposal, ProposalState, Vote, VoteRecord};
+use types::{
+    ContractError, ContractState, DataKey, GovernanceConfig, MultiSigAction, MultiSigActionType,
+    MultiSigConfig, Proposal, ProposalState, SpamConfig, Vote, VoteRecord,
+};
 
 const MAX_TITLE_LEN: u32 = 128;
 const MAX_DESC_LEN: u32 = 1024;
@@ -153,8 +159,8 @@ fn execute_multisig_action(
         MultiSigActionType::Pause => {
             set_paused(env, true);
             // Emit using the stored admin address as the actor.
-            if let Ok(admin) = get_admin(env) {
-                events::contract_paused(env, &admin);
+            if let Ok(admin) = storage_get_admin(env) {
+                events::contract_paused(env, &admin, None);
             }
         }
         MultiSigActionType::Unpause => {
@@ -162,7 +168,7 @@ fn execute_multisig_action(
                 return Err(ContractError::NotPaused);
             }
             set_paused(env, false);
-            if let Ok(admin) = get_admin(env) {
+            if let Ok(admin) = storage_get_admin(env) {
                 events::contract_unpaused(env, &admin);
             }
         }
@@ -247,6 +253,14 @@ impl GovernanceContract {
         if TokenSupplyClient::new(&env, &voting_token).try_total_supply().is_err() {
             return Err(ContractError::InvalidTokenContract);
         }
+        // Validate parameters
+        if min_proposal_balance < 0 {
+            return Err(ContractError::InvalidMinProposalBalance);
+        }
+        if min_duration > max_duration {
+            return Err(ContractError::InvalidDurationConfig);
+        }
+        
         set_admin(&env, &admin);
         set_voting_token(&env, &voting_token);
         let supply = TokenSupplyClient::new(&env, &voting_token).total_supply();
@@ -273,6 +287,7 @@ impl GovernanceContract {
             set_persistent_storage_ttl(&env, persistent_storage_ttl);
         }
         set_version(&env, (1, 0, 0));
+        set_metadata_version(&env, 1);
         set_contract_state(&env, &ContractState::Ready);
         events::contract_initialized(&env, &admin);
         Ok(())
@@ -403,6 +418,7 @@ impl GovernanceContract {
             return Err(ContractError::ProposalAlreadyExists);
         }
 
+        let metadata_version = get_metadata_version(&env);
         let proposal = Proposal {
             id,
             proposer: proposer.clone(),
@@ -417,10 +433,11 @@ impl GovernanceContract {
             state: ProposalState::Active,
             execute_after: 0,
             tags,
+            metadata_version,
         };
         save_proposal(&env, &proposal);
         set_last_proposal(&env, &proposer, now);
-        events::proposal_created(&env, id, &proposer);
+        events::proposal_created(&env, id, &proposer, metadata_version);
         Ok(id)
     }
 
@@ -601,7 +618,8 @@ impl GovernanceContract {
         );
         save_proposal(&env, &proposal);
         events::vote_cast(&env, proposal_id, &voter, &vote, weight);
-        if proposal.state == ProposalState::Rejected && veto_threshold > 0 && vote == Vote::No {
+        let veto_threshold = get_veto_threshold(&env);
+        if veto_threshold > 0 && proposal.votes_no >= veto_threshold {
             events::proposal_vetoed(&env, proposal_id, proposal.votes_no, veto_threshold);
         }
         Ok(())
@@ -949,7 +967,7 @@ impl GovernanceContract {
         // auth first
         admin.require_auth();
         require_non_zero_address(&env, &admin)?;
-        if get_admin(&env)? != admin {
+        if storage_get_admin(&env)? != admin {
             return Err(ContractError::NotAdmin);
         }
 
@@ -964,9 +982,9 @@ impl GovernanceContract {
             return Err(ContractError::MigrationFailed);
         }
 
-        // Place migration logic here. Currently no structural key renames are
-        // necessary; this is the canonical place to transform any values that
-        // need reshaping between versions.
+        // Bump metadata version so proposals created after this migration carry
+        // version 2, while existing proposals retain version 1 (#547).
+        set_metadata_version(&env, 2);
 
         // Bump version to v2.0.0 and emit event.
         set_version(&env, (2, 0, 0));
@@ -1071,7 +1089,7 @@ impl GovernanceContract {
     ) -> Result<(), ContractError> {
         caller.require_auth();
         require_non_zero_address(&env, &caller)?;
-        if get_admin(&env)? != caller {
+        if storage_get_admin(&env)? != caller {
             return Err(ContractError::NotAdmin);
         }
         if admins.is_empty() {
@@ -1187,5 +1205,72 @@ impl GovernanceContract {
     /// Returns the current multi-sig configuration, or `None` if not configured.
     pub fn get_multisig_config(env: Env) -> Option<MultiSigConfig> {
         get_multisig_config(&env)
+    }
+
+    // =========================================================================
+    // Metadata versioning (#547)
+    // =========================================================================
+
+    /// Returns the current metadata schema version for newly created proposals.
+    ///
+    /// Each proposal stores its own `metadata_version` at creation time, allowing
+    /// indexers and clients to identify the correct deserialization path across
+    /// contract upgrades. This function returns the version that NEWLY created
+    /// proposals will receive; existing proposals retain the version they were
+    /// created with.
+    pub fn get_metadata_version(env: Env) -> u32 {
+        get_metadata_version(&env)
+    }
+
+    // =========================================================================
+    // Anti-spam guard admin controls (#548)
+    // =========================================================================
+
+    /// Updates the spam-prevention parameters. Only the admin may call this.
+    ///
+    /// Both parameters are optional; pass the current value to leave it unchanged.
+    /// A value of `0` disables the corresponding guard.
+    ///
+    /// # Parameters
+    /// - `admin` – Contract administrator.
+    /// - `min_proposal_balance` – New minimum token balance required to create
+    ///   a proposal. Set to `0` to remove the balance requirement.
+    /// - `proposal_cooldown` – New minimum seconds a proposer must wait between
+    ///   consecutive proposals. Set to `0` to remove the cooldown.
+    ///
+    /// # Errors
+    /// - [`ContractError::InvalidAddress`] if `admin` is the zero address.
+    /// - [`ContractError::NotAdmin`] if `admin` does not match the stored admin.
+    /// - [`ContractError::ContractPaused`] if the contract is paused.
+    /// - [`ContractError::InvalidSpamConfig`] if `min_proposal_balance` is negative.
+    pub fn update_spam_config(
+        env: Env,
+        admin: Address,
+        min_proposal_balance: i128,
+        proposal_cooldown: u64,
+    ) -> Result<(), ContractError> {
+        admin.require_auth();
+        require_non_zero_address(&env, &admin)?;
+        if is_paused(&env) {
+            return Err(ContractError::ContractPaused);
+        }
+        if storage_get_admin(&env)? != admin {
+            return Err(ContractError::NotAdmin);
+        }
+        if min_proposal_balance < 0 {
+            return Err(ContractError::InvalidSpamConfig);
+        }
+        set_min_proposal_balance(&env, min_proposal_balance);
+        set_proposal_cooldown(&env, proposal_cooldown);
+        events::spam_config_updated(&env, min_proposal_balance, proposal_cooldown);
+        Ok(())
+    }
+
+    /// Returns the current spam-prevention configuration.
+    pub fn get_spam_config(env: Env) -> SpamConfig {
+        SpamConfig {
+            min_proposal_balance: get_min_proposal_balance(&env),
+            proposal_cooldown: get_proposal_cooldown(&env),
+        }
     }
 }

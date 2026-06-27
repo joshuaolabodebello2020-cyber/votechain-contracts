@@ -3,6 +3,7 @@ target/
 .env.local
 .env.testnet
 .env.mainnet
+.env.integration
 *.wasm
 
 # Coverage reports

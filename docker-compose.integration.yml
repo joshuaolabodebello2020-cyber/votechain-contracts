@@ -1,0 +1,81 @@
+services:
+  # Stellar Quickstart node — local network with Soroban RPC enabled
+  stellar-node:
+    image: stellar/quickstart:latest
+    ports:
+      - "8000:8000"
+    environment:
+      - ENABLE_SOROBAN_RPC=true
+    command: --local
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
+  # Disposable Redis used by the backend during integration tests
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  # Contract builder + deployer — runs once, then exits
+  contract-deployer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      stellar-node:
+        condition: service_healthy
+    environment:
+      - NETWORK=local
+      - STELLAR_RPC_URL=http://stellar-node:8000/soroban/rpc
+      - STELLAR_NETWORK_PASSPHRASE=Standalone Network ; February 2017
+    volumes:
+      - .:/app
+      - cargo-cache:/usr/local/cargo/registry
+      - wasm-artifacts:/app/target/wasm32-unknown-unknown/release
+    working_dir: /app
+    command: >
+      bash -c "
+        stellar contract build &&
+        ./scripts/deploy.sh
+      "
+    env_file:
+      - .env.integration
+
+  # Integration test runner — waits for deployer, then runs tests
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      stellar-node:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      contract-deployer:
+        condition: service_completed_successfully
+    environment:
+      - NETWORK=local
+      - STELLAR_RPC_URL=http://stellar-node:8000/soroban/rpc
+      - STELLAR_NETWORK_PASSPHRASE=Standalone Network ; February 2017
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - .:/app
+      - cargo-cache:/usr/local/cargo/registry
+      - wasm-artifacts:/app/target/wasm32-unknown-unknown/release
+    working_dir: /app
+    command: cargo test --test '*' -- --nocapture
+    env_file:
+      - .env.integration
+
+volumes:
+  cargo-cache:
+  wasm-artifacts:
