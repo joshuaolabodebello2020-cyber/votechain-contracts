@@ -5,6 +5,10 @@ target/
 .env.mainnet
 *.wasm
 
+# Coverage reports
+lcov.info
+coverage/
+
 # Node.js
 node_modules/
 dist/
