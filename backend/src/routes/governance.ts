@@ -55,7 +55,7 @@ router.get(
     res.json(stats);
   } catch (error) {
     console.error("Error fetching governance stats:", error);
-    res.status(500).json({ error: "Failed to fetch governance statistics" });
+    res.status(500).json(withCorrelationId(res, { error: "Failed to fetch governance statistics" }));
   }
 });
 
