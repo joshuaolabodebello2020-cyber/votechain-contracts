@@ -1,30 +1,16 @@
-# Dockerfile for VoteChain contracts
+# syntax=docker/dockerfile:1
+FROM rust:1.86-slim-bookworm AS base
 
-FROM rust:latest
-
-# Install dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    curl \
-    git \
-    pkg-config \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config libssl-dev ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Rust tools
-RUN rustup target add wasm32-unknown-unknown && \
-    rustup component add rustfmt clippy
+RUN rustup target add wasm32-unknown-unknown
 
-# Install Stellar CLI
+# Install Stellar CLI (same flags as CI)
 RUN cargo install --locked stellar-cli --features opt
 
 WORKDIR /app
+COPY . .
 
-# Copy project files
-COPY Cargo.toml Cargo.lock ./
-COPY contracts ./contracts
-
-# Build contracts
-RUN stellar contract build
-
-# Default command
-CMD ["/bin/bash"]
+CMD ["bash"]

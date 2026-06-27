@@ -1,0 +1,33 @@
+{
+  "name": "@votechain/sdk",
+  "version": "0.1.0",
+  "description": "A JavaScript/TypeScript SDK for interacting with VoteChain governance contracts on Stellar Soroban.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "votechain",
+    "soroban",
+    "stellar",
+    "sdk",
+    "governance",
+    "typescript"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@stellar/stellar-sdk": "^15.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

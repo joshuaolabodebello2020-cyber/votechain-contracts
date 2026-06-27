@@ -1,0 +1,27 @@
+{
+  "name": "votechain-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "i18next": "23.11.5",
+    "i18next-browser-languagedetector": "8.0.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-i18next": "14.1.2"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/react": "18.3.1",
+    "@types/react-dom": "18.3.1",
+    "@vitejs/plugin-react": "^6.0.2",
+    "jsdom": "^29.1.1",
+    "typescript": "5.4.5",
+    "vitest": "^4.1.7"
+  }
+}
