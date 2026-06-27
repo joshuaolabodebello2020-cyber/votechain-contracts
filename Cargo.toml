@@ -4,9 +4,13 @@ members = [
     "contracts/governance",
     "contracts/token",
 ]
+exclude = [
+    "api",
+    "indexer",
+]
 
 [workspace.dependencies]
-soroban-sdk = { version = "22.0.0", features = ["testutils"] }
+soroban-sdk = { version = "22.0.0" }
 
 [profile.release]
 opt-level = "z"

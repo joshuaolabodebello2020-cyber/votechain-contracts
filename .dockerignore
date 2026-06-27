@@ -1,0 +1,29 @@
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# CI/CD
+.github
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Cargo build artifacts (will be rebuilt in Docker)
+/target
+Cargo.lock
+
+# Documentation
+docs
+*.md
+
+# Misc
+node_modules
+.env
+.env.local
+*.log

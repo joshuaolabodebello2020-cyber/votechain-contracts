@@ -1,0 +1,19 @@
+{
+  "heading": "Governance Dashboard",
+  "lastUpdated": "Last updated: {{time}} · refreshes every 5 min",
+  "loading": "Loading governance statistics…",
+  "failedToLoad": "Failed to load statistics.",
+  "proposalsByState": "Proposals by State",
+  "total": "Total: {{count}}",
+  "participationRate": "Participation Rate Over Time",
+  "avgQuorum": "Avg Quorum Achievement",
+  "avgQuorumDescription": "Average across all finalized proposals",
+  "topVoters": "Top 10 Voters by Vote Weight",
+  "pieChartAriaLabel": "Proposals by state pie chart",
+  "lineChartAriaLabel": "Voter participation rate over time",
+  "columns": {
+    "rank": "#",
+    "address": "Address",
+    "totalWeight": "Total Weight"
+  }
+}

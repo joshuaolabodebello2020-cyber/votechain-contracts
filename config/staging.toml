@@ -1,0 +1,11 @@
+# Staging environment for integration testing before mainnet
+# Copy or override values as needed for your staging network (RPC endpoint, passphrase)
+[network]
+name = "staging"
+# Replace with your staging RPC URL (could be a dedicated testnet or private Soroban node)
+rpc_url = "https://soroban-testnet.stellar.org"
+network_passphrase = "Test SDF Network ; September 2015"
+
+[contracts]
+governance = ""
+token = ""
