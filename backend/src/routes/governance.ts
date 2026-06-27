@@ -1,9 +1,11 @@
 /**
  * Governance routes - provides dashboard metrics and statistics.
- * Replace stub handlers with real Stellar RPC / indexer calls.
+ * RPC calls are wrapped with a circuit breaker so upstream failures degrade
+ * gracefully instead of cascading.
  */
 
 import { Router, Request, Response } from "express";
+import { rpcCircuitBreaker, CircuitOpenError } from "../middleware/circuitBreaker";
 
 const router = Router();
 
@@ -14,11 +16,19 @@ interface ProposalStats {
   avgQuorumAchievement: number;
 }
 
+// GET /health/rpc — exposes circuit-breaker state
+router.get("/health/rpc", (_req: Request, res: Response) => {
+  const status = rpcCircuitBreaker.status();
+  const httpStatus = status.state === "OPEN" ? 503 : 200;
+  res.status(httpStatus).json(status);
+});
+
 // GET /governance/stats — returns governance health metrics
 router.get("/governance/stats", async (_req: Request, res: Response) => {
   try {
-    // TODO: Replace with real API calls to Stellar RPC / indexer
-    const stats: ProposalStats = {
+    // Wrap the upstream RPC call in the circuit breaker.
+    // Swap the lambda body for a real Stellar RPC / indexer call.
+    const stats: ProposalStats = await rpcCircuitBreaker.call(async () => ({
       byState: {
         Active: 3,
         Passed: 12,
@@ -46,12 +56,16 @@ router.get("/governance/stats", async (_req: Request, res: Response) => {
         { address: "GCDE...7890", total_weight: 1_500_000 },
       ],
       avgQuorumAchievement: 73,
-    };
+    }));
 
     res.json(stats);
   } catch (error) {
-    console.error("Error fetching governance stats:", error);
-    res.status(500).json({ error: "Failed to fetch governance statistics" });
+    if (error instanceof CircuitOpenError) {
+      res.status(503).json({ error: error.message, retryAfterMs: error.retryAfterMs });
+    } else {
+      console.error("Error fetching governance stats:", error);
+      res.status(500).json({ error: "Failed to fetch governance statistics" });
+    }
   }
 });
 
