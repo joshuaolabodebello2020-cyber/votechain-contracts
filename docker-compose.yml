@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  # Stellar RPC node for contract deployment
+  stellar-rpc:
+    image: stellar/stellar-core:latest
+    container_name: votechain-stellar-rpc
+    environment:
+      - STELLAR_NETWORK_ID=TESTNET_SDF_2
+    ports:
+      - "11625:11625"
+      - "11626:11626"
+    networks:
+      - votechain-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11626"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  # PostgreSQL for data persistence (optional)
+  postgres:
+    image: postgres:15-alpine
+    container_name: votechain-postgres
+    environment:
+      POSTGRES_DB: votechain
+      POSTGRES_USER: votechain
+      POSTGRES_PASSWORD: votechain_dev_password
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - votechain-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U votechain"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Contract deployment service
+  contract-deploy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: votechain-contracts
+    working_dir: /app
+    volumes:
+      - .:/app
+      - cargo-cache:/root/.cargo
+    environment:
+      - RUST_LOG=debug
+      - STELLAR_RPC_URL=http://stellar-rpc:11626
+    depends_on:
+      - stellar-rpc
+    networks:
+      - votechain-network
+    command: /bin/sh -c "cargo test && stellar contract build"
+    restart: on-failure
+
+volumes:
+  postgres-data:
+  cargo-cache:
+
+networks:
+  votechain-network:
+    driver: bridge
