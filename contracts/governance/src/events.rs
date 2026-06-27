@@ -217,3 +217,18 @@ pub fn delegation_cleared(env: &Env, delegator: &Address) {
     env.events()
         .publish((symbol_short!("undelegat"), delegator.clone()), ());
 }
+
+/// Emits a `mindupdate` event when the minimum duration is changed by admin.
+pub fn min_duration_updated(env: &Env, new_min: u64) {
+    env.events().publish((symbol_short!("mindupdate"),), new_min);
+}
+
+/// Emits a `maxdupdate` event when the maximum duration is changed by admin.
+pub fn max_duration_updated(env: &Env, new_max: u64) {
+    env.events().publish((symbol_short!("maxdupdate"),), new_max);
+}
+
+/// Emits a `qdflupdate` event when the default quorum is changed by admin.
+pub fn quorum_default_updated(env: &Env, new_default: i128) {
+    env.events().publish((symbol_short!("qdflupdate"),), new_default);
+}
