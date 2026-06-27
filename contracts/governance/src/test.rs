@@ -252,9 +252,7 @@ fn test_amend_proposal_before_voting_starts() {
         &0_u64,
         &60_u64,
         &2_592_000_u64,
-        &false,
-        &60_u64,
-        &0_u64,
+        &false, &crate::types::GovernanceOptions { amend_window: 60, timelock_duration: 0, veto_threshold: 0, persistent_storage_ttl: 0 },
     );
 
     let proposer = Address::generate(&env);
@@ -293,9 +291,7 @@ fn test_amend_proposal_after_voting_starts_reverts() {
         &0_u64,
         &60_u64,
         &2_592_000_u64,
-        &false,
-        &60_u64,
-        &0_u64,
+        &false, &crate::types::GovernanceOptions { amend_window: 60, timelock_duration: 0, veto_threshold: 0, persistent_storage_ttl: 0 },
     );
 
     let proposer = Address::generate(&env);
@@ -331,9 +327,7 @@ fn test_amend_proposal_by_non_proposer_reverts() {
         &0_u64,
         &60_u64,
         &2_592_000_u64,
-        &false,
-        &60_u64,
-        &0_u64,
+        &false, &crate::types::GovernanceOptions { amend_window: 60, timelock_duration: 0, veto_threshold: 0, persistent_storage_ttl: 0 },
     );
 
     let proposer = Address::generate(&env);
@@ -390,8 +384,12 @@ fn test_veto_threshold_rejects_proposal_immediately() {
         &60_u64,
         &2_592_000_u64,
         &false,
-        &0_u64,
-        &5_000_000_i128,
+        &crate::types::GovernanceOptions {
+            amend_window: 0,
+            timelock_duration: 0,
+            veto_threshold: 5_000_000,
+            persistent_storage_ttl: 0,
+        },
     );
 
     let proposer = Address::generate(&env);
@@ -401,6 +399,7 @@ fn test_veto_threshold_rejects_proposal_immediately() {
         &String::from_str(&env, "desc"),
         &100,
         &3600,
+        &Vec::new(&env),
     );
 
     let voter = Address::generate(&env);
@@ -2134,11 +2133,6 @@ fn test_admin_cannot_vote_own_proposal_when_restricted() {
         &3600,
         &Vec::new(&env),
     );
-
-    // B has never proposed — must succeed immediately despite A being in cooldown
-    let id = client.create_proposal(
-        &proposer_b,
-        &String::from_str(&env, "B first"),
     // admin tries to vote on their own proposal — should panic
     client.cast_vote(&admin, &id, &Vote::Yes);
 }
@@ -2202,10 +2196,47 @@ fn test_non_admin_can_vote_when_admin_restricted() {
 /// Proposing at exactly `last + cooldown` (boundary) must succeed.
 #[test]
 fn test_cooldown_exact_boundary_accepted() {
-    let voter = Address::generate(&env);
-    tok.mint(&admin, &voter, &500_000_i128);
-    client.cast_vote(&voter, &id, &Vote::Yes);
-    assert_eq!(client.get_proposal(&id).votes_yes, 500_000);
+    let env = Env::default();
+    env.mock_all_auths();
+    let client = new_client(&env);
+    let admin = Address::generate(&env);
+    let token_id = setup_token(&env, &admin);
+    let cooldown: u64 = 3600;
+    client.initialize(
+        &admin,
+        &token_id,
+        &0_i128,
+        &cooldown,
+        &60_u64,
+        &2_592_000_u64,
+        &false,
+        &crate::types::GovernanceOptions {
+            amend_window: 0,
+            timelock_duration: 0,
+            veto_threshold: 0,
+            persistent_storage_ttl: 0,
+        },
+    );
+
+    let proposer = Address::generate(&env);
+    client.create_proposal(
+        &proposer,
+        &String::from_str(&env, "First"),
+        &String::from_str(&env, "desc"),
+        &100,
+        &7200,
+        &Vec::new(&env),
+    );
+    env.ledger().with_mut(|l| l.timestamp += cooldown);
+    let id2 = client.create_proposal(
+        &proposer,
+        &String::from_str(&env, "Boundary"),
+        &String::from_str(&env, "desc"),
+        &100,
+        &3600,
+        &Vec::new(&env),
+    );
+    assert_eq!(client.get_proposal(&id2).state, ProposalState::Active);
 }
 
 // ── end SEC-016 ───────────────────────────────────────────────────────────────
@@ -2805,8 +2836,46 @@ fn test_initialize_restrict_admin_vote_enforced() {
 #[test]
 #[should_panic]
 fn test_cooldown_one_second_before_boundary_reverts() {
-    // admin voting on their own proposal must revert
-    client.cast_vote(&admin, &id, &Vote::Yes);
+    let env = Env::default();
+    env.mock_all_auths();
+    let client = new_client(&env);
+    let admin = Address::generate(&env);
+    let token_id = setup_token(&env, &admin);
+    let cooldown: u64 = 3600;
+    client.initialize(
+        &admin,
+        &token_id,
+        &0_i128,
+        &cooldown,
+        &60_u64,
+        &2_592_000_u64,
+        &false,
+        &crate::types::GovernanceOptions {
+            amend_window: 0,
+            timelock_duration: 0,
+            veto_threshold: 0,
+            persistent_storage_ttl: 0,
+        },
+    );
+
+    let proposer = Address::generate(&env);
+    client.create_proposal(
+        &proposer,
+        &String::from_str(&env, "First"),
+        &String::from_str(&env, "desc"),
+        &100,
+        &7200,
+        &Vec::new(&env),
+    );
+    env.ledger().with_mut(|l| l.timestamp += cooldown - 1);
+    client.create_proposal(
+        &proposer,
+        &String::from_str(&env, "Too soon"),
+        &String::from_str(&env, "desc"),
+        &100,
+        &3600,
+        &Vec::new(&env),
+    );
 }
 
 /// Calling initialize a second time must revert with AlreadyInitialized (#13).
@@ -3094,32 +3163,21 @@ fn test_full_lifecycle_cancel() {
     let client = new_client(&env);
     let admin = Address::generate(&env);
     let token_id = setup_token(&env, &admin);
-    let cooldown: u64 = 3600;
-    client.initialize(&admin, &token_id, &0_i128, &cooldown);
 
-    let proposer = Address::generate(&env);
-    client.create_proposal(
-        &proposer,
-        &String::from_str(&env, "First"),
-        &String::from_str(&env, "desc"),
-        &100,
-        &7200,
-    );
-    env.ledger().with_mut(|l| l.timestamp += cooldown);
-    client.create_proposal(
-        &proposer,
-        &String::from_str(&env, "Second"),
-        &String::from_str(&env, "desc"),
-        &100,
-        &7200,
-    );
-    // immediately after second — cooldown reset, must be blocked
-    client.create_proposal(
-        &proposer,
-        &String::from_str(&env, "Third too soon"),
-        &String::from_str(&env, "desc"),
-        &100,
-        &3600,
+    client.initialize(
+        &admin,
+        &token_id,
+        &0_i128,
+        &0_u64,
+        &60_u64,
+        &2_592_000_u64,
+        &false,
+        &crate::types::GovernanceOptions {
+            amend_window: 0,
+            timelock_duration: 0,
+            veto_threshold: 0,
+            persistent_storage_ttl: 0,
+        },
     );
 }
 

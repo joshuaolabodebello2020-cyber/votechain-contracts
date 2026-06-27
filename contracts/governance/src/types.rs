@@ -273,6 +273,48 @@ pub struct VoteRecord {
     pub weight: i128,
 }
 
+/// Optional governance parameters passed to [`GovernanceContract::initialize`].
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct GovernanceOptions {
+    pub amend_window: u64,
+    pub timelock_duration: u64,
+    pub veto_threshold: i128,
+    pub persistent_storage_ttl: u32,
+}
+
+/// Multi-sig admin configuration: a list of admin addresses and an approval threshold.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct MultiSigConfig {
+    pub admins: Vec<Address>,
+    pub threshold: u32,
+}
+
+/// The type of privileged action that requires multi-sig approval.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub enum MultiSigActionType {
+    ExecuteProposal,
+    CancelProposal,
+    UpdateMultiSig,
+    Pause,
+    Unpause,
+}
+
+/// A pending multi-sig action awaiting threshold approvals.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct MultiSigAction {
+    pub id: u64,
+    pub action_type: MultiSigActionType,
+    pub proposal_id: u64,
+    /// New multi-sig config for `UpdateMultiSig` actions; otherwise empty (`admins` len 0).
+    pub new_config: MultiSigConfig,
+    pub approvals: u32,
+    pub executed: bool,
+}
+
 /// Full contract configuration returned by [`get_config`].
 #[contracttype]
 #[derive(Clone, Debug)]

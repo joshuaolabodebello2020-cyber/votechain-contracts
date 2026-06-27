@@ -343,6 +343,53 @@ pub fn get_voter_snapshot(env: &Env, proposal_id: u64, voter: &Address) -> Optio
         .persistent()
         .get(&DataKey::VoterSnapshot(proposal_id, voter.clone()))
 }
+
+// =============================================================================
+// Vote delegation storage
+// =============================================================================
+
+/// Stores the delegatee for `delegator`.
+pub fn set_delegation(env: &Env, delegator: &Address, delegatee: &Address) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::Delegation(delegator.clone()), delegatee);
+}
+
+/// Returns the delegatee for `delegator`, if any.
+pub fn get_delegatee(env: &Env, delegator: &Address) -> Option<Address> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::Delegation(delegator.clone()))
+}
+
+/// Clears the delegation record for `delegator`.
+pub fn clear_delegation(env: &Env, delegator: &Address) {
+    env.storage()
+        .persistent()
+        .remove(&DataKey::Delegation(delegator.clone()));
+}
+
+/// Stores the aggregate delegated weight received by `delegatee`.
+pub fn set_delegated_weight(env: &Env, delegatee: &Address, weight: i128) {
+    if weight == 0 {
+        env.storage()
+            .persistent()
+            .remove(&DataKey::DelegatedWeight(delegatee.clone()));
+    } else {
+        env.storage()
+            .persistent()
+            .set(&DataKey::DelegatedWeight(delegatee.clone()), &weight);
+    }
+}
+
+/// Returns the aggregate delegated weight for `delegatee` (0 if none).
+pub fn get_delegated_weight(env: &Env, delegatee: &Address) -> i128 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::DelegatedWeight(delegatee.clone()))
+        .unwrap_or(0)
+}
+
 /// Stores the contract version as a `(major, minor, patch)` tuple.
 pub fn set_version(env: &Env, version: (u32, u32, u32)) {
     env.storage().instance().set(&DataKey::Version, &version);
@@ -567,7 +614,7 @@ pub fn bump_proposal_ttl(env: &Env, proposal_id: u64) {
     let ttl = get_persistent_storage_ttl(env);
     env.storage()
         .persistent()
-        .bump(&DataKey::Proposal(proposal_id), ttl);
+        .extend_ttl(&DataKey::Proposal(proposal_id), ttl, ttl);
 }
 
 /// Bumps the TTL of a vote record entry.
@@ -575,7 +622,7 @@ pub fn bump_vote_record_ttl(env: &Env, proposal_id: u64, voter: &Address) {
     let ttl = get_persistent_storage_ttl(env);
     env.storage()
         .persistent()
-        .bump(&DataKey::VoteRecord(proposal_id, voter.clone()), ttl);
+        .extend_ttl(&DataKey::VoteRecord(proposal_id, voter.clone()), ttl, ttl);
 }
 
 /// Bumps the TTL of a HasVoted flag entry.
@@ -583,7 +630,7 @@ pub fn bump_has_voted_ttl(env: &Env, proposal_id: u64, voter: &Address) {
     let ttl = get_persistent_storage_ttl(env);
     env.storage()
         .persistent()
-        .bump(&DataKey::HasVoted(proposal_id, voter.clone()), ttl);
+        .extend_ttl(&DataKey::HasVoted(proposal_id, voter.clone()), ttl, ttl);
 }
 
 /// Bumps the TTL of a voter snapshot entry.
@@ -591,7 +638,7 @@ pub fn bump_voter_snapshot_ttl(env: &Env, proposal_id: u64, voter: &Address) {
     let ttl = get_persistent_storage_ttl(env);
     env.storage()
         .persistent()
-        .bump(&DataKey::VoterSnapshot(proposal_id, voter.clone()), ttl);
+        .extend_ttl(&DataKey::VoterSnapshot(proposal_id, voter.clone()), ttl, ttl);
 }
 
 /// Bumps the TTL of a LastProposal entry.
@@ -599,7 +646,7 @@ pub fn bump_last_proposal_ttl(env: &Env, proposer: &Address) {
     let ttl = get_persistent_storage_ttl(env);
     env.storage()
         .persistent()
-        .bump(&DataKey::LastProposal(proposer.clone()), ttl);
+        .extend_ttl(&DataKey::LastProposal(proposer.clone()), ttl, ttl);
 }
 
 /// Bumps the TTL of a multi-sig action entry.
@@ -607,7 +654,7 @@ pub fn bump_multisig_action_ttl(env: &Env, action_id: u64) {
     let ttl = get_persistent_storage_ttl(env);
     env.storage()
         .persistent()
-        .bump(&DataKey::MultiSigAction(action_id), ttl);
+        .extend_ttl(&DataKey::MultiSigAction(action_id), ttl, ttl);
 }
 
 /// Bumps the TTL of a multi-sig approval entry.
@@ -615,7 +662,7 @@ pub fn bump_multisig_approval_ttl(env: &Env, action_id: u64, approver: &Address)
     let ttl = get_persistent_storage_ttl(env);
     env.storage()
         .persistent()
-        .bump(&DataKey::MultiSigApproval(action_id, approver.clone()), ttl);
+        .extend_ttl(&DataKey::MultiSigApproval(action_id, approver.clone()), ttl, ttl);
 }
 
 // =============================================================================
