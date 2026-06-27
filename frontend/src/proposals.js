@@ -385,7 +385,7 @@ function renderToast(toast) {
       <div class="toast-body">
         <div>${toast.status === TOAST_STATUS.pending ? 'Your transaction is pending confirmation.' : toast.status === TOAST_STATUS.confirmed ? 'Transaction confirmed successfully.' : 'Transaction failed to complete.'}</div>
         <div>${toast.hash}</div>
-        ${toast.error ? `<div style="margin-top:0.5rem;color:#fca5a5;">${toast.error}</div>` : ''}
+        ${toast.error ? `<div class="toast-error-message">${toast.error}</div>` : ''}
       </div>
       <div class="toast-actions">
         ${actionButtonHtml}

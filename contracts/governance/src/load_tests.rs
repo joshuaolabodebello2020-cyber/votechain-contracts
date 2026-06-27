@@ -25,7 +25,7 @@ fn setup_token(env: &Env, admin: &Address) -> Address {
 fn new_gov(env: &Env, admin: &Address, token_id: &Address) -> GovernanceContractClient<'static> {
     let id = env.register(GovernanceContract, ());
     let client = GovernanceContractClient::new(env, &id);
-    client.initialize(admin, token_id, &0_i128, &0_u64);
+    client.initialize(admin, token_id, &0_i128, &0_u64, &60_u64, &2_592_000_u64, &false, &0_u64, &0_u64, &0_i128, &0_u32, &0_u32);
     client
 }
 

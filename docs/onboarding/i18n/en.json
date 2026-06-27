@@ -1,0 +1,26 @@
+{
+  "onboarding": {
+    "welcome":         { "title": "Welcome to VoteChain", "body": "VoteChain lets your community create proposals, vote with token weight, and execute decisions — all transparently on the Stellar blockchain.", "cta": "Get started" },
+    "connect-wallet":  { "title": "Connect your wallet",  "body": "Connect a Stellar-compatible wallet (e.g. Freighter) to interact with governance. Your vote weight equals your governance token balance.", "cta": "Next" },
+    "create-proposal": { "title": "Create a proposal",    "body": "Any address can submit a proposal. Provide a title, description, quorum threshold, and voting duration in seconds.", "cta": "Next" },
+    "cast-vote":       { "title": "Cast your vote",        "body": "During the active voting window, cast Yes, No, or Abstain. Each address may vote exactly once per proposal.", "cta": "Next" },
+    "lifecycle":       { "title": "Proposal lifecycle",    "body": "After the voting period ends, anyone can finalise the proposal. It passes when total_votes ≥ quorum AND yes > no, then an admin can execute it.", "cta": "Next" },
+    "done":            { "title": "You're ready to govern","body": "You can revisit this tutorial at any time from the Help menu.", "cta": "Done" }
+  },
+  "glossary": {
+    "proposal":    "An on-chain governance item with a title, description, quorum requirement, and fixed voting window. Any address may create one.",
+    "quorum":      "The minimum total votes required for a proposal to be valid.",
+    "vote-weight": "The number of governance tokens held by a voter at the time of voting.",
+    "abstain":     "A vote choice that counts toward quorum but neither supports nor opposes the proposal.",
+    "finalise":    "Closing a proposal after its voting period expires. The contract then marks it Passed or Rejected.",
+    "execute":     "Admin action that marks a Passed proposal as Executed.",
+    "cancel":      "Admin action that stops an Active proposal before its voting window ends.",
+    "lifecycle":   "Active → Passed/Rejected → Executed, or Active → Cancelled."
+  },
+  "common": {
+    "dismiss": "Dismiss",
+    "reopen":  "Help",
+    "close":   "Close",
+    "step":    "Step {{current}} of {{total}}"
+  }
+}

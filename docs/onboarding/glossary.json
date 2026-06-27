@@ -1,0 +1,45 @@
+{
+  "version": "1.0.0",
+  "terms": [
+    {
+      "id": "proposal",
+      "term": "Proposal",
+      "definition": "An on-chain governance item with a title, description, quorum requirement, and fixed voting window. Any address may create one."
+    },
+    {
+      "id": "quorum",
+      "term": "Quorum",
+      "definition": "The minimum total votes (yes + no + abstain) required for a proposal to be valid. Set by the proposer at creation time."
+    },
+    {
+      "id": "vote-weight",
+      "term": "Vote weight",
+      "definition": "The number of governance tokens held by a voter at the time of voting. More tokens = more influence."
+    },
+    {
+      "id": "abstain",
+      "term": "Abstain",
+      "definition": "A vote choice that counts toward quorum but neither supports nor opposes the proposal."
+    },
+    {
+      "id": "finalise",
+      "term": "Finalise",
+      "definition": "The act of closing a proposal after its voting period expires. Anyone can trigger this. The contract then marks the proposal Passed or Rejected."
+    },
+    {
+      "id": "execute",
+      "term": "Execute",
+      "definition": "Admin action that marks a Passed proposal as Executed, signalling that its outcome has been acted on off-chain or on-chain."
+    },
+    {
+      "id": "cancel",
+      "term": "Cancel",
+      "definition": "Admin action that stops an Active proposal before its voting window ends."
+    },
+    {
+      "id": "lifecycle",
+      "term": "Lifecycle",
+      "definition": "The sequence of states a proposal moves through: Active → Passed/Rejected → Executed, or Active → Cancelled."
+    }
+  ]
+}
