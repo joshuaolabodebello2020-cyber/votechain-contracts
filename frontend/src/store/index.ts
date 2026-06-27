@@ -59,12 +59,14 @@ interface ProposalStoreState {
   // Loading/error state for fetching
   loading: boolean;
   error: string | null;
+  // Last fetch timestamp for stale data indication
+  lastFetch: number | null;
   // Last block we fetched data at (for deduplication)
   lastBlock: number;
   // Optimistic vote patches per proposal
   optimisticVotes: Record<string, OptimisticVote>;
   // Actions
-  setProposals: (proposals: Proposal[], block: number) => void;
+  setProposals: (proposals: Proposal[], block: number, timestamp?: number) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   invalidate: () => void;
@@ -147,10 +149,11 @@ export const useProposalStore = create<ProposalStoreState>((set, get) => ({
   proposals: {},
   loading: true,
   error: null,
+  lastFetch: null,
   lastBlock: 0,
   optimisticVotes: {},
 
-  setProposals: (proposals: Proposal[], block: number) =>
+  setProposals: (proposals: Proposal[], block: number, timestamp?: number) =>
     set((state: ProposalStoreState) => {
       // Remove optimistic votes that are already confirmed, since fresh data will reflect them
       const filteredOptimisticVotes: Record<string, OptimisticVote> = {};
@@ -163,6 +166,7 @@ export const useProposalStore = create<ProposalStoreState>((set, get) => ({
       return {
         proposals: Object.fromEntries(proposals.map((p: Proposal) => [p.id, p])),
         lastBlock: block,
+        lastFetch: timestamp ?? Date.now(),
         error: null,
         optimisticVotes: filteredOptimisticVotes,
       };
@@ -172,7 +176,7 @@ export const useProposalStore = create<ProposalStoreState>((set, get) => ({
 
   setError: (error: string | null) => set({ error }),
 
-  invalidate: () => set({ proposals: {}, lastBlock: 0, error: null }),
+  invalidate: () => set({ proposals: {}, lastBlock: 0, lastFetch: null, error: null }),
 
   applyOptimisticVote: (proposalId: string, choice: VoteRecord['type'], weight: number) =>
     set((state: ProposalStoreState) => ({

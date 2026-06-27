@@ -1,23 +1,13 @@
-import React, { useState, lazy, Suspense } from 'react';
-import VotingPanelSkeleton from './VotingPanelSkeleton';
-
-const LazyVotingPanelContent = lazy(() => import('./VotingPanelContent'));
-
-export default function VotingPanel() {
-  return (
-    <Suspense fallback={<VotingPanelSkeleton />}>
-      <LazyVotingPanelContent />
-    </Suspense>
-  );
-}
-
-// ── Original content moved to VotingPanelContent.tsx ───────────────────────
-
+import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Proposal, VoteRecord } from '../types';
 import { useWalletStore, useProposalStore } from '../store';
 import { useOptimisticVote, type VoteChoice } from '../hooks/useOptimisticVote';
 import { TransactionToast } from '../components/TransactionToast';
+import { validateVote, type ValidationResult } from '../utils/validation';
+import { OfflineBanner } from '../components/OfflineBanner';
+import { StaleDataIndicator } from '../components/NetworkErrorBanner';
+import { useNetworkStatus } from '../hooks/useNetworkStatus';
 
 // ── Stub tx broadcaster ────────────────────────────────────────────────────
 // Replace this with your real Soroban contract call when the backend is wired.
@@ -75,19 +65,23 @@ interface ProposalVoteCardProps {
 
 function ProposalVoteCard({ proposal, walletWeight, onVote, isPending, optimisticVote }: ProposalVoteCardProps) {
   const { t } = useTranslation();
-  // Use optimisticVote as the selected choice if it exists
   const [selected, setSelected] = useState<VoteChoice | null>(optimisticVote?.choice || null);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
 
-  // Update selected if optimisticVote changes
   React.useEffect(() => {
     if (optimisticVote?.choice) {
       setSelected(optimisticVote.choice);
     }
   }, [optimisticVote?.choice]);
 
+  const voteValidation: ValidationResult = useMemo(() => validateVote(selected), [selected]);
+
   async function handleSubmit() {
-    if (!selected) return;
-    await onVote(proposal.id, selected);
+    setSubmitAttempted(true);
+    if (!voteValidation.valid) return;
+    setSelected(null);
+    setSubmitAttempted(false);
+    await onVote(proposal.id, selected!);
   }
 
   return (
@@ -134,7 +128,7 @@ function ProposalVoteCard({ proposal, walletWeight, onVote, isPending, optimisti
             choice,
             selected: selected === choice,
             disabled: isPending || (optimisticVote?.status === 'confirmed'),
-            onClick: () => setSelected(choice),
+            onClick: () => { setSelected(choice); setSubmitAttempted(false); },
             label: t(`votingPanel.vote${choice}`),
           };
           return (
@@ -147,36 +141,44 @@ function ProposalVoteCard({ proposal, walletWeight, onVote, isPending, optimisti
       </div>
 
       {/* Submit */}
-      <button
-        type="button"
-        onClick={handleSubmit}
-        disabled={!selected || isPending || (optimisticVote?.status === 'confirmed')}
-        aria-disabled={!selected || isPending || (optimisticVote?.status === 'confirmed')}
-        aria-label={t('votingPanel.submitAriaLabel', { type: selected ?? '', id: proposal.id })}
-        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
-      >
-        {isPending ? (
-          <>
-            <span className="spinner" aria-hidden="true" />
-            {t('votingPanel.confirming')}
-          </>
-        ) : optimisticVote?.status === 'confirmed' ? (
-          '✓ Vote Cast'
-        ) : (
-          t('votingPanel.castVote')
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+        {submitAttempted && !voteValidation.valid && (
+          <p id={`vote-error-${proposal.id}`} role="alert" style={{ color: '#fca5a5', fontSize: '0.85rem' }}>
+            {voteValidation.error}
+          </p>
         )}
-      </button>
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={!selected || isPending || (optimisticVote?.status === 'confirmed')}
+          aria-disabled={!selected || isPending || (optimisticVote?.status === 'confirmed')}
+          aria-label={t('votingPanel.submitAriaLabel', { type: selected ?? '', id: proposal.id })}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+        >
+          {isPending ? (
+            <>
+              <span className="spinner" aria-hidden="true" />
+              {t('votingPanel.confirming')}
+            </>
+          ) : optimisticVote?.status === 'confirmed' ? (
+            '✓ Vote Cast'
+          ) : (
+            t('votingPanel.castVote')
+          )}
+        </button>
+      </div>
     </div>
   );
 }
 
 // ── Page ───────────────────────────────────────────────────────────────────
 
-function VotingPanelContent() {
+export default function VotingPanelContent() {
   const { t } = useTranslation();
   const { address, connected } = useWalletStore();
-  const { getAllProposals, optimisticVotes } = useProposalStore();
+  const { getAllProposals, optimisticVotes, lastFetch } = useProposalStore();
   const { getProposal, getStatus, isConfirming, castVote, tx, resetTx, resetProposal } = useOptimisticVote();
+  const { isOnline } = useNetworkStatus();
 
   // Wallet weight — replace with real on-chain balance lookup.
   const WALLET_WEIGHT = 10_000;
@@ -210,6 +212,9 @@ function VotingPanelContent() {
   return (
     <section aria-labelledby="voting-panel-heading" style={{ padding: '1.5rem' }}>
       <h2 id="voting-panel-heading">{t('votingPanel.heading')}</h2>
+
+      <OfflineBanner onRetry={() => window.location.reload()} />
+      {lastFetch && <StaleDataIndicator isOffline={!isOnline} lastFetchTime={new Date(lastFetch)} />}
 
       {/* Error banner — shown when tx fails and optimistic update is reverted */}
       {tx.status === 'failed' && activeProposalId && (

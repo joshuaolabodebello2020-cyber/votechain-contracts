@@ -1,29 +1,7 @@
-import React, { useMemo, useState, lazy, Suspense } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Proposal, ProposalStatus } from '../../types/proposal';
 import { useOgMeta } from '../../hooks/useOgMeta';
 import './ProposalDetail.css';
-import ProposalDetailSkeleton from './ProposalDetailSkeleton';
-
-const LazyProposalDetailContent = lazy(() => import('./ProposalDetailContent'));
-
-interface ProposalDetailProps {
-  proposal: Proposal;
-  isAdmin?: boolean;
-  onVote?: (type: 'Yes' | 'No' | 'Abstain') => void;
-  onFinalize?: () => void;
-  onExecute?: () => void;
-  onCancel?: () => void;
-}
-
-const ProposalDetail: React.FC<ProposalDetailProps> = (props) => {
-  return (
-    <Suspense fallback={<ProposalDetailSkeleton />}>
-      <LazyProposalDetailContent {...props} />
-    </Suspense>
-  );
-};
-
-export default ProposalDetail;
 
 interface ProposalDetailContentProps {
   proposal: Proposal;
@@ -223,4 +201,4 @@ const ProposalDetailContent: React.FC<ProposalDetailContentProps> = ({
   );
 };
 
-export default ProposalDetail;
+export default ProposalDetailContent;
