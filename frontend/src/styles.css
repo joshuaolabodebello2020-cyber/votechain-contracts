@@ -14,10 +14,11 @@
   --color-surface-2:    #eef2f6;
   --color-border:       #e2e8f0;
   --color-text:         #1e293b;
-  --color-text-muted:   #64748b;
-  --color-primary:      #3b82f6;
+  --color-text-muted:   #5b6b82; /* Fixed to >= 4.5:1 contrast on bg/surface */
+  --color-primary:      #1e60d5; /* Fixed to >= 4.5:1 contrast on surface */
   --color-primary-dark: #2563eb;
-  --color-focus:        #3b82f6;
+  --color-focus:        #1e60d5;
+  --color-error:        #b91c1c; /* Dynamic error variable */
 
   /* State badge colours — meet 4.5:1 on light surface */
   --badge-active-bg:    #ecfdf5;
@@ -56,8 +57,9 @@ html.dark {
   --color-text:         #e8eaf6;
   --color-text-muted:   #8b90b0;
   --color-primary:      #6c8fff;
-  --color-primary-dark: #4a6fe8;
+  --color-primary-dark: #3c5ecb; /* Fixed to >= 4.5:1 contrast for white text on it */
   --color-focus:        #6c8fff;
+  --color-error:        #f87171; /* Dynamic error variable */
 
   /* State badge colours — meet 4.5:1 on dark surface */
   --badge-active-bg:    #0d3b2e;
@@ -587,6 +589,11 @@ main { flex: 1; padding: 2rem 0 4rem; }
   font-size: 0.85rem;
   color: var(--color-text-muted);
   word-break: break-word;
+}
+
+.toast-error-message {
+  margin-top: 0.5rem;
+  color: var(--color-error);
 }
 
 .toast-status {

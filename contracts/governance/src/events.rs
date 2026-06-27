@@ -13,177 +13,152 @@
 // limitations under the License.
 
 use soroban_sdk::{symbol_short, Address, Env, String};
-use crate::types::{ProposalState, Vote};
-use soroban_sdk::{symbol_short, Address, Env};
+use crate::types::{MultiSigActionType, ProposalState, Vote};
+
+// First topic on every governance event so off-chain indexers can distinguish
+// governance events from token events when aggregating across contracts (#549).
+const CONTRACT_TYPE: fn() -> soroban_sdk::Symbol = || symbol_short!("gov");
 
 /// # Event Schema
 ///
 /// All events are published via `env.events().publish(topics, data)`.
-/// Topics are a tuple of `(Symbol, ...)` for efficient off-chain filtering.
+/// The first topic is always `"gov"` to enable cross-contract indexing (#549).
 ///
-/// | Function      | Topic 0        | Topic 1       | Data                              |
-/// |---------------|----------------|---------------|-----------------------------------|
-/// | initialize    | `"init"`       | —             | `admin: Address`                  |
-/// | create_proposal | `"created"`  | `id: u64`     | `proposer: Address`               |/// | amend_proposal | "amended"   | `id: u64`     | `(proposer, title, description)`  |/// | cast_vote     | `"vote"`       | `id: u64`     | `(voter, vote, weight)`           |
-/// | finalise      | `"final"`      | `id: u64`     | `state: ProposalState`            |
-/// | execute       | `"executed"`   | `id: u64`     | `()`                              |
-/// | cancel        | `"cancelled"`  | `id: u64`     | `()`                              |
-/// | update_quorum | `"qupdate"`    | `id: u64`     | `new_quorum: i128`                |
-/// | transfer_admin | `"admxfer"`   | —             | `(old_admin, new_admin): (Address, Address)` |
-///
+/// | Function             | Topics                          | Data                                      |
+/// |----------------------|---------------------------------|-------------------------------------------|
+/// | initialize           | `("gov", "init")`               | `admin: Address`                          |
+/// | create_proposal      | `("gov", "created", id)`        | `(proposer: Address, metadata_ver: u32)`  |
+/// | amend_proposal       | `("gov", "amended", id)`        | `(proposer, title, description)`          |
+/// | cast_vote            | `("gov", "vote", id)`           | `(voter, vote, weight)`                   |
+/// | finalise             | `("gov", "final", id)`          | `(state, execute_after)`                  |
+/// | execute              | `("gov", "executed", id)`       | `()`                                      |
+/// | cancel               | `("gov", "cancelled", id)`      | `()`                                      |
+/// | update_quorum        | `("gov", "qupdate", id)`        | `new_quorum: i128`                        |
+/// | transfer_admin       | `("gov", "admxfer")`            | `(old_admin, new_admin)`                  |
+/// | propose_admin_xfer   | `("gov", "admprop")`            | `(admin, nominee, expiry)`                |
+/// | pause                | `("gov", "paused")`             | `(admin, reason)`                         |
+/// | unpause              | `("gov", "unpaused")`           | `admin: Address`                          |
+/// | upgrade              | `("gov", "upgraded")`           | `(old_ver, new_ver)`                      |
+/// | migrate              | `("gov", "migrated")`           | `(old_ver, new_ver)`                      |
+/// | update_spam_config   | `("gov", "spamcfg")`            | `(min_balance, cooldown)`                 |
+/// | initialize_multisig  | `("gov", "mscfg")`              | `threshold: u32`                          |
+/// | propose_multisig     | `("gov", "msprop", action_id)`  | `(proposer, action_type)`                 |
+/// | approve_multisig     | `("gov", "msapprv", action_id)` | `(approver, approvals, threshold)`        |
+/// | exec_multisig        | `("gov", "msexec", action_id)`  | `action_type`                             |
+/// | veto                 | `("gov", "veto", id)`           | `(votes_no, veto_threshold)`              |
+
 /// Emits an `init` event when the contract is initialised.
-///
-/// Topics: `("init",)`  
-/// Data: `admin: Address`
 pub fn contract_initialized(env: &Env, admin: &Address) {
     env.events()
-        .publish((symbol_short!("init"),), admin.clone());
+        .publish((CONTRACT_TYPE(), symbol_short!("init")), admin.clone());
 }
 
 /// Emits a `created` event when a new proposal is created.
-///
-/// Topics: `("created", id)`  
-/// Data: `proposer: Address`
-pub fn proposal_created(env: &Env, id: u64, proposer: &Address) {
+/// Data includes the proposer address and metadata version for indexer schema awareness (#547, #549).
+pub fn proposal_created(env: &Env, id: u64, proposer: &Address, metadata_version: u32) {
     env.events()
-        .publish((symbol_short!("created"), id), proposer.clone());
+        .publish((CONTRACT_TYPE(), symbol_short!("created"), id), (proposer.clone(), metadata_version));
 }
 
 /// Emits a `vote` event when a vote is cast.
-///
-/// Topics: `("vote", id)`  
-/// Data: `(voter: Address, vote: Vote, weight: i128)`
 pub fn vote_cast(env: &Env, id: u64, voter: &Address, vote: &Vote, weight: i128) {
     env.events().publish(
-        (symbol_short!("vote"), id),
+        (CONTRACT_TYPE(), symbol_short!("vote"), id),
         (voter.clone(), vote.clone(), weight),
     );
 }
 
 /// Emits a `final` event when a proposal is finalised (Passed or Rejected).
 ///
-/// Topics: `("final", id)`
-/// Data: `(state: ProposalState, execute_after: u64)`
-///
 /// `execute_after` is the earliest Unix timestamp at which the proposal may be
-/// executed (non-zero only when `state == Passed`).  Consumers can use this to
-/// schedule an execution call without querying the proposal struct separately.
+/// executed (non-zero only when `state == Passed`).
 pub fn proposal_finalised(env: &Env, id: u64, state: &ProposalState, execute_after: u64) {
     env.events()
-        .publish((symbol_short!("final"), id), (state.clone(), execute_after));
+        .publish((CONTRACT_TYPE(), symbol_short!("final"), id), (state.clone(), execute_after));
 }
 
-/// Emits a `veto` event when a proposal is immediately rejected by the veto.
-///
-/// Topics: `("veto", id)`
-/// Data: `(votes_no: i128, veto_threshold: i128)`
+/// Emits a `veto` event when a proposal is immediately rejected by the veto mechanism.
 pub fn proposal_vetoed(env: &Env, id: u64, votes_no: i128, veto_threshold: i128) {
-    env.events().publish((symbol_short!("veto"), id), (votes_no, veto_threshold));
+    env.events().publish(
+        (CONTRACT_TYPE(), symbol_short!("veto"), id),
+        (votes_no, veto_threshold),
+    );
 }
 
 /// Emits an `executed` event when a passed proposal is executed.
-///
-/// Topics: `("executed", id)`  
-/// Data: `()`
 pub fn proposal_executed(env: &Env, id: u64) {
-    env.events().publish((symbol_short!("executed"), id), ());
+    env.events().publish((CONTRACT_TYPE(), symbol_short!("executed"), id), ());
 }
 
 /// Emits a `cancelled` event when a proposal is cancelled by admin.
-///
-/// Topics: `("cancelled", id)`  
-/// Data: `()`
 pub fn proposal_cancelled(env: &Env, id: u64) {
-    env.events().publish((symbol_short!("cancelled"), id), ());
+    env.events().publish((CONTRACT_TYPE(), symbol_short!("cancelled"), id), ());
 }
 
 /// Emits an `amended` event when a proposal is updated before voting starts.
-///
-/// Topics: `("amended", id)`  
-/// Data: `(proposer: Address, title: String, description: String)`
 pub fn proposal_amended(env: &Env, id: u64, proposer: &Address, title: &String, description: &String) {
-    env.events().publish((symbol_short!("amended"), id), (proposer.clone(), title.clone(), description.clone()));
+    env.events().publish(
+        (CONTRACT_TYPE(), symbol_short!("amended"), id),
+        (proposer.clone(), title.clone(), description.clone()),
+    );
 }
 
 /// Emits a `qupdate` event when a proposal's quorum is updated.
-///
-/// Topics: `("qupdate", id)`  
-/// Data: `new_quorum: i128`
 pub fn quorum_updated(env: &Env, id: u64, new_quorum: i128) {
     env.events()
-        .publish((symbol_short!("qupdate"), id), new_quorum);
+        .publish((CONTRACT_TYPE(), symbol_short!("qupdate"), id), new_quorum);
 }
 
 /// Emits an `admxfer` event when admin rights are transferred.
-///
-/// Topics: `("admxfer",)`
-/// Data: `(old_admin: Address, new_admin: Address)`
 pub fn admin_transferred(env: &Env, old_admin: &Address, new_admin: &Address) {
     env.events().publish(
-        (symbol_short!("admxfer"),),
+        (CONTRACT_TYPE(), symbol_short!("admxfer")),
         (old_admin.clone(), new_admin.clone()),
     );
 }
 
-/// Emits an `admpropose` event when a two-step admin rotation is proposed.
-///
-/// Topics: `("admpropose",)`
-/// Data: `(current_admin: Address, nominee: Address, expiry: u64)`
+/// Emits an `admprop` event when a two-step admin rotation is proposed.
 pub fn admin_transfer_proposed(env: &Env, admin: &Address, nominee: &Address, expiry: u64) {
     env.events().publish(
-        (symbol_short!("admprop"),),
+        (CONTRACT_TYPE(), symbol_short!("admprop")),
         (admin.clone(), nominee.clone(), expiry),
     );
 }
 
 /// Emits a `paused` event when the contract is paused.
-///
-/// Topics: `("paused",)`
-/// Data: `(admin: Address, reason: Option<String>)`
 pub fn contract_paused(env: &Env, admin: &Address, reason: Option<String>) {
     env.events()
-        .publish((symbol_short!("paused"),), (admin.clone(), reason));
+        .publish((CONTRACT_TYPE(), symbol_short!("paused")), (admin.clone(), reason));
 }
 
 /// Emits an `unpaused` event when the contract is unpaused.
-///
-/// Topics: `("unpaused",)`
-/// Data: `admin: Address`
 pub fn contract_unpaused(env: &Env, admin: &Address) {
     env.events()
-        .publish((symbol_short!("unpaused"),), admin.clone());
+        .publish((CONTRACT_TYPE(), symbol_short!("unpaused")), admin.clone());
 }
 
 /// Emits an `upgraded` event when the contract version is upgraded.
-///
-/// Topics: `("upgraded",)`
-/// Data: `(old_version: (u32, u32, u32), new_version: (u32, u32, u32))`
 pub fn contract_upgraded(env: &Env, old_version: (u32, u32, u32), new_version: (u32, u32, u32)) {
     env.events()
-        .publish((symbol_short!("upgraded"),), (old_version, new_version));
+        .publish((CONTRACT_TYPE(), symbol_short!("upgraded")), (old_version, new_version));
 }
 
 /// Emits a `migrated` event when a storage migration completes.
-///
-/// Topics: `("migrated",)`
-/// Data: `(old_version: (u32, u32, u32), new_version: (u32, u32, u32))`
 pub fn migration_completed(env: &Env, old_version: (u32, u32, u32), new_version: (u32, u32, u32)) {
     env.events()
-        .publish((symbol_short!("migrated"),), (old_version, new_version));
+        .publish((CONTRACT_TYPE(), symbol_short!("migrated")), (old_version, new_version));
 }
 
-/// Emits a `migrated` event when a contract migration completes.
+/// Emits a `spamcfg` event when spam-prevention parameters are updated (#548).
 ///
-/// Topics: `("migrated",)`
-/// Data: `(old_version: (u32, u32, u32), new_version: (u32, u32, u32))`
-pub fn migration_completed(env: &Env, old_version: (u32, u32, u32), new_version: (u32, u32, u32)) {
-    env.events().publish((symbol_short!("migrated"),), (old_version, new_version));
+/// Topics: `("gov", "spamcfg")`
+/// Data: `(min_proposal_balance: i128, proposal_cooldown: u64)`
+pub fn spam_config_updated(env: &Env, min_proposal_balance: i128, proposal_cooldown: u64) {
+    env.events()
+        .publish((CONTRACT_TYPE(), symbol_short!("spamcfg")), (min_proposal_balance, proposal_cooldown));
 }
 
-/// Emits an `mspropose` event when a multi-sig action is proposed.
-///
-/// Topics: `("mspropose", action_id)`
-/// Data: `(proposer: Address, action_type: MultiSigActionType)`
+/// Emits an `msprop` event when a multi-sig action is proposed.
 pub fn multisig_action_proposed(
     env: &Env,
     action_id: u64,
@@ -191,15 +166,12 @@ pub fn multisig_action_proposed(
     action_type: &MultiSigActionType,
 ) {
     env.events().publish(
-        (symbol_short!("msprop"), action_id),
+        (CONTRACT_TYPE(), symbol_short!("msprop"), action_id),
         (proposer.clone(), action_type.clone()),
     );
 }
 
-/// Emits an `msapprove` event when a multi-sig action receives an approval.
-///
-/// Topics: `("msapprove", action_id)`
-/// Data: `(approver: Address, approvals: u32, threshold: u32)`
+/// Emits an `msapprv` event when a multi-sig action receives an approval.
 pub fn multisig_action_approved(
     env: &Env,
     action_id: u64,
@@ -208,28 +180,42 @@ pub fn multisig_action_approved(
     threshold: u32,
 ) {
     env.events().publish(
-        (symbol_short!("msapprv"), action_id),
+        (CONTRACT_TYPE(), symbol_short!("msapprv"), action_id),
         (approver.clone(), approvals, threshold),
     );
 }
 
 /// Emits an `msexec` event when a multi-sig action reaches threshold and executes.
-///
-/// Topics: `("msexec", action_id)`
-/// Data: `action_type: MultiSigActionType`
 pub fn multisig_action_executed(env: &Env, action_id: u64, action_type: &MultiSigActionType) {
     env.events().publish(
-        (symbol_short!("msexec"), action_id),
+        (CONTRACT_TYPE(), symbol_short!("msexec"), action_id),
         action_type.clone(),
     );
 }
 
 /// Emits an `mscfg` event when the multi-sig config is updated.
-///
-/// Topics: `("mscfg",)`
-/// Data: `threshold: u32`
 pub fn multisig_config_updated(env: &Env, threshold: u32) {
-    env.events().publish((symbol_short!("mscfg"),), threshold);
+    env.events().publish((CONTRACT_TYPE(), symbol_short!("mscfg")), threshold);
+}
+
+/// Emits a `delegated` event when a delegation is set.
+///
+/// Topics: `("delegated", delegator)`
+/// Data: `delegatee: Address`
+pub fn delegation_set(env: &Env, delegator: &Address, delegatee: &Address) {
+    env.events().publish(
+        (symbol_short!("delegated"), delegator.clone()),
+        delegatee.clone(),
+    );
+}
+
+/// Emits an `undelegat` event when a delegation is removed.
+///
+/// Topics: `("undelegat", delegator)`
+/// Data: `()`
+pub fn delegation_cleared(env: &Env, delegator: &Address) {
+    env.events()
+        .publish((symbol_short!("undelegat"), delegator.clone()), ());
 }
 
 /// Emits a `mindupdate` event when the minimum duration is changed by admin.

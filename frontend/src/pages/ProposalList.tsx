@@ -10,13 +10,17 @@
 import { useProposals } from '../hooks/useProposals';
 import ProposalListComponent from '../components/ProposalList';
 import { ProposalSkeletonList } from '../components/ProposalCardSkeleton';
+import { OfflineBanner } from '../components/OfflineBanner';
+import { StaleDataIndicator } from '../components/NetworkErrorBanner';
+import { useNetworkStatus } from '../hooks/useNetworkStatus';
 
 // How many skeleton cards to display while loading.
 // Should roughly match the typical number of proposals visible above the fold.
 const SKELETON_COUNT = 5;
 
 export default function ProposalListPage() {
-  const { proposals, loading, error, refresh } = useProposals();
+  const { proposals, loading, error, refresh, lastFetch } = useProposals();
+  const { isOnline } = useNetworkStatus();
 
   // ── Loading state ──────────────────────────────────────────
   if (loading) {
@@ -29,6 +33,7 @@ export default function ProposalListPage() {
             Fetching proposals from the Stellar network…
           </p>
         </div>
+        {!isOnline && <OfflineBanner onRetry={refresh} />}
         <ProposalSkeletonList count={SKELETON_COUNT} />
       </div>
     );
@@ -41,6 +46,7 @@ export default function ProposalListPage() {
         <div className="page-heading">
           <h1>Proposals</h1>
         </div>
+        {!isOnline && <OfflineBanner onRetry={refresh} />}
         {/*
          * role="alert" ensures screen readers announce the error immediately
          * without the user having to navigate to it (WCAG 4.1.3).
@@ -65,6 +71,8 @@ export default function ProposalListPage() {
      * value when the skeleton list (aria-busy="true") is replaced.
      */
     <div className="container" aria-busy="false">
+      <OfflineBanner onRetry={refresh} />
+      {lastFetch && <StaleDataIndicator isOffline={!isOnline} lastFetchTime={new Date(lastFetch)} />}
       <ProposalListComponent proposals={proposals} />
     </div>
   );

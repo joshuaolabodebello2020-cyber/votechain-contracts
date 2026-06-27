@@ -50,8 +50,19 @@ jobs:
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
 
+  secret-scan:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan for secrets with Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   coverage:
-    name: Test Coverage
+    name: Rust Contract Coverage
     runs-on: ubuntu-latest
     needs: test
     steps:
@@ -86,10 +97,84 @@ jobs:
           done
       - uses: actions/upload-artifact@v4
         with:
-          name: coverage-report
+          name: rust-coverage-report
           path: |
             lcov.info
             *-coverage-summary.txt
+
+  frontend-coverage:
+    name: Frontend Coverage
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Run tests with coverage
+        run: npm run test:coverage
+      - name: Print coverage summary
+        if: always()
+        run: |
+          echo "=== Frontend Coverage Summary ==="
+          cat coverage/coverage-summary.json 2>/dev/null \
+            | node -e "
+              const d=require('fs').readFileSync('/dev/stdin','utf8');
+              const s=JSON.parse(d).total;
+              ['lines','statements','functions','branches'].forEach(k=>{
+                const p=s[k].pct;
+                const ok=p>=60;
+                console.log((ok?'✅':'❌')+' '+k+': '+p+'% (threshold: 60%)');
+                if(!ok){process.exitCode=1;}
+              });
+            " || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-coverage-report
+          path: frontend/coverage/
+
+  backend-coverage:
+    name: Backend Coverage
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - name: Run tests with coverage
+        run: npm run test:coverage
+      - name: Print coverage summary
+        if: always()
+        run: |
+          echo "=== Backend Coverage Summary ==="
+          cat coverage/coverage-summary.json 2>/dev/null \
+            | node -e "
+              const d=require('fs').readFileSync('/dev/stdin','utf8');
+              const s=JSON.parse(d).total;
+              ['lines','statements','functions','branches'].forEach(k=>{
+                const p=s[k].pct;
+                const ok=p>=60;
+                console.log((ok?'✅':'❌')+' '+k+': '+p+'% (threshold: 60%)');
+                if(!ok){process.exitCode=1;}
+              });
+            " || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-coverage-report
+          path: backend/coverage/
 
   security-audit:
     name: Security Audit
@@ -124,7 +209,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
-      - run: cargo install --locked stellar-cli --features opt
       - uses: actions/cache@v4
         with:
           path: |
@@ -141,28 +225,53 @@ jobs:
           WASM_DIR="target/wasm32-unknown-unknown/release"
           GOV_WASM="$WASM_DIR/votechain_governance.wasm"
           TOK_WASM="$WASM_DIR/votechain_token.wasm"
-          GOV_LIMIT=$((100 * 1024))   # 100 KB
-          TOK_LIMIT=$((50 * 1024))    # 50 KB
+          GOV_LIMIT=$((100 * 1024))   # 100 KB — see docs/wasm-size-thresholds.md
+          TOK_LIMIT=$((50 * 1024))    # 50 KB  — see docs/wasm-size-thresholds.md
 
           gov_size=$(stat -c%s "$GOV_WASM")
           tok_size=$(stat -c%s "$TOK_WASM")
 
-          echo "governance.wasm : $gov_size bytes (limit: $GOV_LIMIT)"
-          echo "token.wasm      : $tok_size bytes (limit: $TOK_LIMIT)"
+          gov_kb=$(echo "scale=1; $gov_size/1024" | bc)
+          tok_kb=$(echo "scale=1; $tok_size/1024" | bc)
+
+          echo "governance.wasm : $gov_size bytes (${gov_kb} KB, limit: 100 KB)"
+          echo "token.wasm      : $tok_size bytes (${tok_kb} KB, limit: 50 KB)"
 
           # Write size log artifact
           mkdir -p wasm-size-history
           echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) governance=$gov_size token=$tok_size" \
             >> wasm-size-history/sizes.log
 
+          # Post a build summary visible on every CI run
+          {
+            echo "## WASM Binary Sizes"
+            echo ""
+            echo "| Contract | Size | Limit | Status |"
+            echo "| --- | --- | --- | --- |"
+            if [ "$gov_size" -le "$GOV_LIMIT" ]; then
+              echo "| \`governance.wasm\` | ${gov_kb} KB | 100 KB | ✅ |"
+            else
+              echo "| \`governance.wasm\` | ${gov_kb} KB | 100 KB | ❌ EXCEEDS LIMIT |"
+            fi
+            if [ "$tok_size" -le "$TOK_LIMIT" ]; then
+              echo "| \`token.wasm\` | ${tok_kb} KB | 50 KB | ✅ |"
+            else
+              echo "| \`token.wasm\` | ${tok_kb} KB | 50 KB | ❌ EXCEEDS LIMIT |"
+            fi
+            echo ""
+            echo "> Thresholds defined in [docs/wasm-size-thresholds.md](docs/wasm-size-thresholds.md)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          FAILED=0
           if [ "$gov_size" -gt "$GOV_LIMIT" ]; then
-            echo "ERROR: governance.wasm ($gov_size bytes) exceeds 100 KB limit" >&2
-            exit 1
+            echo "::error file=contracts/governance/src/lib.rs::governance.wasm ($gov_size bytes / ${gov_kb} KB) exceeds the 100 KB limit. See docs/wasm-size-thresholds.md for guidance." >&2
+            FAILED=1
           fi
           if [ "$tok_size" -gt "$TOK_LIMIT" ]; then
-            echo "ERROR: token.wasm ($tok_size bytes) exceeds 50 KB limit" >&2
-            exit 1
+            echo "::error file=contracts/token/src/lib.rs::token.wasm ($tok_size bytes / ${tok_kb} KB) exceeds the 50 KB limit. See docs/wasm-size-thresholds.md for guidance." >&2
+            FAILED=1
           fi
+          exit $FAILED
       - uses: actions/upload-artifact@v4
         with:
           name: wasm-size-history
@@ -171,6 +280,16 @@ jobs:
         with:
           name: wasm-contracts
           path: target/wasm32-unknown-unknown/release/*.wasm
+
+  openapi-validate:
+    name: Validate OpenAPI Spec
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install @redocly/cli
+        run: npm install -g @redocly/cli@1.21.0
+      - name: Lint OpenAPI spec
+        run: redocly lint api/openapi.yml
 
   wasm-validity:
     name: WASM Validity Tests
