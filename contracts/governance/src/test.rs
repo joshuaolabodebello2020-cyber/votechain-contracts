@@ -688,6 +688,130 @@ fn test_proposals_at_different_lifecycle_stages() {
 
 // ── end TEST-009 ──────────────────────────────────────────────────────────────
 
+// ── Issue #464: route handler error-path tests ───────────────────────────────
+
+#[test]
+#[should_panic]
+fn test_create_proposal_invalid_quorum() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let proposer = Address::generate(&env);
+    let token_id = setup_token(&env, &admin);
+    client.initialize(&admin, &token_id);
+    client.create_proposal(&proposer, &String::from_str(&env, "T"), &String::from_str(&env, "d"), &0, &3600);
+}
+
+#[test]
+#[should_panic]
+fn test_create_proposal_invalid_duration() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let proposer = Address::generate(&env);
+    let token_id = setup_token(&env, &admin);
+    client.initialize(&admin, &token_id);
+    client.create_proposal(&proposer, &String::from_str(&env, "T"), &String::from_str(&env, "d"), &100, &0);
+}
+
+#[test]
+#[should_panic]
+fn test_get_proposal_not_found() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let token_id = setup_token(&env, &admin);
+    client.initialize(&admin, &token_id);
+    client.get_proposal(&999);
+}
+
+#[test]
+#[should_panic]
+fn test_cast_vote_after_period_ended() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let voter = Address::generate(&env);
+    let token_id = setup_token(&env, &voter);
+    client.initialize(&admin, &token_id);
+    let id = client.create_proposal(&voter, &String::from_str(&env, "T"), &String::from_str(&env, "d"), &100, &3600);
+    env.ledger().with_mut(|l| l.timestamp += 3601);
+    client.cast_vote(&voter, &id, &Vote::Yes);
+}
+
+#[test]
+#[should_panic]
+fn test_cast_vote_proposal_not_found() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let voter = Address::generate(&env);
+    let token_id = setup_token(&env, &voter);
+    client.initialize(&admin, &token_id);
+    client.cast_vote(&voter, &999, &Vote::Yes);
+}
+
+#[test]
+#[should_panic]
+fn test_cast_vote_no_voting_power() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let proposer = Address::generate(&env);
+    let zero_voter = Address::generate(&env); // no tokens
+    let token_id = setup_token(&env, &admin);  // admin holds supply, not zero_voter
+    client.initialize(&admin, &token_id);
+    let id = client.create_proposal(&proposer, &String::from_str(&env, "T"), &String::from_str(&env, "d"), &100, &3600);
+    client.cast_vote(&zero_voter, &id, &Vote::Yes);
+}
+
+#[test]
+#[should_panic]
+fn test_finalise_voting_still_open() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let voter = Address::generate(&env);
+    let token_id = setup_token(&env, &voter);
+    client.initialize(&admin, &token_id);
+    let id = client.create_proposal(&voter, &String::from_str(&env, "T"), &String::from_str(&env, "d"), &100, &3600);
+    client.cast_vote(&voter, &id, &Vote::Yes);
+    client.finalise(&id); // period not ended
+}
+
+#[test]
+#[should_panic]
+fn test_finalise_proposal_not_found() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let token_id = setup_token(&env, &admin);
+    client.initialize(&admin, &token_id);
+    client.finalise(&999);
+}
+
+#[test]
+#[should_panic]
+fn test_execute_proposal_not_passed() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let voter = Address::generate(&env);
+    let token_id = setup_token(&env, &voter);
+    client.initialize(&admin, &token_id);
+    let id = client.create_proposal(&voter, &String::from_str(&env, "T"), &String::from_str(&env, "d"), &100, &3600);
+    client.cast_vote(&voter, &id, &Vote::No);
+    env.ledger().with_mut(|l| l.timestamp += 3601);
+    client.finalise(&id);
+    client.execute(&admin, &id); // status is Rejected, not Passed
+}
+
+#[test]
+#[should_panic]
+fn test_cancel_already_cancelled() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let proposer = Address::generate(&env);
+    let token_id = setup_token(&env, &admin);
+    client.initialize(&admin, &token_id);
+    let id = client.create_proposal(&proposer, &String::from_str(&env, "T"), &String::from_str(&env, "d"), &100, &3600);
+    client.cancel(&admin, &id);
+    client.cancel(&admin, &id); // already Cancelled, not Active
+}
+
+// ── end Issue #464 governance tests ──────────────────────────────────────────
+
 #[test]
 #[should_panic]
 fn test_cannot_vote_twice() {
@@ -1232,6 +1356,289 @@ fn test_vote_at_exact_end_time_reverts() {
     mint_and_vote(&t, &voter, id, Vote::Yes, 1_000_000);
 }
 
+// ── end SC-027 ────────────────────────────────────────────────────────────────
+
+// ── Integration tests: governance × token contract interactions ───────────────
+
+// Helper: blank token contract (zero initial supply). Returns (id, client, minter).
+fn setup_token_blank(env: &Env) -> (Address, votechain_token::TokenContractClient<'static>, Address) {
+    let minter = Address::generate(env);
+    let tok_id = env.register(votechain_token::TokenContract, ());
+    let tok = votechain_token::TokenContractClient::new(env, &tok_id);
+    tok.initialize(&minter, &0);
+    (tok_id, tok, minter)
+}
+
+/// Voting weight equals the voter's token balance at the moment of casting.
+#[test]
+fn test_vote_weight_equals_token_balance_at_cast_time() {
+    let (env, client) = setup();
+    let gov_admin = Address::generate(&env);
+    let voter = Address::generate(&env);
+
+    let (tok_id, tok, minter) = setup_token_blank(&env);
+    tok.mint(&minter, &voter, &750);
+
+    client.initialize(&gov_admin, &tok_id);
+    let id = client.create_proposal(
+        &voter,
+        &String::from_str(&env, "Weight check"),
+        &String::from_str(&env, "d"),
+        &100,
+        &3600,
+    );
+    client.cast_vote(&voter, &id, &Vote::Yes);
+    assert_eq!(client.get_proposal(&id).votes_yes, 750);
+}
+
+/// Distributing tokens between two voters gives each proportional voting power.
+#[test]
+fn test_token_transfer_splits_voting_power() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let voter1 = Address::generate(&env);
+    let voter2 = Address::generate(&env);
+
+    let tok_id = setup_token(&env, &admin);
+    let tok = votechain_token::TokenContractClient::new(&env, &tok_id);
+    tok.transfer(&admin, &voter1, &600);
+    tok.transfer(&admin, &voter2, &400);
+
+    client.initialize(&admin, &tok_id);
+    let id = client.create_proposal(
+        &admin,
+        &String::from_str(&env, "Split vote"),
+        &String::from_str(&env, "d"),
+        &1,
+        &3600,
+    );
+    client.cast_vote(&voter1, &id, &Vote::Yes);
+    client.cast_vote(&voter2, &id, &Vote::No);
+
+    let p = client.get_proposal(&id);
+    assert_eq!(p.votes_yes, 600);
+    assert_eq!(p.votes_no, 400);
+    assert_eq!(p.votes_abstain, 0);
+}
+
+/// A user with zero token balance cannot cast a vote (NoVotingPower).
+#[test]
+#[should_panic]
+fn test_zero_balance_voter_cannot_vote() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let voter = Address::generate(&env);
+    let zero_holder = Address::generate(&env);
+
+    let tok_id = setup_token(&env, &voter);
+    client.initialize(&admin, &tok_id);
+    let id = client.create_proposal(
+        &voter,
+        &String::from_str(&env, "P"),
+        &String::from_str(&env, "d"),
+        &1,
+        &3600,
+    );
+    client.cast_vote(&zero_holder, &id, &Vote::Yes);
+}
+
+/// A token transfer that occurs AFTER a vote has been cast does not alter the
+/// already-recorded tally — weight is snapshotted at cast time.
+#[test]
+fn test_token_transfer_after_vote_does_not_alter_tally() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let voter = Address::generate(&env);
+    let recipient = Address::generate(&env);
+
+    let tok_id = setup_token(&env, &voter);
+    let tok = votechain_token::TokenContractClient::new(&env, &tok_id);
+
+    client.initialize(&admin, &tok_id);
+    let id = client.create_proposal(
+        &voter,
+        &String::from_str(&env, "Immutable tally"),
+        &String::from_str(&env, "d"),
+        &500,
+        &3600,
+    );
+
+    client.cast_vote(&voter, &id, &Vote::Yes);
+    assert_eq!(client.get_proposal(&id).votes_yes, 1_000_000);
+
+    tok.transfer(&voter, &recipient, &600_000);
+
+    // Tally must remain at the balance captured at cast time.
+    assert_eq!(client.get_proposal(&id).votes_yes, 1_000_000);
+}
+
+/// Minting additional tokens to a user increases their voting weight on a
+/// subsequent proposal.
+#[test]
+fn test_mint_increases_voting_power_for_next_vote() {
+    let (env, client) = setup();
+    let gov_admin = Address::generate(&env);
+    let voter = Address::generate(&env);
+
+    let (tok_id, tok, minter) = setup_token_blank(&env);
+    tok.mint(&minter, &voter, &200);
+
+    client.initialize(&gov_admin, &tok_id);
+
+    let id1 = client.create_proposal(
+        &voter,
+        &String::from_str(&env, "P1"),
+        &String::from_str(&env, "d"),
+        &1,
+        &3600,
+    );
+    client.cast_vote(&voter, &id1, &Vote::Yes);
+    assert_eq!(client.get_proposal(&id1).votes_yes, 200);
+
+    tok.mint(&minter, &voter, &800);
+
+    let id2 = client.create_proposal(
+        &voter,
+        &String::from_str(&env, "P2"),
+        &String::from_str(&env, "d"),
+        &1,
+        &3600,
+    );
+    client.cast_vote(&voter, &id2, &Vote::Yes);
+    assert_eq!(client.get_proposal(&id2).votes_yes, 1_000);
+}
+
+/// Burning tokens between two proposals reduces the voter's weight on the
+/// later one without retroactively changing the earlier tally.
+#[test]
+fn test_burn_reduces_voting_power_without_affecting_past_tally() {
+    let (env, client) = setup();
+    let gov_admin = Address::generate(&env);
+    // voter is also the token admin (setup_token initialises with voter as admin)
+    let voter = Address::generate(&env);
+
+    let tok_id = setup_token(&env, &voter);
+    let tok = votechain_token::TokenContractClient::new(&env, &tok_id);
+
+    client.initialize(&gov_admin, &tok_id);
+
+    let id1 = client.create_proposal(
+        &voter,
+        &String::from_str(&env, "P1"),
+        &String::from_str(&env, "d"),
+        &1,
+        &3600,
+    );
+    client.cast_vote(&voter, &id1, &Vote::Yes);
+    assert_eq!(client.get_proposal(&id1).votes_yes, 1_000_000);
+
+    // voter is the token admin, so voter authorises the burn of their own tokens
+    tok.burn(&voter, &voter, &600_000);
+
+    let id2 = client.create_proposal(
+        &voter,
+        &String::from_str(&env, "P2"),
+        &String::from_str(&env, "d"),
+        &1,
+        &3600,
+    );
+    client.cast_vote(&voter, &id2, &Vote::Yes);
+    assert_eq!(client.get_proposal(&id2).votes_yes, 400_000);
+    assert_eq!(client.get_proposal(&id1).votes_yes, 1_000_000); // unchanged
+}
+
+/// Quorum set exactly at total supply passes only when the full supply votes.
+#[test]
+fn test_quorum_equal_to_total_supply_requires_full_participation() {
+    let (env, client) = setup();
+    let gov_admin = Address::generate(&env);
+    let voter = Address::generate(&env);
+
+    let (tok_id, tok, minter) = setup_token_blank(&env);
+    tok.mint(&minter, &voter, &1_000);
+
+    client.initialize(&gov_admin, &tok_id);
+    let id = client.create_proposal(
+        &voter,
+        &String::from_str(&env, "Full quorum"),
+        &String::from_str(&env, "d"),
+        &1_000,
+        &3600,
+    );
+    client.cast_vote(&voter, &id, &Vote::Yes);
+    env.ledger().with_mut(|l| l.timestamp += 3601);
+    client.finalise(&id);
+    assert_eq!(client.get_proposal(&id).status, ProposalStatus::Passed);
+}
+
+/// Multiple voters with different token balances produce correct Yes/No/Abstain
+/// tallies and the proposal finalises to the expected outcome.
+#[test]
+fn test_multi_voter_mixed_votes_tally_and_outcome() {
+    let (env, client) = setup();
+    let gov_admin = Address::generate(&env);
+    let yes_voter = Address::generate(&env);
+    let no_voter = Address::generate(&env);
+    let abs_voter = Address::generate(&env);
+
+    let (tok_id, tok, minter) = setup_token_blank(&env);
+    tok.mint(&minter, &yes_voter, &500);
+    tok.mint(&minter, &no_voter, &300);
+    tok.mint(&minter, &abs_voter, &200);
+
+    client.initialize(&gov_admin, &tok_id);
+    let id = client.create_proposal(
+        &yes_voter,
+        &String::from_str(&env, "Mixed"),
+        &String::from_str(&env, "d"),
+        &900, // total votes will be 1000 >= 900; yes(500) > no(300) => Passed
+        &3600,
+    );
+
+    client.cast_vote(&yes_voter, &id, &Vote::Yes);
+    client.cast_vote(&no_voter, &id, &Vote::No);
+    client.cast_vote(&abs_voter, &id, &Vote::Abstain);
+
+    let p = client.get_proposal(&id);
+    assert_eq!(p.votes_yes, 500);
+    assert_eq!(p.votes_no, 300);
+    assert_eq!(p.votes_abstain, 200);
+
+    env.ledger().with_mut(|l| l.timestamp += 3601);
+    client.finalise(&id);
+    assert_eq!(client.get_proposal(&id).status, ProposalStatus::Passed);
+}
+
+/// A proposal with enough total votes but Yes tied with No is rejected.
+#[test]
+fn test_tied_vote_is_rejected() {
+    let (env, client) = setup();
+    let admin = Address::generate(&env);
+    let voter1 = Address::generate(&env);
+    let voter2 = Address::generate(&env);
+
+    let tok_id = setup_token(&env, &admin);
+    let tok = votechain_token::TokenContractClient::new(&env, &tok_id);
+    tok.transfer(&admin, &voter1, &500_000);
+    tok.transfer(&admin, &voter2, &500_000);
+
+    client.initialize(&admin, &tok_id);
+    let id = client.create_proposal(
+        &admin,
+        &String::from_str(&env, "Tie"),
+        &String::from_str(&env, "d"),
+        &1,
+        &3600,
+    );
+    client.cast_vote(&voter1, &id, &Vote::Yes);
+    client.cast_vote(&voter2, &id, &Vote::No);
+
+    env.ledger().with_mut(|l| l.timestamp += 3601);
+    client.finalise(&id);
+    assert_eq!(client.get_proposal(&id).status, ProposalStatus::Rejected);
+}
+
+// ── end integration tests ─────────────────────────────────────────────────────
 #[test]
 #[should_panic(expected = "Error(Contract, #11)")]
 fn test_vote_with_zero_balance_reverts() {
@@ -3206,4 +3613,136 @@ fn test_get_config_before_init_fails() {
     let client = GovernanceContractClient::new(&env, &env.register(GovernanceContract, ()));
     let result = client.try_get_config();
     assert_eq!(result, Err(Ok(ContractError::VotingTokenNotSet)));
+}
+
+// ── Issue #486: Vote delegation / proxy voting ────────────────────────────────
+
+/// delegate() stores the delegatee and get_delegate() retrieves it.
+#[test]
+fn test_delegate_and_get_delegate() {
+    let t = setup_env();
+    let delegator = Address::generate(&t.env);
+    let delegatee = Address::generate(&t.env);
+
+    t.client.delegate(&delegator, &delegatee);
+    assert_eq!(t.client.get_delegate(&delegator), Some(delegatee));
+}
+
+/// delegate() to self must revert.
+#[test]
+#[should_panic(expected = "Error(Contract, #37)")]
+fn test_delegate_to_self_reverts() {
+    let t = setup_env();
+    let addr = Address::generate(&t.env);
+    t.client.delegate(&addr, &addr);
+}
+
+/// undelegate() clears the delegation.
+#[test]
+fn test_undelegate_clears_delegation() {
+    let t = setup_env();
+    let delegator = Address::generate(&t.env);
+    let delegatee = Address::generate(&t.env);
+
+    t.client.delegate(&delegator, &delegatee);
+    t.client.undelegate(&delegator);
+    assert_eq!(t.client.get_delegate(&delegator), None);
+}
+
+/// undelegate() with no prior delegation must revert.
+#[test]
+#[should_panic(expected = "Error(Contract, #39)")]
+fn test_undelegate_without_delegation_reverts() {
+    let t = setup_env();
+    let addr = Address::generate(&t.env);
+    t.client.undelegate(&addr);
+}
+
+/// Redelegating overwrites the previous delegatee.
+#[test]
+fn test_redelegate_overwrites_previous() {
+    let t = setup_env();
+    let delegator = Address::generate(&t.env);
+    let first = Address::generate(&t.env);
+    let second = Address::generate(&t.env);
+
+    t.client.delegate(&delegator, &first);
+    t.client.delegate(&delegator, &second);
+    assert_eq!(t.client.get_delegate(&delegator), Some(second));
+}
+
+/// Delegated votes are tallied: delegate's vote weight includes delegator balance.
+#[test]
+fn test_cast_vote_as_delegate_tallies_delegated_weight() {
+    let t = setup_env();
+    let tok = votechain_token::TokenContractClient::new(&t.env, &t.token_id);
+
+    let delegate = Address::generate(&t.env);
+    let delegator = Address::generate(&t.env);
+
+    // Mint: delegate 400, delegator 600
+    tok.mint(&t.admin, &delegate, &400_i128);
+    tok.mint(&t.admin, &delegator, &600_i128);
+
+    // delegator delegates to delegate
+    t.client.delegate(&delegator, &delegate);
+
+    let id = create_test_proposal(&t, &delegate);
+
+    let delegators = soroban_sdk::vec![&t.env, delegator.clone()];
+    t.client.cast_vote_as_delegate(&delegate, &id, &Vote::Yes, &delegators);
+
+    let proposal = t.client.get_proposal(&id);
+    // Combined weight = 400 + 600 = 1000
+    assert_eq!(proposal.votes_yes, 1_000);
+}
+
+/// Delegator who already voted is skipped when delegate casts.
+#[test]
+fn test_delegator_already_voted_not_double_counted() {
+    let t = setup_env();
+    let tok = votechain_token::TokenContractClient::new(&t.env, &t.token_id);
+
+    let delegate = Address::generate(&t.env);
+    let delegator = Address::generate(&t.env);
+
+    tok.mint(&t.admin, &delegate, &500_i128);
+    tok.mint(&t.admin, &delegator, &500_i128);
+
+    t.client.delegate(&delegator, &delegate);
+
+    let id = create_test_proposal(&t, &delegate);
+
+    // Delegator votes independently first
+    t.client.cast_vote(&delegator, &id, &Vote::No);
+
+    // Now delegate votes — delegator already voted so only delegate's own weight counts
+    let delegators = soroban_sdk::vec![&t.env, delegator];
+    t.client.cast_vote_as_delegate(&delegate, &id, &Vote::Yes, &delegators);
+
+    let proposal = t.client.get_proposal(&id);
+    assert_eq!(proposal.votes_yes, 500); // only delegate's weight
+    assert_eq!(proposal.votes_no, 500);  // delegator's independent vote
+}
+
+/// Address with no delegation set is skipped silently.
+#[test]
+fn test_cast_vote_as_delegate_ignores_non_delegators() {
+    let t = setup_env();
+    let tok = votechain_token::TokenContractClient::new(&t.env, &t.token_id);
+
+    let delegate = Address::generate(&t.env);
+    let random = Address::generate(&t.env); // did NOT delegate
+
+    tok.mint(&t.admin, &delegate, &300_i128);
+    tok.mint(&t.admin, &random, &700_i128);
+
+    let id = create_test_proposal(&t, &delegate);
+
+    let delegators = soroban_sdk::vec![&t.env, random];
+    t.client.cast_vote_as_delegate(&delegate, &id, &Vote::Yes, &delegators);
+
+    let proposal = t.client.get_proposal(&id);
+    // Only delegate's own weight counted
+    assert_eq!(proposal.votes_yes, 300);
 }

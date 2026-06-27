@@ -1,0 +1,149 @@
+name: Performance Benchmarks
+
+# Runs weekly and on demand. Non-blocking by default (continue-on-error: true)
+# to prevent flaky infrastructure timings from blocking unrelated PRs.
+on:
+  schedule:
+    - cron: "0 3 * * 1"   # 03:00 UTC every Monday
+  workflow_dispatch:
+    inputs:
+      update_baseline:
+        description: "Persist current API results as the new baseline"
+        required: false
+        default: "false"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  bench-contracts:
+    name: Contract Benchmarks (Criterion)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-bench-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-bench-
+
+      - name: Run criterion benchmarks
+        run: cargo bench -p votechain-governance 2>&1 | tee bench-output.txt
+
+      - name: Summarise results
+        if: always()
+        run: |
+          echo "## Contract Benchmark Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
+          grep -E "time:|change:" bench-output.txt | head -30 >> "$GITHUB_STEP_SUMMARY" || true
+          echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: criterion-report-${{ github.run_id }}
+          path: target/criterion
+          retention-days: 30
+          if-no-files-found: ignore
+
+  bench-api:
+    name: API Benchmarks
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install and build backend
+        working-directory: backend
+        run: npm ci && npm run build
+
+      - name: Start backend
+        working-directory: backend
+        env:
+          PORT: 3001
+          REDIS_URL: redis://localhost:6379
+        run: node dist/app.js &
+
+      - name: Wait for backend
+        run: |
+          for i in $(seq 1 20); do
+            curl -sf http://localhost:3001/api/proposals > /dev/null 2>&1 && echo "ready" && break
+            sleep 2
+          done
+
+      - name: Run API benchmarks
+        env:
+          API_URL: http://localhost:3001
+          ITERATIONS: "50"
+          CONCURRENCY: "1"
+          OUT_FILE: perf/api-results.json
+        run: node backend/bench/api-bench.js
+
+      - name: Check regression
+        id: check
+        run: |
+          if [[ "${{ github.event.inputs.update_baseline }}" == "true" ]]; then
+            node perf/check-regression.js --update-baseline
+          else
+            node perf/check-regression.js
+          fi
+
+      - name: Annotate on regression
+        if: failure() && steps.check.outcome == 'failure'
+        run: echo "::warning title=Performance Regression::One or more API endpoints exceeded thresholds. See bench-api logs."
+
+      - name: Write step summary
+        if: always()
+        run: |
+          echo "## API Benchmark Results" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f perf/api-results.json ]; then
+            echo "| Endpoint | p50 | p95 | p99 |" >> "$GITHUB_STEP_SUMMARY"
+            echo "|----------|-----|-----|-----|" >> "$GITHUB_STEP_SUMMARY"
+            node -e "
+              const d = JSON.parse(require('fs').readFileSync('perf/api-results.json'));
+              d.results.forEach(r => console.log('| ' + r.endpoint + ' | ' + r.p50 + 'ms | ' + r.p95 + 'ms | ' + r.p99 + 'ms |'));
+            " >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: api-bench-results-${{ github.run_id }}
+          path: perf/api-results.json
+          retention-days: 90
+          if-no-files-found: ignore
+
+      - name: Commit updated baseline
+        if: github.event.inputs.update_baseline == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add perf/api-baseline.json 2>/dev/null || true
+          git diff --staged --quiet || git commit -m "perf: update api baseline [skip ci]"
+          git push || true
