@@ -1,0 +1,24 @@
+{
+  "_comment": "Performance regression thresholds for VoteChain. All times in milliseconds. A run fails when any measured value exceeds its threshold. Adjust these after establishing a stable baseline on your target hardware.",
+  "api": {
+    "regression_multiplier": 2.0,
+    "_comment_multiplier": "Fail if current p95 > baseline_p95 * regression_multiplier (i.e. >2x slower)",
+    "absolute_max_ms": {
+      "_comment": "Hard ceiling regardless of baseline — catches first-run regressions",
+      "GET /api/proposals":        200,
+      "GET /api/proposals/:id":    100,
+      "GET /api/governance/stats": 200,
+      "GET /metrics/cache":         50
+    }
+  },
+  "contract": {
+    "regression_multiplier": 2.0,
+    "_comment_multiplier": "Fail if current mean_ns > baseline_mean_ns * regression_multiplier",
+    "absolute_max_us": {
+      "_comment": "Hard ceiling in microseconds (Soroban in-process, not network)",
+      "create_proposal": 5000,
+      "cast_vote":       5000,
+      "finalise":        5000
+    }
+  }
+}

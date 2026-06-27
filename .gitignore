@@ -13,6 +13,9 @@ yarn-debug.log*
 yarn-error.log*
 .eslintcache
 
+# Performance benchmark run artifacts (baseline is committed; results are not)
+perf/api-results.json
+
 # Rust
 **/*.rs.bk
 Cargo.lock

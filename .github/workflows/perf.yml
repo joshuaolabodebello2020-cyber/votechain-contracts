@@ -1,0 +1,163 @@
+name: Performance Benchmarks
+
+# Runs on a weekly schedule and on demand.
+# Non-blocking by default: failures create annotations but do not gate PRs.
+# Set PERF_BLOCKING=true in repo variables to make the check a hard gate.
+on:
+  schedule:
+    - cron: "0 3 * * 1"   # 03:00 UTC every Monday
+  workflow_dispatch:
+    inputs:
+      update_baseline:
+        description: "Update stored baseline with current results"
+        required: false
+        default: "false"
+
+env:
+  CARGO_TERM_COLOR: always
+  NODE_VERSION: "20"
+
+jobs:
+  # ── Contract benchmarks via Criterion ──────────────────────────────────────
+  bench-contracts:
+    name: Contract Benchmarks (Criterion)
+    runs-on: ubuntu-latest
+    continue-on-error: true   # non-blocking — annotations only
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-bench-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-bench-
+
+      - name: Run criterion benchmarks
+        run: cargo bench -p votechain-governance 2>&1 | tee bench-output.txt
+
+      - name: Extract summary for step summary
+        if: always()
+        run: |
+          echo "## Contract Benchmark Results" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          grep -E "time:|thrpt:|change:" bench-output.txt | head -40 >> "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload criterion HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: criterion-report-${{ github.run_id }}
+          path: target/criterion
+          retention-days: 30
+          if-no-files-found: ignore
+
+  # ── API benchmarks ──────────────────────────────────────────────────────────
+  bench-api:
+    name: API Benchmarks
+    runs-on: ubuntu-latest
+    continue-on-error: true   # non-blocking
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        run: npm ci
+        working-directory: backend
+
+      - name: Build backend
+        run: npm run build
+        working-directory: backend
+
+      - name: Start backend server
+        run: node dist/app.js &
+        working-directory: backend
+        env:
+          PORT: 3001
+          REDIS_URL: redis://localhost:6379
+
+      - name: Wait for server to be ready
+        run: |
+          for i in $(seq 1 20); do
+            curl -sf http://localhost:3001/api/proposals > /dev/null && echo "Server ready" && break
+            echo "Waiting... ($i/20)"
+            sleep 2
+          done
+
+      - name: Run API benchmarks
+        run: node backend/bench/api-bench.js
+        env:
+          API_URL: http://localhost:3001
+          ITERATIONS: "50"
+          CONCURRENCY: "1"
+          OUT_FILE: perf/api-results.json
+
+      - name: Check regression against thresholds
+        id: regression
+        run: |
+          if [[ "${{ github.event.inputs.update_baseline }}" == "true" ]]; then
+            node perf/check-regression.js --update-baseline
+          else
+            node perf/check-regression.js
+          fi
+
+      - name: Annotate on regression
+        if: failure() && steps.regression.outcome == 'failure'
+        run: |
+          echo "::warning title=Performance Regression::One or more API endpoints exceeded regression thresholds. See the bench-api job logs for details."
+
+      - name: Write results to step summary
+        if: always()
+        run: |
+          echo "## API Benchmark Results" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f perf/api-results.json ]; then
+            echo '| Endpoint | p50 (ms) | p95 (ms) | p99 (ms) |' >> "$GITHUB_STEP_SUMMARY"
+            echo '|----------|----------|----------|----------|' >> "$GITHUB_STEP_SUMMARY"
+            node -e "
+              const d = JSON.parse(require('fs').readFileSync('perf/api-results.json'));
+              for (const r of d.results) {
+                console.log('| ' + r.endpoint + ' | ' + r.p50 + ' | ' + r.p95 + ' | ' + r.p99 + ' |');
+              }
+            " >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload results artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-bench-results-${{ github.run_id }}
+          path: perf/api-results.json
+          retention-days: 90
+          if-no-files-found: ignore
+
+      - name: Commit updated baseline (update_baseline only)
+        if: github.event.inputs.update_baseline == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add perf/api-baseline.json || true
+          git diff --staged --quiet || git commit -m "perf: update api benchmark baseline [skip ci]"
+          git push || true
