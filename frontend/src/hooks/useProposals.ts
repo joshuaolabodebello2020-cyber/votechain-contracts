@@ -3,12 +3,14 @@
  *
  * Fetches the proposal list from the backend / Soroban RPC and manages
  * loading / error state. Uses the central proposal store for consistency.
+ * Preserves existing data on network errors for offline experience.
  */
 
 import { useEffect, useCallback } from 'react';
 import { sampleProposals } from '../data';
 import type { Proposal } from '../types';
 import { useProposalStore } from '../store';
+import { api } from '../api/ApiClient';
 
 // ── Mock fetcher (replace with real implementation) ──────────────────────────
 
@@ -20,8 +22,9 @@ async function fetchProposals(): Promise<Proposal[]> {
   //   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   //   return res.json() as Promise<Proposal[]>;
   //
-  await new Promise<void>((resolve) => setTimeout(resolve, 1500));
-  return sampleProposals;
+  // await new Promise<void>((resolve) => setTimeout(resolve, 1500));
+  // return sampleProposals;
+  return api.get<Proposal[]>('/api/proposals');
 }
 
 // ── Hook ─────────────────────────────────────────────────────────────────────
@@ -30,6 +33,7 @@ interface UseProposalsResult {
   proposals: Proposal[];
   loading: boolean;
   error: string | null;
+  lastFetch: number | null;
   /** Manually trigger a re-fetch (e.g. after submitting a new proposal). */
   refresh: () => Promise<void>;
 }
@@ -43,6 +47,7 @@ export function useProposals(): UseProposalsResult {
     loading,
     error,
     lastBlock,
+    lastFetch,
   } = useProposalStore();
 
   const refresh = useCallback(async () => {
@@ -71,6 +76,7 @@ export function useProposals(): UseProposalsResult {
     proposals: getAllProposals(),
     loading,
     error,
+    lastFetch,
     refresh,
   };
 }

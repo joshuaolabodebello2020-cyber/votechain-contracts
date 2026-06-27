@@ -24,7 +24,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use soroban_sdk::{testutils::Address as _, Address, Env, String as SorobanString};
+use soroban_sdk::{testutils::Address as _, Address, Env, String as SorobanString, Vec};
 use votechain_governance::{GovernanceContract, GovernanceContractClient};
 
 /// Input layout (little-endian):
@@ -52,9 +52,6 @@ fuzz_target!(|data: &[u8]| {
         return;
     }
 
-    // Convert raw bytes to strings via lossy UTF-8 so soroban_sdk::String
-    // can accept them. Non-UTF-8 sequences become U+FFFD replacement chars,
-    // which still exercises the printable-byte and length validators.
     let title_str = std::string::String::from_utf8_lossy(&body[..title_len]);
     let desc_str = std::string::String::from_utf8_lossy(&body[title_len..title_len + desc_len]);
 
@@ -73,12 +70,15 @@ fuzz_target!(|data: &[u8]| {
     client.initialize(
         &admin,
         &tok_id,
-        &0_i128,        // no min balance
-        &0_u64,         // no cooldown
-        &60_u64,        // min duration
-        &2_592_000_u64, // max duration (30 days)
-        &false,
-        &0_u64,
+        &0_i128,        // min_proposal_balance
+        &0_u64,         // proposal_cooldown
+        &60_u64,        // min_duration
+        &2_592_000_u64, // max_duration
+        &false,         // restrict_admin_vote
+        &0_u64,         // amend_window
+        &0_u64,         // timelock_duration
+        &0_i128,        // veto_threshold
+        &0_u32,         // persistent_storage_ttl
     );
 
     let proposer = Address::generate(&env);
@@ -86,5 +86,12 @@ fuzz_target!(|data: &[u8]| {
     let desc = SorobanString::from_str(&env, &desc_str);
 
     // Must not panic — only Ok or a ContractError is acceptable.
-    let _ = client.try_create_proposal(&proposer, &title, &desc, &quorum, &duration);
+    let _ = client.try_create_proposal(
+        &proposer,
+        &title,
+        &desc,
+        &quorum,
+        &duration,
+        &Vec::new(&env),
+    );
 });
