@@ -13,6 +13,18 @@ path = "fuzz_targets/fuzz_create_proposal.rs"
 test = false
 doc = false
 
+[[bin]]
+name = "fuzz_cast_vote"
+path = "fuzz_targets/fuzz_cast_vote.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_finalise"
+path = "fuzz_targets/fuzz_finalise.rs"
+test = false
+doc = false
+
 [dependencies]
 libfuzzer-sys = "0.4"
 votechain-governance = { path = "..", features = ["testutils"] }

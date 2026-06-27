@@ -1,0 +1,13 @@
+.skeleton-block {
+  background-color: var(--color-surface-2);
+  animation: loading-shimmer 1.5s infinite linear;
+  background: linear-gradient(to right, var(--color-surface-2) 8%, var(--color-surface-3) 18%, var(--color-surface-2) 33%);
+  background-size: 800px 104px;
+  position: relative;
+  overflow: hidden;
+}
+
+@keyframes loading-shimmer {
+  0% { background-position: -800px 0; }
+  100% { background-position: 800px 0; }
+}

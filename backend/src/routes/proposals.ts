@@ -10,78 +10,58 @@ import {
   getCacheMetrics,
   invalidateProposalCache,
 } from "../middleware/redisCache";
-import {
-  fetchProposalCount,
-  readContractData,
-  getGovernanceContractId,
-  wrapRpcError,
-} from "../services/stellarRpc";
-import { xdr, nativeToScVal } from "@stellar/stellar-sdk";
+import { validate } from "../middleware/requestValidator";
 
 const router = Router();
 
 // GET /proposals — cached 30 s
-router.get("/proposals", cacheProposalList, async (_req: Request, res: Response) => {
-  try {
-    const count = await fetchProposalCount();
-    // Fetch each proposal by its numeric ID from persistent storage
-    const ids = Array.from({ length: count }, (_, i) => i + 1);
-    const proposals = await Promise.all(
-      ids.map((id) =>
-        readContractData(
-          getGovernanceContractId(),
-          xdr.ScVal.scvMap([
-            new xdr.ScMapEntry({
-              key: nativeToScVal("Proposal"),
-              val: nativeToScVal(id, { type: "u64" }),
-            }),
-          ])
-        )
-      )
-    );
-    res.json(proposals.filter(Boolean));
-  } catch (err) {
-    const error = wrapRpcError(err);
-    console.error("Error fetching proposals:", error);
-    res.status(502).json({ error: error.message });
+router.get(
+  "/proposals",
+  validate({
+    query: {
+      limit: { type: "integer", required: false, min: 1, max: 100 },
+      page: { type: "integer", required: false, min: 1 },
+      status: { type: "string", required: false, enum: ["Active", "Passed", "Rejected", "Executed", "Cancelled"] },
+    },
+  }),
+  cacheProposalList,
+  async (_req: Request, res: Response) => {
+    // TODO: fetch from Stellar RPC / indexer
+    const proposals: unknown[] = [];
+    res.json(proposals);
   }
-});
+);
 
 // GET /proposals/:id — cached 10 s
-router.get("/proposals/:id", cacheProposalItem, async (req: Request, res: Response) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id < 1) {
-    res.status(400).json({ error: "Invalid proposal id" });
-    return;
+router.get(
+  "/proposals/:id",
+  validate({
+    params: {
+      id: { type: "string", required: true, min: 1, max: 64, pattern: /^[a-zA-Z0-9_-]+$/ },
+    },
+  }),
+  cacheProposalItem,
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+    // TODO: fetch single proposal from Stellar RPC / indexer
+    res.json({ id });
   }
-  try {
-    const proposal = await readContractData(
-      getGovernanceContractId(),
-      xdr.ScVal.scvMap([
-        new xdr.ScMapEntry({
-          key: nativeToScVal("Proposal"),
-          val: nativeToScVal(id, { type: "u64" }),
-        }),
-      ])
-    );
-    if (!proposal) {
-      res.status(404).json({ error: "Proposal not found" });
-      return;
-    }
-    res.json(proposal);
-  } catch (err) {
-    const error = wrapRpcError(err);
-    console.error(`Error fetching proposal ${id}:`, error);
-    res.status(502).json({ error: error.message });
-  }
-});
+);
 
 // POST /proposals/invalidate — called by the event indexer on new on-chain events
-router.post("/proposals/invalidate", async (req: Request, res: Response) => {
-  const { id } = req.body as { id?: string };
-  await invalidateProposalCache(id);
-  res.json({ ok: true, invalidated: id ?? "list" });
-});
+router.post(
+  "/proposals/invalidate",
+  validate({
+    body: {
+      id: { type: "string", required: false, min: 1, max: 64, pattern: /^[a-zA-Z0-9_-]+$/ },
+    },
+  }),
+  async (req: Request, res: Response) => {
+    const { id } = req.body as { id?: string };
+    await invalidateProposalCache(id);
+    res.json({ ok: true, invalidated: id ?? "list" });
+  }
+);
 
 // GET /metrics/cache — exposes hit/miss counters
 router.get("/metrics/cache", (_req: Request, res: Response) => {

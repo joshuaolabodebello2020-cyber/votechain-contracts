@@ -1,24 +1,99 @@
 version: 2
 updates:
+  # Cargo dependencies (Rust workspace: governance + token contracts)
   - package-ecosystem: "cargo"
     directory: "/"
     schedule:
       interval: "weekly"
-    # Allow PRs to be opened automatically for patches and minor updates
+      day: "monday"
     open-pull-requests-limit: 10
-    # Optionally, you can add reviewers or labels here
-    # reviewers: ["team"]
-version: 2
-updates:
-  - package-ecosystem: "cargo"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 5
     assignees:
-      - "@Vera3289"
+      - "Vera3289"
     labels:
       - "dependencies"
-      - "security"
-    allow:
-      - dependency-type: "all"
+    groups:
+      soroban:
+        patterns:
+          - "soroban-sdk"
+          - "soroban-*"
+
+  # npm dependencies — frontend (React/Vite)
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    assignees:
+      - "Vera3289"
+    labels:
+      - "dependencies"
+    groups:
+      react:
+        patterns:
+          - "react"
+          - "react-*"
+          - "@types/react*"
+      vite-ecosystem:
+        patterns:
+          - "vite"
+          - "@vitejs/*"
+          - "vitest"
+      testing:
+        patterns:
+          - "@playwright/*"
+          - "@testing-library/*"
+      typescript-eslint:
+        patterns:
+          - "typescript"
+          - "@typescript-eslint/*"
+          - "eslint*"
+
+  # npm dependencies — backend (Express/TypeScript API)
+  - package-ecosystem: "npm"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    assignees:
+      - "Vera3289"
+    labels:
+      - "dependencies"
+    groups:
+      typescript-toolchain:
+        patterns:
+          - "typescript"
+          - "ts-node"
+          - "@types/*"
+      testing:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+          - "supertest"
+          - "@types/supertest"
+
+  # npm dependencies — SDK
+  - package-ecosystem: "npm"
+    directory: "/sdk"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    assignees:
+      - "Vera3289"
+    labels:
+      - "dependencies"
+
+  # GitHub Actions — pin actions to SHAs and keep them updated
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    assignees:
+      - "Vera3289"
+    labels:
+      - "dependencies"
+      - "ci"
