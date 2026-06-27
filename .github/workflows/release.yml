@@ -21,7 +21,46 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
       - run: stellar contract build
+
+      - name: Generate SHA-256 checksums
+        run: |
+          cd target/wasm32-unknown-unknown/release
+          sha256sum votechain_governance.wasm votechain_token.wasm > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Upload WASM artifacts (90-day retention)
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-release-${{ github.ref_name }}
+          path: |
+            target/wasm32-unknown-unknown/release/votechain_governance.wasm
+            target/wasm32-unknown-unknown/release/votechain_token.wasm
+            target/wasm32-unknown-unknown/release/SHA256SUMS.txt
+          retention-days: 90
+
+      - name: Build TypeScript SDK bindings
+        run: |
+          mkdir -p sdk/governance sdk/token
+          stellar contract bindings typescript \
+            --wasm target/wasm32-unknown-unknown/release/votechain_governance.wasm \
+            --output-dir sdk/governance \
+            --overwrite || echo "::warning::TypeScript bindings for governance skipped (requires deployed contract)"
+          stellar contract bindings typescript \
+            --wasm target/wasm32-unknown-unknown/release/votechain_token.wasm \
+            --output-dir sdk/token \
+            --overwrite || echo "::warning::TypeScript bindings for token skipped (requires deployed contract)"
+
+      - name: Upload SDK artifact (90-day retention)
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdk-${{ github.ref_name }}
+          path: sdk/
+          retention-days: 90
+
       - uses: softprops/action-gh-release@v2
         with:
-          files: target/wasm32-unknown-unknown/release/*.wasm
+          files: |
+            target/wasm32-unknown-unknown/release/votechain_governance.wasm
+            target/wasm32-unknown-unknown/release/votechain_token.wasm
+            target/wasm32-unknown-unknown/release/SHA256SUMS.txt
           generate_release_notes: true
