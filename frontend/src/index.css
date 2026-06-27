@@ -1,9 +1,41 @@
+@import "./styles/tokens.css";
+
 :root {
-  color-scheme: dark;
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: #0f172a;
-  color: #f8fafc;
+  font-family: var(--font-sans);
+  background: var(--color-bg);
+  color: var(--color-text-primary);
   line-height: 1.6;
+  transition: background-color var(--duration-normal) var(--ease-default),
+              color var(--duration-normal) var(--ease-default);
+  color-scheme: light;
+
+  /* State badge colors — meet 4.5:1 on light surface */
+  --badge-active-bg:    #ecfdf5;
+  --badge-active-fg:    #065f46;
+  --badge-passed-bg:    #eff6ff;
+  --badge-passed-fg:    #1e40af;
+  --badge-rejected-bg:  #fef2f2;
+  --badge-rejected-fg:  #991b1b;
+  --badge-executed-bg:  #f5f3ff;
+  --badge-executed-fg:  #5b21b6;
+  --badge-cancelled-bg: #f9fafb;
+  --badge-cancelled-fg: #374151;
+}
+
+html.dark {
+  color-scheme: dark;
+
+  /* State badge colors — meet 4.5:1 on dark surface */
+  --badge-active-bg:    #0d3b2e;
+  --badge-active-fg:    #4ade80;
+  --badge-passed-bg:    #0d2b4a;
+  --badge-passed-fg:    #60a5fa;
+  --badge-rejected-bg:  #3b1010;
+  --badge-rejected-fg:  #f87171;
+  --badge-executed-bg:  #1e1b4b;
+  --badge-executed-fg:  #a78bfa;
+  --badge-cancelled-bg: #2a2a2a;
+  --badge-cancelled-fg: #9ca3af;
 }
 
 * {
@@ -15,7 +47,7 @@ body {
 }
 
 a {
-  color: #38bdf8;
+  color: var(--color-primary);
 }
 
 button,
@@ -25,33 +57,36 @@ input {
 }
 
 button {
-  border: 1px solid #334155;
-  background: #1e293b;
-  color: #f8fafc;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
   padding: 0.75rem 1rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-md);
   cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-default),
+              border-color var(--duration-fast) var(--ease-default),
+              color var(--duration-fast) var(--ease-default);
 }
 
 button:hover,
 button:focus-visible {
-  background: #334155;
-  outline: 3px solid #7dd3fc;
+  background: var(--color-surface-raised);
+  outline: 3px solid var(--color-primary);
 }
 
 input,
 select {
-  border: 1px solid #334155;
-  background: #0f172a;
-  color: #f8fafc;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text-primary);
   padding: 0.75rem 0.85rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-md);
   min-width: 12rem;
 }
 
 input:focus,
 select:focus {
-  outline: 3px solid #7dd3fc;
+  outline: 3px solid var(--color-primary);
 }
 
 .container {
@@ -70,9 +105,9 @@ select:focus {
 }
 
 .card {
-  background: #111827;
-  border: 1px solid #334155;
-  border-radius: 1rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
   padding: 1.25rem;
   margin-bottom: 1.25rem;
 }
@@ -93,13 +128,13 @@ table {
 }
 
 thead {
-  background: #1e293b;
+  background: var(--color-surface-raised);
 }
 
 th,
 td {
   padding: 0.9rem 0.75rem;
-  border: 1px solid #334155;
+  border: 1px solid var(--color-border);
   text-align: left;
 }
 
@@ -108,7 +143,7 @@ th {
 }
 
 tr:nth-child(even) {
-  background: #121827;
+  background: var(--color-surface-raised);
 }
 
 .status-chip {
@@ -120,28 +155,28 @@ tr:nth-child(even) {
 }
 
 .status-active {
-  background: #334155;
-  color: #a5f3fc;
+  background: var(--badge-active-bg);
+  color: var(--badge-active-fg);
 }
 
 .status-passed {
-  background: #14532d;
-  color: #bbf7d0;
+  background: var(--badge-passed-bg);
+  color: var(--badge-passed-fg);
 }
 
 .status-rejected {
-  background: #7f1d1d;
-  color: #fecaca;
+  background: var(--badge-rejected-bg);
+  color: var(--badge-rejected-fg);
 }
 
 .status-executed {
-  background: #312e81;
-  color: #c7d2fe;
+  background: var(--badge-executed-bg);
+  color: var(--badge-executed-fg);
 }
 
 .status-cancelled {
-  background: #831843;
-  color: #fecdd3;
+  background: var(--badge-cancelled-bg);
+  color: var(--badge-cancelled-fg);
 }
 
 .proposal-list {
@@ -153,16 +188,16 @@ tr:nth-child(even) {
 }
 
 .proposal-card {
-  background: #111827;
-  border: 1px solid #334155;
-  border-radius: 1rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
   padding: 1.25rem;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
 }
 
 .proposal-card:hover {
-  border-color: #3b82f6;
-  box-shadow: 0 12px 30px rgba(59, 130, 246, 0.12);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-lg);
 }
 
 .card-header {
@@ -180,9 +215,9 @@ tr:nth-child(even) {
 }
 
 .proposal-id {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-family: var(--font-mono);
   font-size: 0.75rem;
-  color: #94a3b8;
+  color: var(--color-text-muted);
   margin-bottom: 0.25rem;
 }
 
@@ -190,7 +225,7 @@ tr:nth-child(even) {
   font-size: 1.05rem;
   font-weight: 600;
   line-height: 1.35;
-  color: #f8fafc;
+  color: var(--color-text-primary);
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -212,7 +247,7 @@ tr:nth-child(even) {
 
 .proposal-description {
   margin: 0.75rem 0 1rem;
-  color: #94a3b8;
+  color: var(--color-text-secondary);
   line-height: 1.75;
 }
 
@@ -231,7 +266,7 @@ tr:nth-child(even) {
   align-items: center;
   gap: 0.35rem;
   font-size: 0.85rem;
-  color: #cbd5e1;
+  color: var(--color-text-secondary);
 }
 
 .vote-dot {
@@ -246,7 +281,7 @@ tr:nth-child(even) {
 }
 
 .dot-abstain {
-  background: #94a3b8;
+  background: var(--color-text-muted);
 }
 
 .card-footer {
@@ -256,9 +291,9 @@ tr:nth-child(even) {
   flex-wrap: wrap;
   gap: 0.5rem;
   padding-top: 0.75rem;
-  border-top: 1px solid #334155;
+  border-top: 1px solid var(--color-border);
   font-size: 0.85rem;
-  color: #94a3b8;
+  color: var(--color-text-muted);
 }
 
 .empty-state {
@@ -267,13 +302,13 @@ tr:nth-child(even) {
   align-items: center;
   gap: 1rem;
   padding: 3rem 1rem;
-  color: #cbd5e1;
+  color: var(--color-text-secondary);
   text-align: center;
 }
 
 .empty-state-illustration {
   font-size: 3rem;
-  background: #1e293b;
+  background: var(--color-surface-raised);
   width: 5rem;
   height: 5rem;
   display: grid;
@@ -282,7 +317,7 @@ tr:nth-child(even) {
 }
 
 .empty-state-note {
-  color: #94a3b8;
+  color: var(--color-text-muted);
 }
 
 @media (max-width: 768px) {
@@ -320,8 +355,8 @@ tr:nth-child(even) {
 }
 
 .active-tab {
-  background: #0ea5e9;
-  color: #000;
+  background: var(--color-primary);
+  color: var(--color-primary-text);
 }
 
 @media (max-width: 720px) {
@@ -341,13 +376,13 @@ tr:nth-child(even) {
   top: -3rem;
   left: 1rem;
   z-index: 9999;
-  background: #0ea5e9;
-  color: #000;
+  background: var(--color-primary);
+  color: var(--color-primary-text);
   padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-md);
   font-weight: 600;
   text-decoration: none;
-  transition: top 0.15s;
+  transition: top var(--duration-fast);
 }
 .skip-link:focus {
   top: 1rem;
@@ -365,9 +400,9 @@ tr:nth-child(even) {
 }
 
 .modal {
-  background: #111827;
-  border: 1px solid #334155;
-  border-radius: 1rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
   padding: 1.5rem;
   max-width: 560px;
   width: 90%;
@@ -483,23 +518,23 @@ tr:nth-child(even) {
 .modal-close {
   background: transparent;
   border: none;
-  color: #94a3b8;
+  color: var(--color-text-muted);
   font-size: 1.1rem;
   cursor: pointer;
   padding: 0.25rem 0.5rem;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
   min-width: auto;
 }
 
 .modal-close:hover,
 .modal-close:focus-visible {
-  background: #1e293b;
-  color: #f8fafc;
-  outline: 3px solid #7dd3fc;
+  background: var(--color-surface-raised);
+  color: var(--color-text-primary);
+  outline: 3px solid var(--color-primary);
 }
 
 .modal-body {
-  color: #e2e8f0;
+  color: var(--color-text-secondary);
 }
 
 /* ── Spinner (used by optimistic vote loading state) ────────── */
@@ -519,12 +554,49 @@ tr:nth-child(even) {
 }
 
 /* ── Vote choice badges ─────────────────────────────────────── */
-.vote-for     { background: #14532d; color: #bbf7d0; }
-.vote-against { background: #7f1d1d; color: #fecaca; }
-.vote-abstain { background: #334155; color: #e2e8f0; }
+.vote-for     { background: var(--badge-active-bg); color: var(--badge-active-fg); }
+.vote-against { background: var(--badge-rejected-bg); color: var(--badge-rejected-fg); }
+.vote-abstain { background: var(--badge-cancelled-bg); color: var(--badge-cancelled-fg); }
 
 /* ── Optimistic pending row highlight ───────────────────────── */
 .optimistic-pending {
   opacity: 0.75;
   font-style: italic;
+}
+
+/* ── Theme Toggle Button ────────────────────────────────────── */
+.theme-toggle {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast), transform var(--duration-fast);
+}
+
+.theme-toggle:hover {
+  background: var(--color-surface-raised);
+  color: var(--color-text-primary);
+  border-color: var(--color-primary);
+  transform: scale(1.05);
+}
+
+.theme-toggle:active {
+  transform: scale(0.95);
+}
+
+.theme-toggle-icon {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2;
+  transition: transform var(--duration-normal) var(--ease-default);
+}
+
+.theme-toggle:hover .theme-toggle-icon {
+  transform: rotate(15deg);
 }

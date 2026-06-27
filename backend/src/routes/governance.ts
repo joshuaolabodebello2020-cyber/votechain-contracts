@@ -5,7 +5,7 @@
  */
 
 import { Router, Request, Response } from "express";
-import { rpcCircuitBreaker, CircuitOpenError } from "../middleware/circuitBreaker";
+import { validate } from "../middleware/requestValidator";
 
 const router = Router();
 
@@ -16,15 +16,11 @@ interface ProposalStats {
   avgQuorumAchievement: number;
 }
 
-// GET /health/rpc — exposes circuit-breaker state
-router.get("/health/rpc", (_req: Request, res: Response) => {
-  const status = rpcCircuitBreaker.status();
-  const httpStatus = status.state === "OPEN" ? 503 : 200;
-  res.status(httpStatus).json(status);
-});
-
-// GET /governance/stats — returns governance health metrics
-router.get("/governance/stats", async (_req: Request, res: Response) => {
+// GET /governance/stats — returns governance health metrics (no inputs expected)
+router.get(
+  "/governance/stats",
+  validate({}),
+  async (_req: Request, res: Response) => {
   try {
     // Wrap the upstream RPC call in the circuit breaker.
     // Swap the lambda body for a real Stellar RPC / indexer call.

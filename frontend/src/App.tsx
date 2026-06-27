@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import Navbar from "./components/Navbar";
 import { ProposalSkeletonList } from "./components/ProposalCardSkeleton";
+import OnboardingTutorial from "./components/OnboardingTutorial";
+import { RpcStatus } from "./components/RpcStatus";
 
 const ProposalList = React.lazy(() => import("./pages/ProposalList"));
 const ProposalDetail = React.lazy(() => import("./pages/ProposalDetail"));
@@ -35,6 +37,9 @@ export default function App() {
       <Navbar />
 
       <main id="main-content">
+        <div className="container">
+          <RpcStatus />
+        </div>
         {/*
          * ProposalList gets a proper skeleton fallback while the JS chunk is
          * downloading so users see a meaningful placeholder immediately.
