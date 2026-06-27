@@ -1,6 +1,6 @@
 /**
  * Proposal routes with Redis caching applied.
- * Replace the stub handlers with real Stellar RPC / indexer calls.
+ * On-chain data is fetched via the shared Stellar RPC service.
  */
 
 import { Router, Request, Response } from "express";

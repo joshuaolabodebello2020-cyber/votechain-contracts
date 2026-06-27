@@ -11,9 +11,7 @@ const router = Router();
 
 interface ProposalStats {
   byState: Record<string, number>;
-  participationOverTime: Array<{ date: string; rate: number }>;
-  topVoters: Array<{ address: string; total_weight: number }>;
-  avgQuorumAchievement: number;
+  totalProposals: number;
 }
 
 // GET /governance/stats — returns governance health metrics (no inputs expected)
@@ -54,8 +52,32 @@ router.get(
       avgQuorumAchievement: 73,
     }));
 
+    const proposals = (
+      await Promise.all(
+        ids.map((id) =>
+          readContractData(
+            getGovernanceContractId(),
+            xdr.ScVal.scvMap([
+              new xdr.ScMapEntry({
+                key: nativeToScVal("Proposal"),
+                val: nativeToScVal(id, { type: "u64" }),
+              }),
+            ])
+          )
+        )
+      )
+    ).filter(Boolean) as Array<Record<string, unknown>>;
+
+    const byState: Record<string, number> = {};
+    for (const p of proposals) {
+      const state = String(p.state ?? "Unknown");
+      byState[state] = (byState[state] ?? 0) + 1;
+    }
+
+    const stats: ProposalStats = { byState, totalProposals: count };
     res.json(stats);
-  } catch (error) {
+  } catch (err) {
+    const error = wrapRpcError(err);
     console.error("Error fetching governance stats:", error);
     res.status(500).json(withCorrelationId(res, { error: "Failed to fetch governance statistics" }));
   }
