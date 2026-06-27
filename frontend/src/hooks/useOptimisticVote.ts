@@ -1,168 +1,130 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback } from 'react';
 import type { Proposal, VoteRecord } from '../types';
 import { useTransactionStatus } from './useTransactionStatus';
+import { useProposalStore, type OptimisticVote } from '../store';
+import { useProposals } from './useProposals';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export type VoteChoice = VoteRecord['type']; // 'For' | 'Against' | 'Abstain'
 
-/** The shape of vote counts we track per proposal. */
-export interface VoteCounts {
-  votesCount: number;
-  totalWeight: number;
-  forWeight: number;
-  againstWeight: number;
-  abstainWeight: number;
-}
-
 export type OptimisticStatus = 'idle' | 'pending' | 'confirmed' | 'failed';
 
-export interface UseOptimisticVoteReturn {
-  /** Current (possibly optimistic) vote counts for the active proposal. */
-  counts: VoteCounts;
-  /** Whether the optimistic update is in-flight (not yet confirmed). */
-  status: OptimisticStatus;
-  /** True while the transaction is being confirmed on-chain. */
-  isConfirming: boolean;
+export interface UseOptimisticVoteResult {
+  /** Current (possibly optimistic) proposal data for given id */
+  getProposal: (id: string) => Proposal | undefined;
+  /** Get optimistic status for given proposal id */
+  getStatus: (id: string) => OptimisticStatus;
+  /** True while the transaction is being confirmed on-chain for given id */
+  isConfirming: (id: string) => boolean;
   /**
-   * Submit a vote optimistically.
-   *
-   * @param proposal  The proposal being voted on.
-   * @param choice    The voter's choice.
-   * @param weight    The voter's vote weight.
-   * @param sendTx    Async function that broadcasts the transaction and returns
-   *                  the transaction hash. Throw to signal failure.
+   * Submit a vote optimistically using the shared store.
    */
   castVote: (
-    proposal: Proposal,
+    proposalId: string,
     choice: VoteChoice,
     weight: number,
     sendTx: () => Promise<string>
   ) => Promise<void>;
-  /** Underlying tx state from useTransactionStatus (for the toast). */
+  /** Underlying tx state from useTransactionStatus (for the toast) */
   tx: ReturnType<typeof useTransactionStatus>['tx'];
   resetTx: ReturnType<typeof useTransactionStatus>['reset'];
-}
-
-// ── Helpers ────────────────────────────────────────────────────────────────
-
-function countsFromProposal(proposal: Proposal): VoteCounts {
-  const forWeight = proposal.votes
-    .filter((v) => v.type === 'For')
-    .reduce((s, v) => s + v.weight, 0);
-  const againstWeight = proposal.votes
-    .filter((v) => v.type === 'Against')
-    .reduce((s, v) => s + v.weight, 0);
-  const abstainWeight = proposal.votes
-    .filter((v) => v.type === 'Abstain')
-    .reduce((s, v) => s + v.weight, 0);
-
-  return {
-    votesCount: proposal.votesCount,
-    totalWeight: proposal.totalWeight,
-    forWeight,
-    againstWeight,
-    abstainWeight,
-  };
+  /** Reset optimistic state for a specific proposal id */
+  resetProposal: (id: string) => void;
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
 
 /**
- * Manages optimistic vote counts for a single proposal.
- *
- * Flow:
- *   1. castVote() snapshots current counts and applies the delta immediately.
- *   2. sendTx() is called — if it throws, we roll back before the tx even starts.
- *   3. useTransactionStatus polls Horizon until confirmed or failed.
- *   4. On confirmed: status → 'confirmed' (caller should refresh server data).
- *   5. On failed:    counts roll back to the pre-vote snapshot.
+ * Manages optimistic vote counts using the shared proposal store.
  */
-export function useOptimisticVote(proposal: Proposal): UseOptimisticVoteReturn {
+export function useOptimisticVote(): UseOptimisticVoteResult {
   const { tx, submit: submitTx, reset: resetTx } = useTransactionStatus();
+  const {
+    getProposal: getProposalFromStore,
+    applyOptimisticVote,
+    confirmOptimisticVote,
+    revertOptimisticVote,
+    optimisticVotes,
+  } = useProposalStore();
+  const { refresh } = useProposals();
 
-  const [counts, setCounts] = useState<VoteCounts>(() => countsFromProposal(proposal));
-  const [status, setStatus] = useState<OptimisticStatus>('idle');
+  const getProposal = useCallback(
+    (id: string) => {
+      const proposal = getProposalFromStore(id);
+      if (!proposal) return undefined;
+      // Return as Proposal type (strip optimisticVote if needed for compatibility)
+      const { optimisticVote, ...rest } = proposal;
+      return rest;
+    },
+    [getProposalFromStore]
+  );
 
-  // Keep a snapshot so we can roll back on failure.
-  const snapshot = useRef<VoteCounts | null>(null);
+  const getStatus = useCallback(
+    (id: string): OptimisticStatus => {
+      const vote = optimisticVotes[id];
+      if (!vote) return 'idle';
+      return vote.status;
+    },
+    [optimisticVotes]
+  );
 
-  // Sync counts when the proposal prop changes (e.g. after server refresh).
-  // We only sync when not in-flight to avoid clobbering the optimistic state.
-  const prevProposalId = useRef(proposal.id);
-  if (proposal.id !== prevProposalId.current) {
-    prevProposalId.current = proposal.id;
-    setCounts(countsFromProposal(proposal));
-    setStatus('idle');
-    snapshot.current = null;
-  }
+  const isConfirming = useCallback(
+    (id: string): boolean => {
+      const vote = optimisticVotes[id];
+      return vote?.status === 'pending';
+    },
+    [optimisticVotes]
+  );
 
   const castVote = useCallback(
     async (
-      targetProposal: Proposal,
+      proposalId: string,
       choice: VoteChoice,
       weight: number,
       sendTx: () => Promise<string>
     ) => {
-      // ── 1. Snapshot current counts ──────────────────────────────────────
-      const before = countsFromProposal(targetProposal);
-      snapshot.current = before;
+      // Apply optimistic update immediately
+      applyOptimisticVote(proposalId, choice, weight);
 
-      // ── 2. Apply optimistic delta ────────────────────────────────────────
-      const optimistic: VoteCounts = {
-        votesCount: before.votesCount + 1,
-        totalWeight: before.totalWeight + weight,
-        forWeight: before.forWeight + (choice === 'For' ? weight : 0),
-        againstWeight: before.againstWeight + (choice === 'Against' ? weight : 0),
-        abstainWeight: before.abstainWeight + (choice === 'Abstain' ? weight : 0),
-      };
-      setCounts(optimistic);
-      setStatus('pending');
-
-      // ── 3. Broadcast the transaction ─────────────────────────────────────
       let hash: string;
       try {
         hash = await sendTx();
       } catch {
-        // sendTx threw before we even got a hash — roll back immediately.
-        setCounts(before);
-        setStatus('failed');
-        snapshot.current = null;
+        // sendTx threw before we even got a hash — revert immediately
+        revertOptimisticVote(proposalId);
         return;
       }
 
-      // ── 4. Start polling Horizon ─────────────────────────────────────────
-      submitTx(hash);
+      // Start polling Horizon for confirmation
+      try {
+        await submitTx(hash);
+        // If submitTx resolves, it's confirmed
+        confirmOptimisticVote(proposalId);
+        // Then refresh proposals to get fresh on-chain data
+        await refresh();
+      } catch {
+        // If submitTx throws, it failed — revert
+        revertOptimisticVote(proposalId);
+      }
     },
-    [submitTx]
+    [applyOptimisticVote, revertOptimisticVote, confirmOptimisticVote, submitTx, refresh]
   );
 
-  // ── 5. React to tx status changes ─────────────────────────────────────────
-  // We watch tx.status and update our own status + roll back on failure.
-  // Using a ref to avoid stale closure issues inside the effect.
-  const prevTxStatus = useRef(tx.status);
-  if (tx.status !== prevTxStatus.current) {
-    prevTxStatus.current = tx.status;
-
-    if (tx.status === 'confirmed') {
-      setStatus('confirmed');
-      snapshot.current = null;
-    } else if (tx.status === 'failed') {
-      // Roll back to the pre-vote snapshot.
-      if (snapshot.current) {
-        setCounts(snapshot.current);
-        snapshot.current = null;
-      }
-      setStatus('failed');
-    }
-  }
+  const resetProposal = useCallback(
+    (id: string) => {
+      revertOptimisticVote(id);
+    },
+    [revertOptimisticVote]
+  );
 
   return {
-    counts,
-    status,
-    isConfirming: tx.status === 'pending',
+    getProposal,
+    getStatus,
+    isConfirming,
     castVote,
     tx,
     resetTx,
+    resetProposal,
   };
 }
