@@ -65,7 +65,7 @@ router.post(
 
 // GET /metrics/cache — exposes hit/miss counters
 router.get("/metrics/cache", (_req: Request, res: Response) => {
-  res.json(getCacheMetrics());
+  sendSuccess(res, getCacheMetrics());
 });
 
 export default router;

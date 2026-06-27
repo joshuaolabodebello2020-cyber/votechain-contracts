@@ -32,9 +32,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ProposalSummary'
+                $ref: '#/components/schemas/ProposalSummaryListResponse'
   /proposals/{id}:
     get:
       summary: Get full proposal details
@@ -50,13 +48,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProposalDetail'
+                $ref: '#/components/schemas/ProposalDetailResponse'
         '404':
           description: Proposal not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiError'
+                $ref: '#/components/schemas/ErrorResponse'
   /proposals/{id}/votes:
     get:
       summary: List votes for a proposal
@@ -72,15 +70,13 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/VoteRecord'
+                $ref: '#/components/schemas/VoteRecordListResponse'
         '404':
           description: Proposal not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiError'
+                $ref: '#/components/schemas/ErrorResponse'
   /voters/{address}/votes:
     get:
       summary: Get vote history for a voter
@@ -96,11 +92,66 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/VoteRecord'
+                $ref: '#/components/schemas/VoteRecordListResponse'
+  /governance/stats:
+    get:
+      summary: Get governance health metrics
+      responses:
+        '200':
+          description: Governance statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceStatsResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /metrics/cache:
+    get:
+      summary: Cache hit/miss counters
+      responses:
+        '200':
+          description: Cache metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CacheMetricsResponse'
 components:
   schemas:
+    # ── Envelope ──────────────────────────────────────────────────────────────
+    ApiError:
+      type: object
+      properties:
+        code:
+          type: string
+          example: NOT_FOUND
+        message:
+          type: string
+          example: Proposal not found
+      required: [code, message]
+    ApiResponse:
+      type: object
+      description: Standard response envelope used by all endpoints.
+      properties:
+        data:
+          description: The response payload, or null on error.
+          nullable: true
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApiError'
+          nullable: true
+          description: Non-null when the request failed.
+        meta:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: Optional metadata (pagination, cache info, etc.).
+      required: [data, errors, meta]
+    # ── Domain schemas ─────────────────────────────────────────────────────────
     ProposalState:
       type: string
       enum: [active, passed, rejected, executed, cancelled]
@@ -163,11 +214,104 @@ components:
         weight:
           type: integer
       required: [proposal_id, voter, vote, weight]
-    ApiError:
+    GovernanceStats:
       type: object
       properties:
-        code:
-          type: string
-        message:
-          type: string
-      required: [code, message]
+        byState:
+          type: object
+          additionalProperties:
+            type: integer
+        participationOverTime:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+              rate:
+                type: number
+            required: [date, rate]
+        topVoters:
+          type: array
+          items:
+            type: object
+            properties:
+              address:
+                type: string
+              total_weight:
+                type: integer
+            required: [address, total_weight]
+        avgQuorumAchievement:
+          type: number
+      required: [byState, participationOverTime, topVoters, avgQuorumAchievement]
+    CacheMetrics:
+      type: object
+      properties:
+        hits:
+          type: integer
+        misses:
+          type: integer
+        hitRate:
+          type: number
+      required: [hits, misses, hitRate]
+    # ── Typed envelope aliases ─────────────────────────────────────────────────
+    ProposalSummaryListResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ProposalSummary'
+              nullable: true
+    ProposalDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              allOf:
+                - $ref: '#/components/schemas/ProposalDetail'
+              nullable: true
+    VoteRecordListResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/VoteRecord'
+              nullable: true
+    GovernanceStatsResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              allOf:
+                - $ref: '#/components/schemas/GovernanceStats'
+              nullable: true
+    CacheMetricsResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              allOf:
+                - $ref: '#/components/schemas/CacheMetrics'
+              nullable: true
+    ErrorResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              nullable: true
+              default: null
+            errors:
+              type: array
+              items:
+                $ref: '#/components/schemas/ApiError'
+              minItems: 1
