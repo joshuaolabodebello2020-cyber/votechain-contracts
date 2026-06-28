@@ -11,6 +11,7 @@ import {
   invalidateProposalCache,
 } from "../middleware/redisCache";
 import { validate } from "../middleware/requestValidator";
+import { sendSuccess } from "../middleware/response";
 
 const router = Router();
 
@@ -19,16 +20,16 @@ router.get(
   "/proposals",
   validate({
     query: {
-      limit: { type: "integer", required: false, min: 1, max: 100 },
-      page: { type: "integer", required: false, min: 1 },
-      status: { type: "string", required: false, enum: ["Active", "Passed", "Rejected", "Executed", "Cancelled"] },
+      offset: { type: "integer", required: false, min: 0 },
+      limit: { type: "integer", required: false, min: 1, max: 50 },
+      state: { type: "string", required: false, enum: ["active", "passed", "rejected", "executed", "cancelled"] },
     },
   }),
   cacheProposalList,
   async (_req: Request, res: Response) => {
     // TODO: fetch from Stellar RPC / indexer
     const proposals: unknown[] = [];
-    res.json(proposals);
+    sendSuccess(res, proposals);
   }
 );
 
@@ -37,14 +38,29 @@ router.get(
   "/proposals/:id",
   validate({
     params: {
-      id: { type: "string", required: true, min: 1, max: 64, pattern: /^[a-zA-Z0-9_-]+$/ },
+      id: { type: "integer", required: true },
     },
   }),
   cacheProposalItem,
   async (req: Request, res: Response) => {
     const { id } = req.params;
     // TODO: fetch single proposal from Stellar RPC / indexer
-    res.json({ id });
+    sendSuccess(res, { id });
+  }
+);
+
+// GET /proposals/:id/votes — get votes for a proposal
+router.get(
+  "/proposals/:id/votes",
+  validate({
+    params: {
+      id: { type: "integer", required: true },
+    },
+  }),
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+    // TODO: fetch proposal votes from Stellar RPC / indexer
+    sendSuccess(res, []);
   }
 );
 

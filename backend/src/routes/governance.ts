@@ -6,81 +6,68 @@
 
 import { Router, Request, Response } from "express";
 import { validate } from "../middleware/requestValidator";
+import { sendSuccess, sendError } from "../middleware/response";
 
 const router = Router();
 
-interface ProposalStats {
-  byState: Record<string, number>;
-  totalProposals: number;
-}
-
-// GET /governance/stats — returns governance health metrics (no inputs expected)
+// GET /governance/stats — returns governance health metrics
 router.get(
   "/governance/stats",
   validate({}),
   async (_req: Request, res: Response) => {
-  try {
-    // Wrap the upstream RPC call in the circuit breaker.
-    // Swap the lambda body for a real Stellar RPC / indexer call.
-    const stats: ProposalStats = await rpcCircuitBreaker.call(async () => ({
-      byState: {
-        Active: 3,
-        Passed: 12,
-        Rejected: 5,
-        Executed: 10,
-        Cancelled: 2,
-      },
-      participationOverTime: [
-        { date: "2026-01", rate: 42 },
-        { date: "2026-02", rate: 55 },
-        { date: "2026-03", rate: 61 },
-        { date: "2026-04", rate: 48 },
-        { date: "2026-05", rate: 64 },
-      ],
-      topVoters: [
-        { address: "GABC...1234", total_weight: 9_800_000 },
-        { address: "GDEF...5678", total_weight: 7_200_000 },
-        { address: "GHIJ...9012", total_weight: 5_500_000 },
-        { address: "GKLM...3456", total_weight: 4_100_000 },
-        { address: "GNOP...7890", total_weight: 3_800_000 },
-        { address: "GQRS...1234", total_weight: 3_200_000 },
-        { address: "GTUV...5678", total_weight: 2_900_000 },
-        { address: "GWXY...9012", total_weight: 2_400_000 },
-        { address: "GZAB...3456", total_weight: 1_900_000 },
-        { address: "GCDE...7890", total_weight: 1_500_000 },
-      ],
-      avgQuorumAchievement: 73,
-    }));
+    try {
+      // TODO: Replace with real Stellar RPC / indexer call
+      const stats = {
+        byState: {
+          active: 3,
+          passed: 12,
+          rejected: 5,
+          executed: 10,
+          cancelled: 2,
+        },
+        participationOverTime: [
+          { date: "2026-01", rate: 42 },
+          { date: "2026-02", rate: 55 },
+          { date: "2026-03", rate: 61 },
+          { date: "2026-04", rate: 48 },
+          { date: "2026-05", rate: 64 },
+        ],
+        topVoters: [
+          { address: "GABC...1234", total_weight: 9800000 },
+          { address: "GDEF...5678", total_weight: 7200000 },
+          { address: "GHIJ...9012", total_weight: 5500000 },
+          { address: "GKLM...3456", total_weight: 4100000 },
+          { address: "GNOP...7890", total_weight: 3800000 },
+          { address: "GQRS...1234", total_weight: 3200000 },
+          { address: "GTUV...5678", total_weight: 2900000 },
+          { address: "GWXY...9012", total_weight: 2400000 },
+          { address: "GZAB...3456", total_weight: 1900000 },
+          { address: "GCDE...7890", total_weight: 1500000 },
+        ],
+        avgQuorumAchievement: 73,
+      };
 
-    const proposals = (
-      await Promise.all(
-        ids.map((id) =>
-          readContractData(
-            getGovernanceContractId(),
-            xdr.ScVal.scvMap([
-              new xdr.ScMapEntry({
-                key: nativeToScVal("Proposal"),
-                val: nativeToScVal(id, { type: "u64" }),
-              }),
-            ])
-          )
-        )
-      )
-    ).filter(Boolean) as Array<Record<string, unknown>>;
-
-    const byState: Record<string, number> = {};
-    for (const p of proposals) {
-      const state = String(p.state ?? "Unknown");
-      byState[state] = (byState[state] ?? 0) + 1;
+      sendSuccess(res, stats);
+    } catch (err) {
+      console.error("Error fetching governance stats:", err);
+      sendError(res, 500, "INTERNAL_ERROR", "Failed to fetch governance statistics");
     }
-
-    const stats: ProposalStats = { byState, totalProposals: count };
-    res.json(stats);
-  } catch (err) {
-    const error = wrapRpcError(err);
-    console.error("Error fetching governance stats:", error);
-    res.status(500).json(withCorrelationId(res, { error: "Failed to fetch governance statistics" }));
   }
-});
+);
+
+// GET /voters/:address/votes — returns votes for a specific voter
+router.get(
+  "/voters/:address/votes",
+  validate({
+    params: {
+      address: { type: "string", required: true },
+    },
+  }),
+  async (req: Request, res: Response) => {
+    const { address } = req.params;
+    // TODO: Replace with real Stellar RPC / indexer call
+    sendSuccess(res, []);
+  }
+);
 
 export default router;

@@ -32,13 +32,64 @@
   font-size: 0.875rem;
   font-weight: 600;
   text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
-.proposal-status-badge[data-status="Active"] { background: #dbeafe; color: #1e40af; }
-.proposal-status-badge[data-status="Passed"] { background: #dcfce7; color: #166534; }
-.proposal-status-badge[data-status="Rejected"] { background: #fee2e2; color: #991b1b; }
-.proposal-status-badge[data-status="Executed"] { background: #f3f4f6; color: #374151; }
-.proposal-status-badge[data-status="Cancelled"] { background: #fef3c7; color: #92400e; }
+.proposal-status-badge::before {
+  content: '';
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.proposal-status-badge[data-status="Active"] { 
+  background: var(--badge-active-bg); 
+  color: var(--badge-active-fg); 
+}
+.proposal-status-badge[data-status="Active"]::before { 
+  background: var(--badge-active-fg); 
+  border-radius: 50%;
+}
+
+.proposal-status-badge[data-status="Passed"] { 
+  background: var(--badge-passed-bg); 
+  color: var(--badge-passed-fg); 
+}
+.proposal-status-badge[data-status="Passed"]::before { 
+  background: var(--badge-passed-fg); 
+  border-radius: 0.125rem;
+}
+
+.proposal-status-badge[data-status="Rejected"] { 
+  background: var(--badge-rejected-bg); 
+  color: var(--badge-rejected-fg); 
+}
+.proposal-status-badge[data-status="Rejected"]::before { 
+  background: var(--badge-rejected-fg); 
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+}
+
+.proposal-status-badge[data-status="Executed"] { 
+  background: var(--badge-executed-bg); 
+  color: var(--badge-executed-fg); 
+}
+.proposal-status-badge[data-status="Executed"]::before { 
+  background: var(--badge-executed-fg); 
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+}
+
+.proposal-status-badge[data-status="Cancelled"] { 
+  background: var(--badge-cancelled-bg); 
+  color: var(--badge-cancelled-fg); 
+}
+.proposal-status-badge[data-status="Cancelled"]::before { 
+  background: var(--badge-cancelled-fg); 
+  clip-path: polygon(20% 0%, 80% 0%, 100% 100%, 0% 100%);
+}
 
 .proposal-title {
   font-size: 2rem;

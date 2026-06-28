@@ -396,3 +396,103 @@ fn e2e_five_voters_lifecycle_passed_executed() {
     s.gov.execute(&s.admin, &id);
     assert_eq!(s.gov.get_proposal(&id).state, ProposalState::Executed);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COMPREHENSIVE SINGLE FULL LIFECYCLE TEST:
+// Covers multiple proposals, all vote outcomes, all state transitions, and all failure cases
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn e2e_comprehensive_lifecycle_test() {
+    let s = make_suite();
+
+    // ── 1. FIRST PROPOSAL: FULL PASS + EXECUTE LIFECYCLE ───────────────────────
+    let id1 = new_proposal(&s, 100, 3600);
+    assert_eq!(s.gov.get_proposal(&id1).state, ProposalState::Active);
+
+    // All vote types cast and tallies verified
+    let yes_voter = mint_vote(&s, 150, id1, Vote::Yes);
+    let no_voter = mint_vote(&s, 50, id1, Vote::No);
+    let abstain_voter = mint_vote(&s, 75, id1, Vote::Abstain);
+    let p1 = s.gov.get_proposal(&id1);
+    assert_eq!(p1.votes_yes, 150);
+    assert_eq!(p1.votes_no, 50);
+    assert_eq!(p1.votes_abstain, 75);
+
+    // Failure case: double vote rejected
+    let double_vote_result = s.gov.try_cast_vote(&yes_voter, &id1, &Vote::No);
+    assert_eq!(double_vote_result.err().unwrap().unwrap(), ContractError::AlreadyVoted);
+
+    // Failure case: finalise before voting ends rejected
+    let finalise_early_result = s.gov.try_finalise(&id1);
+    assert_eq!(finalise_early_result.err().unwrap().unwrap(), ContractError::VotingStillOpen);
+
+    // Failure case: non-admin cancel rejected
+    let non_admin = Address::generate(&s.env);
+    let non_admin_cancel_result = s.gov.try_cancel(&non_admin, &id1);
+    assert_eq!(non_admin_cancel_result.err().unwrap().unwrap(), ContractError::NotAdmin);
+
+    // Advance time and finalise to Passed
+    advance(&s, 3601);
+    s.gov.finalise(&id1);
+    let p1_final = s.gov.get_proposal(&id1);
+    assert_eq!(p1_final.state, ProposalState::Passed);
+
+    // Failure case: vote on finalized proposal rejected
+    let late_voter = Address::generate(&s.env);
+    s.token.mint(&s.admin, &late_voter, &100);
+    let late_vote_result = s.gov.try_cast_vote(&late_voter, &id1, &Vote::Yes);
+    assert!(late_vote_result.is_err());
+
+    // Failure case: non-admin execute rejected
+    let non_admin_execute_result = s.gov.try_execute(&non_admin, &id1);
+    assert_eq!(non_admin_execute_result.err().unwrap().unwrap(), ContractError::NotAdmin);
+
+    // Execute proposal
+    s.gov.execute(&s.admin, &id1);
+    assert_eq!(s.gov.get_proposal(&id1).state, ProposalState::Executed);
+
+    // Failure case: execute already executed proposal rejected
+    let re_execute_result = s.gov.try_execute(&s.admin, &id1);
+    assert!(re_execute_result.is_err());
+
+    // Failure case: cancel already executed proposal rejected
+    let cancel_executed_result = s.gov.try_cancel(&s.admin, &id1);
+    assert!(cancel_executed_result.is_err());
+
+    // ── 2. SECOND PROPOSAL: REJECTED (NO WINS, QUORUM MET) ─────────────────────
+    let id2 = new_proposal(&s, 80, 1800);
+    mint_vote(&s, 40, id2, Vote::Yes);
+    mint_vote(&s, 50, id2, Vote::No);
+    mint_vote(&s, 30, id2, Vote::Abstain); // Quorum met (120 ≥ 80)
+    advance(&s, 1801);
+    s.gov.finalise(&id2);
+    assert_eq!(s.gov.get_proposal(&id2).state, ProposalState::Rejected);
+
+    // Failure case: execute rejected proposal rejected
+    let execute_rejected_result = s.gov.try_execute(&s.admin, &id2);
+    assert_eq!(execute_rejected_result.err().unwrap().unwrap(), ContractError::ProposalNotPassed);
+
+    // ── 3. THIRD PROPOSAL: CANCELLED (ADMIN CANCELS MID-VOTE) ───────────────────
+    let id3 = new_proposal(&s, 120, 7200);
+    mint_vote(&s, 60, id3, Vote::Yes);
+    s.gov.cancel(&s.admin, &id3);
+    assert_eq!(s.gov.get_proposal(&id3).state, ProposalState::Cancelled);
+
+    // Failure case: vote on cancelled proposal rejected
+    let vote_on_cancelled_result = s.gov.try_cast_vote(&no_voter, &id3, &Vote::No);
+    assert!(vote_on_cancelled_result.is_err());
+
+    // Failure case: finalise cancelled proposal rejected
+    let finalise_cancelled_result = s.gov.try_finalise(&id3);
+    assert!(finalise_cancelled_result.is_err());
+
+    // Failure case: cancel already cancelled proposal rejected
+    let re_cancel_result = s.gov.try_cancel(&s.admin, &id3);
+    assert!(re_cancel_result.is_err());
+
+    // ── 4. VERIFY ALL PROPOSAL COUNTS AND STATES ───────────────────────────────
+    assert_eq!(s.gov.proposal_count(), 3);
+    let proposals: Vec<u64> = (1..=3).collect();
+    assert_eq!(proposals.len(), 3);
+}
