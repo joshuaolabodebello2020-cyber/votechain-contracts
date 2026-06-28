@@ -96,6 +96,44 @@ fn require_non_zero_address(env: &Env, addr: &Address) -> Result<(), ContractErr
     Ok(())
 }
 
+// =============================================================================
+// Invariant checks - Critical invariants to validate before state transitions
+// =============================================================================
+
+/// Validates that all vote tallies in a proposal are non-negative.
+fn check_proposal_vote_tallies(proposal: &Proposal) -> Result<(), ContractError> {
+    if proposal.votes_yes < 0 || proposal.votes_no < 0 || proposal.votes_abstain < 0 {
+        return Err(ContractError::NegativeVoteTally);
+    }
+    Ok(())
+}
+
+/// Validates that a proposal state transition is allowed.
+/// Allowed transitions:
+/// - Active → Passed, Rejected, Cancelled
+/// - Passed → Executed
+/// - No other transitions allowed.
+fn check_proposal_state_transition(
+    current: &ProposalState,
+    next: &ProposalState,
+) -> Result<(), ContractError> {
+    match (current, next) {
+        (ProposalState::Active, ProposalState::Passed)
+        | (ProposalState::Active, ProposalState::Rejected)
+        | (ProposalState::Active, ProposalState::Cancelled)
+        | (ProposalState::Passed, ProposalState::Executed) => Ok(()),
+        _ => Err(ContractError::InvalidProposalStateTransition),
+    }
+}
+
+/// Performs all critical invariants checks before modifying any state changes to prevent invalid state transitions.
+/// Should be called before saving any modified proposal to storage.
+fn check_all_proposal_invariants(proposal: &Proposal) -> Result<(), ContractError> {
+    // Check 1: Non-negative vote tallies
+    check_proposal_vote_tallies(proposal)?;
+    Ok(())
+}
+
 /// Minimal client for querying the governance token's total supply.
 #[contractclient(name = "TokenSupplyClient")]
 pub trait TokenSupplyInterface {
@@ -431,6 +469,10 @@ impl GovernanceContract {
             tags,
             metadata_version,
         };
+        
+        // Check invariants
+        check_all_proposal_invariants(&proposal)?;
+        
         save_proposal(&env, &proposal);
         set_last_proposal(&env, &proposer, now);
         events::proposal_created(&env, id, &proposer, metadata_version);
@@ -609,6 +651,8 @@ impl GovernanceContract {
             }
         }
 
+        // Check invariants before saving
+        check_all_proposal_invariants(&proposal)?;
         save_vote_record(
             &env,
             proposal_id,
@@ -843,6 +887,9 @@ impl GovernanceContract {
             }
         }
 
+        // Check invariants
+        check_all_proposal_invariants(&proposal)?;
+        
         save_vote_record(
             &env,
             proposal_id,
@@ -887,14 +934,19 @@ impl GovernanceContract {
         }
 
         let total = proposal.votes_yes + proposal.votes_no + proposal.votes_abstain;
-        if total >= proposal.quorum && proposal.votes_yes > proposal.votes_no {
+        let next_state = if total >= proposal.quorum && proposal.votes_yes > proposal.votes_no {
             let timelock = get_timelock_duration(&env);
             proposal.execute_after = now + timelock;
-            proposal.state = ProposalState::Passed;
+            ProposalState::Passed
         } else {
-            proposal.state = ProposalState::Rejected;
-        }
-
+            ProposalState::Rejected
+        };
+        
+        // Check state transition and invariants
+        check_proposal_state_transition(&proposal.state, &next_state)?;
+        proposal.state = next_state;
+        check_all_proposal_invariants(&proposal)?;
+        
         save_proposal(&env, &proposal);
         events::proposal_finalised(&env, proposal_id, &proposal.state, proposal.execute_after);
         Ok(())
@@ -925,7 +977,12 @@ impl GovernanceContract {
         if env.ledger().timestamp() < proposal.execute_after {
             return Err(ContractError::TimelockNotExpired);
         }
+        
+        // Check state transition and invariants
+        check_proposal_state_transition(&proposal.state, &ProposalState::Executed)?;
         proposal.state = ProposalState::Executed;
+        check_all_proposal_invariants(&proposal)?;
+        
         save_proposal(&env, &proposal);
         events::proposal_executed(&env, proposal_id);
         Ok(())
@@ -953,7 +1010,12 @@ impl GovernanceContract {
         if proposal.state != ProposalState::Active {
             return Err(ContractError::ProposalNotActive);
         }
+        
+        // Check state transition and invariants
+        check_proposal_state_transition(&proposal.state, &ProposalState::Cancelled)?;
         proposal.state = ProposalState::Cancelled;
+        check_all_proposal_invariants(&proposal)?;
+        
         save_proposal(&env, &proposal);
         events::proposal_cancelled(&env, proposal_id);
         Ok(())
@@ -991,6 +1053,10 @@ impl GovernanceContract {
             return Err(ContractError::ProposalNotActive);
         }
         proposal.quorum = new_quorum;
+        
+        // Check invariants
+        check_all_proposal_invariants(&proposal)?;
+        
         save_proposal(&env, &proposal);
         events::quorum_updated(&env, proposal_id, new_quorum);
         Ok(())

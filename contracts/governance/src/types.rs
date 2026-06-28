@@ -99,6 +99,12 @@ pub enum ContractError {
     InvalidMinProposalBalance = 39,
     /// 40 – Migration failed (invalid state or preconditions)
     MigrationFailed = 40,
+    /// 41 – Invariant violation: vote tally is negative
+    NegativeVoteTally = 41,
+    /// 42 – Invariant violation: invalid proposal state transition
+    InvalidProposalStateTransition = 42,
+    /// 43 – Invariant violation: proposal already exists
+    ProposalAlreadyExists = 43,
 }
 
 /// Lifecycle state of the governance contract itself.

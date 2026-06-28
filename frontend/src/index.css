@@ -245,6 +245,40 @@ tr:nth-child(even) {
   flex-shrink: 0;
 }
 
+.state-badge::before {
+  content: '';
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.status-active::before {
+  background: var(--badge-active-fg);
+  border-radius: 50%;
+}
+
+.status-passed::before {
+  background: var(--badge-passed-fg);
+  border-radius: 0.125rem;
+}
+
+.status-rejected::before {
+  background: var(--badge-rejected-fg);
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+}
+
+.status-executed::before {
+  background: var(--badge-executed-fg);
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+}
+
+.status-cancelled::before {
+  background: var(--badge-cancelled-fg);
+  clip-path: polygon(20% 0%, 80% 0%, 100% 100%, 0% 100%);
+}
+
 .proposal-description {
   margin: 0.75rem 0 1rem;
   color: var(--color-text-secondary);
