@@ -158,5 +158,10 @@
     "ariaLabel": "Select language",
     "en": "English"
   },
-  "loading": "Loading…"
+  "loading": "Loading…",
+  "session": {
+    "warningMessage": "Your session is about to expire due to inactivity. Click \"Stay logged in\" to continue.",
+    "stayLoggedIn": "Stay logged in",
+    "stayLoggedInAriaLabel": "Stay logged in and reset session timer"
+  }
 }
