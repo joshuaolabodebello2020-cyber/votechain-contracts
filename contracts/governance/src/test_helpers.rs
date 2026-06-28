@@ -83,3 +83,29 @@ pub fn mint_and_vote(t: &TestEnv, voter: &Address, proposal_id: u64, vote: Vote,
     tok.mint(&t.admin, voter, &amount);
     t.client.cast_vote(voter, &proposal_id, &vote);
 }
+
+/// Helper trait to add try_* methods to GovernanceContractClient for testing
+pub trait TryMethods {
+    fn try_execute(&self, admin: &Address, proposal_id: u64) -> Result<(), soroban_sdk::Error>;
+    fn try_cancel(&self, admin: &Address, proposal_id: u64) -> Result<(), soroban_sdk::Error>;
+    fn try_finalise(&self, proposal_id: u64) -> Result<(), soroban_sdk::Error>;
+    fn try_cast_vote(&self, voter: &Address, proposal_id: u64, vote: &Vote) -> Result<(), soroban_sdk::Error>;
+}
+
+impl TryMethods for GovernanceContractClient<'_> {
+    fn try_execute(&self, admin: &Address, proposal_id: u64) -> Result<(), soroban_sdk::Error> {
+        self.execute(admin, proposal_id)
+    }
+
+    fn try_cancel(&self, admin: &Address, proposal_id: u64) -> Result<(), soroban_sdk::Error> {
+        self.cancel(admin, proposal_id)
+    }
+
+    fn try_finalise(&self, proposal_id: u64) -> Result<(), soroban_sdk::Error> {
+        self.finalise(proposal_id)
+    }
+
+    fn try_cast_vote(&self, voter: &Address, proposal_id: u64, vote: &Vote) -> Result<(), soroban_sdk::Error> {
+        self.cast_vote(voter, proposal_id, vote)
+    }
+}

@@ -34,6 +34,8 @@ pub mod test_helpers;
 mod integration_tests;
 #[cfg(test)]
 mod e2e_lifecycle_tests;
+#[cfg(test)]
+mod state_transition_tests;
 
 use soroban_sdk::{contract, contractclient, contractimpl, token, Address, Env, String, Vec};
 use storage::{
