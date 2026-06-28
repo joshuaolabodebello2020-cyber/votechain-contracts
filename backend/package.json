@@ -7,7 +7,9 @@
     "build": "tsc",
     "start": "node dist/app.js",
     "bench": "node bench/api-bench.js",
-    "bench:check": "node bench/api-bench.js && node ../perf/check-regression.js"
+    "bench:check": "node bench/api-bench.js && node ../perf/check-regression.js",
+    "test": "vitest",
+    "test:coverage": "vitest --coverage"
   },
   "dependencies": {
     "@stellar/stellar-sdk": "12.3.0",
