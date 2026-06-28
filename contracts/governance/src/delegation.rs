@@ -52,9 +52,9 @@ fn adjust_delegated_weight(
     let current = get_delegated_weight(env, delegatee);
     let updated = current
         .checked_add(delta)
-        .ok_or(ContractError::VoteTallyOverflow)?;
+        .ok_or(ContractError::Overflow)?;
     if updated < 0 {
-        return Err(ContractError::VoteTallyOverflow);
+        return Err(ContractError::Overflow);
     }
     if updated == 0 {
         set_delegated_weight(env, delegatee, 0);
@@ -88,7 +88,7 @@ pub fn delegate(
     }
 
     if would_create_cycle(env, delegator, delegatee) {
-        return Err(ContractError::DelegationCycle);
+        return Err(ContractError::Cycle);
     }
 
     let token = token::Client::new(env, &get_voting_token(env)?);
@@ -126,5 +126,5 @@ pub fn voting_weight(env: &Env, voter: &Address) -> Result<i128, ContractError> 
     let own = token.balance(voter);
     let delegated = get_delegated_weight(env, voter);
     own.checked_add(delegated)
-        .ok_or(ContractError::VoteTallyOverflow)
+        .ok_or(ContractError::Overflow)
 }

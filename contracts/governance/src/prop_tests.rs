@@ -269,7 +269,7 @@ mod contract_props {
                     &Vec::new(&t.env),
                 );
                 prop_assert!(
-                    matches!(result, Err(Ok(ContractError::InvalidQuorum))),
+                    matches!(result, Err(Ok(ContractError::BadQuorum))),
                     "expected InvalidQuorum for quorum=0, got {:?}", result
                 );
                 Ok(())
@@ -296,7 +296,7 @@ mod contract_props {
                     &Vec::new(&t.env),
                 );
                 prop_assert!(
-                    matches!(result, Err(Ok(ContractError::InvalidDurationRange))),
+                    matches!(result, Err(Ok(ContractError::BadRange))),
                     "expected InvalidDurationRange for duration={}, got {:?}", duration, result
                 );
                 Ok(())
@@ -323,7 +323,7 @@ mod contract_props {
                     &Vec::new(&t.env),
                 );
                 prop_assert!(
-                    matches!(result, Err(Ok(ContractError::InvalidDurationRange))),
+                    matches!(result, Err(Ok(ContractError::BadRange))),
                     "expected InvalidDurationRange for duration={}, got {:?}", duration, result
                 );
                 Ok(())
@@ -369,7 +369,7 @@ mod contract_props {
                 let voter = Address::generate(&t.env);
                 let result = t.client.try_cast_vote(&voter, &proposal_id, &Vote::Yes);
                 prop_assert!(
-                    matches!(result, Err(Ok(ContractError::NoVotingPower))),
+                    matches!(result, Err(Ok(ContractError::NoPower))),
                     "expected NoVotingPower, got {:?}", result
                 );
                 Ok(())
@@ -522,7 +522,7 @@ mod contract_props {
 
                 let result = t.client.try_cast_vote(&voter, &proposal_id, &Vote::Yes);
                 prop_assert!(
-                    matches!(result, Err(Ok(ContractError::VotingPeriodEnded))),
+                    matches!(result, Err(Ok(ContractError::VoteEnded))),
                     "expected VotingPeriodEnded, got {:?}", result
                 );
                 Ok(())
@@ -562,7 +562,8 @@ mod token_props {
                 |amounts| {
                     let (env, admin, client) = setup_token();
                     let initial = client.total_supply();
-                    let mut recipients = std::vec::Vec::new();
+                    extern crate alloc;
+                    let mut recipients = alloc::vec::Vec::new();
                     for &amt in &amounts {
                         let user = Address::generate(&env);
                         client.mint(&admin, &user, &amt);
@@ -665,5 +666,226 @@ mod token_props {
 
         let burn_result = client.try_burn(&admin, &user, &0);
         assert!(burn_result.is_err(), "burn(0) should be rejected");
+    }
+}
+
+// ── Issue #489: Fuzz testing for contract invariants ────────────────────────
+
+#[cfg(test)]
+mod invariant_props {
+    use super::*;
+    use crate::test_helpers::{create_test_proposal, mint_and_vote, setup_env};
+    use crate::types::{ContractError, Vote};
+    use proptest::test_runner::{Config, TestRunner};
+    use soroban_sdk::testutils::{Address as _, Ledger as _};
+    use soroban_sdk::{Address, Env, String, Vec};
+
+    /// INV-1: Vote tallies are always non-negative after any sequence of votes.
+    #[test]
+    fn prop_tallies_always_non_negative() {
+        let config = Config::with_cases(300);
+        let mut runner = TestRunner::new(config);
+
+        runner
+            .run(
+                &(
+                    1i128..=500_000i128,
+                    1i128..=500_000i128,
+                    1i128..=500_000i128,
+                ),
+                |(w_yes, w_no, w_abstain)| {
+                    let t = setup_env();
+                    let id = create_test_proposal(&t, &t.admin.clone());
+
+                    let v1 = Address::generate(&t.env);
+                    let v2 = Address::generate(&t.env);
+                    let v3 = Address::generate(&t.env);
+                    mint_and_vote(&t, &v1, id, Vote::Yes, w_yes);
+                    mint_and_vote(&t, &v2, id, Vote::No, w_no);
+                    mint_and_vote(&t, &v3, id, Vote::Abstain, w_abstain);
+
+                    let p = t.client.get_proposal(&id);
+                    prop_assert!(p.votes_yes >= 0);
+                    prop_assert!(p.votes_no >= 0);
+                    prop_assert!(p.votes_abstain >= 0);
+                    Ok(())
+                },
+            )
+            .unwrap();
+    }
+
+    /// INV-2: Total votes across all categories never exceed total token supply.
+    #[test]
+    fn prop_total_votes_bounded_by_supply() {
+        let config = Config::with_cases(300);
+        let mut runner = TestRunner::new(config);
+
+        runner
+            .run(
+                &(
+                    1i128..=100_000i128,
+                    1i128..=100_000i128,
+                    1i128..=100_000i128,
+                ),
+                |(w_yes, w_no, w_abstain)| {
+                    let t = setup_env();
+                    let id = create_test_proposal(&t, &t.admin.clone());
+
+                    let tok = votechain_token::TokenContractClient::new(&t.env, &t.token_id);
+                    let supply_before = tok.total_supply();
+
+                    let v1 = Address::generate(&t.env);
+                    let v2 = Address::generate(&t.env);
+                    let v3 = Address::generate(&t.env);
+                    mint_and_vote(&t, &v1, id, Vote::Yes, w_yes);
+                    mint_and_vote(&t, &v2, id, Vote::No, w_no);
+                    mint_and_vote(&t, &v3, id, Vote::Abstain, w_abstain);
+
+                    let p = t.client.get_proposal(&id);
+                    let total_votes = p.votes_yes + p.votes_no + p.votes_abstain;
+                    let supply_after = tok.total_supply();
+
+                    prop_assert!(
+                        total_votes <= supply_after,
+                        "total votes {} > supply {}", total_votes, supply_after
+                    );
+                    Ok(())
+                },
+            )
+            .unwrap();
+    }
+
+    /// INV-3: Proposal state after finalise is always terminal (Passed or Rejected).
+    #[test]
+    fn prop_finalise_always_terminal() {
+        let config = Config::with_cases(300);
+        let mut runner = TestRunner::new(config);
+
+        runner
+            .run(
+                &(
+                    0i128..=200i128,
+                    0i128..=200i128,
+                    0i128..=200i128,
+                    1i128..=500i128,
+                ),
+                |(w_yes, w_no, w_abstain, quorum)| {
+                    let t = setup_env();
+                    let proposer = Address::generate(&t.env);
+                    let id = t.client.create_proposal(
+                        &proposer,
+                        &String::from_str(&t.env, "inv"),
+                        &String::from_str(&t.env, "invariant test"),
+                        &quorum,
+                        &3600_u64,
+                        &Vec::new(&t.env),
+                    );
+
+                    if w_yes > 0 {
+                        let v = Address::generate(&t.env);
+                        mint_and_vote(&t, &v, id, Vote::Yes, w_yes);
+                    }
+                    if w_no > 0 {
+                        let v = Address::generate(&t.env);
+                        mint_and_vote(&t, &v, id, Vote::No, w_no);
+                    }
+                    if w_abstain > 0 {
+                        let v = Address::generate(&t.env);
+                        mint_and_vote(&t, &v, id, Vote::Abstain, w_abstain);
+                    }
+
+                    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+                    t.client.finalise(&id);
+
+                    let p = t.client.get_proposal(&id);
+                    use crate::types::ProposalState;
+                    prop_assert!(
+                        p.state == ProposalState::Passed || p.state == ProposalState::Rejected,
+                        "non-terminal state after finalise: {:?}", p.state
+                    );
+                    Ok(())
+                },
+            )
+            .unwrap();
+    }
+
+    /// INV-4: Quorum boundary — proposals with total == quorum and yes > no always pass.
+    #[test]
+    fn prop_exact_quorum_with_yes_majority_passes() {
+        let config = Config::with_cases(200);
+        let mut runner = TestRunner::new(config);
+
+        runner
+            .run(
+                &(1i128..=1000i128,),
+                |(quorum,)| {
+                    let t = setup_env();
+                    let proposer = Address::generate(&t.env);
+                    let id = t.client.create_proposal(
+                        &proposer,
+                        &String::from_str(&t.env, "qb"),
+                        &String::from_str(&t.env, "quorum boundary"),
+                        &quorum,
+                        &3600_u64,
+                        &Vec::new(&t.env),
+                    );
+
+                    // Vote exactly quorum tokens, all Yes
+                    let v = Address::generate(&t.env);
+                    mint_and_vote(&t, &v, id, Vote::Yes, quorum);
+
+                    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+                    t.client.finalise(&id);
+
+                    use crate::types::ProposalState;
+                    prop_assert_eq!(
+                        t.client.get_proposal(&id).state,
+                        ProposalState::Passed,
+                        "exact quorum all-yes should pass"
+                    );
+                    Ok(())
+                },
+            )
+            .unwrap();
+    }
+
+    /// INV-5: Quorum boundary — proposals with total < quorum always reject.
+    #[test]
+    fn prop_below_quorum_always_rejects() {
+        let config = Config::with_cases(200);
+        let mut runner = TestRunner::new(config);
+
+        runner
+            .run(
+                &(2i128..=1000i128,),
+                |(quorum,)| {
+                    let t = setup_env();
+                    let proposer = Address::generate(&t.env);
+                    let id = t.client.create_proposal(
+                        &proposer,
+                        &String::from_str(&t.env, "bq"),
+                        &String::from_str(&t.env, "below quorum"),
+                        &quorum,
+                        &3600_u64,
+                        &Vec::new(&t.env),
+                    );
+
+                    // Vote one less than quorum
+                    let v = Address::generate(&t.env);
+                    mint_and_vote(&t, &v, id, Vote::Yes, quorum - 1);
+
+                    t.env.ledger().with_mut(|l| l.timestamp += 3601);
+                    t.client.finalise(&id);
+
+                    use crate::types::ProposalState;
+                    prop_assert_eq!(
+                        t.client.get_proposal(&id).state,
+                        ProposalState::Rejected,
+                        "below-quorum should reject"
+                    );
+                    Ok(())
+                },
+            )
+            .unwrap();
     }
 }

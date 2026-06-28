@@ -199,36 +199,29 @@ pub fn multisig_config_updated(env: &Env, threshold: u32) {
 }
 
 /// Emits a `delegated` event when a delegation is set.
-///
-/// Topics: `("delegated", delegator)`
-/// Data: `delegatee: Address`
-pub fn delegation_set(env: &Env, delegator: &Address, delegatee: &Address) {
+pub fn delegation_set(env: &Env, delegator: &Address, delegatee: &Address, weight: i128) {
     env.events().publish(
         (symbol_short!("delegated"), delegator.clone()),
-        delegatee.clone(),
+        (delegatee.clone(), weight),
     );
 }
 
 /// Emits an `undelegat` event when a delegation is removed.
-///
-/// Topics: `("undelegat", delegator)`
-/// Data: `()`
-pub fn delegation_cleared(env: &Env, delegator: &Address) {
-    env.events()
-        .publish((symbol_short!("undelegat"), delegator.clone()), ());
+pub fn delegation_revoked(env: &Env, delegator: &Address, delegatee: &Address, weight: i128) {
+    env.events().publish(
+        (symbol_short!("undelegat"), delegator.clone()),
+        (delegatee.clone(), weight),
+    );
 }
 
-/// Emits a `mindupdate` event when the minimum duration is changed by admin.
 pub fn min_duration_updated(env: &Env, new_min: u64) {
-    env.events().publish((symbol_short!("mindupdate"),), new_min);
+    env.events().publish((symbol_short!("mindurupd"),), new_min);
 }
 
-/// Emits a `maxdupdate` event when the maximum duration is changed by admin.
 pub fn max_duration_updated(env: &Env, new_max: u64) {
-    env.events().publish((symbol_short!("maxdupdate"),), new_max);
+    env.events().publish((symbol_short!("maxdurupd"),), new_max);
 }
 
-/// Emits a `qdflupdate` event when the default quorum is changed by admin.
 pub fn quorum_default_updated(env: &Env, new_default: i128) {
-    env.events().publish((symbol_short!("qdflupdate"),), new_default);
+    env.events().publish((symbol_short!("qdfltupd"),), new_default);
 }

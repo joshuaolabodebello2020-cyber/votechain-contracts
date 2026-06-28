@@ -27,6 +27,7 @@ jobs:
           - fuzz_create_proposal
           - fuzz_cast_vote
           - fuzz_finalise
+          - fuzz_lifecycle
 
     steps:
       - uses: actions/checkout@v4

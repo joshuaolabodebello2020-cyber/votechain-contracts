@@ -166,14 +166,14 @@ pub fn save_proposal(env: &Env, p: &Proposal) {
 /// operation, preventing expiry between a vote and a subsequent finalise call.
 ///
 /// # Errors
-/// - [`ContractError::ProposalNotFound`] if no proposal exists for `id`.
+/// - [`ContractError::NotFound`] if no proposal exists for `id`.
 pub fn load_proposal(env: &Env, id: u64) -> Result<Proposal, ContractError> {
     let key = DataKey::Proposal(id);
     let proposal = env
         .storage()
         .persistent()
         .get(&key)
-        .ok_or(ContractError::ProposalNotFound)?;
+        .ok_or(ContractError::NotFound)?;
     bump_persistent(env, &key);
     Ok(proposal)
 }
@@ -186,7 +186,7 @@ pub fn load_proposal(env: &Env, id: u64) -> Result<Proposal, ContractError> {
 /// transactions in the same ledger) each observe a unique counter value.
 ///
 /// # Errors
-/// - [`ContractError::ProposalCountOverflow`] if the counter would exceed `u64::MAX`.
+/// - [`ContractError::IdOverflow`] if the counter would exceed `u64::MAX`.
 pub fn next_id(env: &Env) -> Result<u64, ContractError> {
     let current: u64 = env
         .storage()
@@ -195,7 +195,7 @@ pub fn next_id(env: &Env) -> Result<u64, ContractError> {
         .unwrap_or(0);
     let n = current
         .checked_add(1)
-        .ok_or(ContractError::ProposalCountOverflow)?;
+        .ok_or(ContractError::IdOverflow)?;
     env.storage().instance().set(&DataKey::ProposalCount, &n);
     Ok(n)
 }
@@ -245,12 +245,12 @@ pub fn set_voting_token(env: &Env, token: &Address) {
 /// Returns the stored governance token address.
 ///
 /// # Errors
-/// - [`ContractError::VotingTokenNotSet`] if the contract has not been initialised.
+/// - [`ContractError::TokenNotSet`] if the contract has not been initialised.
 pub fn get_voting_token(env: &Env) -> Result<Address, ContractError> {
     env.storage()
         .instance()
         .get(&DataKey::VotingToken)
-        .ok_or(ContractError::VotingTokenNotSet)
+        .ok_or(ContractError::TokenNotSet)
 }
 
 pub fn set_veto_threshold(env: &Env, v: i128) {
@@ -530,7 +530,7 @@ pub fn get_multisig_config(env: &Env) -> Option<MultiSigConfig> {
 /// Increments the multi-sig action counter and returns the new ID.
 ///
 /// # Errors
-/// - [`ContractError::ProposalCountOverflow`] if the counter would exceed `u64::MAX`.
+/// - [`ContractError::IdOverflow`] if the counter would exceed `u64::MAX`.
 pub fn next_multisig_action_id(env: &Env) -> Result<u64, ContractError> {
     let current: u64 = env
         .storage()
@@ -539,7 +539,7 @@ pub fn next_multisig_action_id(env: &Env) -> Result<u64, ContractError> {
         .unwrap_or(0);
     let n = current
         .checked_add(1)
-        .ok_or(ContractError::ProposalCountOverflow)?;
+        .ok_or(ContractError::IdOverflow)?;
     env.storage().instance().set(&DataKey::MultiSigActionCount, &n);
     Ok(n)
 }
@@ -557,14 +557,14 @@ pub fn save_multisig_action(env: &Env, action: &MultiSigAction) {
 /// SC-006: TTL bumped on successful read (feeds state-mutating approve path).
 ///
 /// # Errors
-/// - [`ContractError::ActionNotFound`] if no action exists for `id`.
+/// - [`ContractError::NoAction`] if no action exists for `id`.
 pub fn load_multisig_action(env: &Env, id: u64) -> Result<MultiSigAction, ContractError> {
     let key = DataKey::MultiSigAction(id);
     let action = env
         .storage()
         .persistent()
         .get(&key)
-        .ok_or(ContractError::ActionNotFound)?;
+        .ok_or(ContractError::NoAction)?;
     bump_persistent(env, &key);
     Ok(action)
 }
@@ -681,4 +681,64 @@ pub fn get_metadata_version(env: &Env) -> u32 {
         .instance()
         .get(&DataKey::MetadataVersion)
         .unwrap_or(1)
+}
+
+// =============================================================================
+// Default quorum storage
+// =============================================================================
+
+/// Stores the default quorum hint in instance storage.
+pub fn set_quorum_default(env: &Env, v: i128) {
+    env.storage().instance().set(&DataKey::QuorumDefault, &v);
+}
+
+/// Returns the default quorum hint, or 0 if not set.
+pub fn get_quorum_default(env: &Env) -> i128 {
+    env.storage()
+        .instance()
+        .get(&DataKey::QuorumDefault)
+        .unwrap_or(0)
+}
+
+// =============================================================================
+// Metadata summary storage (issue #485)
+// =============================================================================
+
+use crate::types::ProposalMetadata;
+
+/// Computes a simple FNV-1a checksum over bytes.
+fn fnv1a(data: &[u8]) -> u32 {
+    let mut hash: u32 = 0x811c_9dc5;
+    for &b in data {
+        hash ^= b as u32;
+        hash = hash.wrapping_mul(0x0100_0193);
+    }
+    hash
+}
+
+/// Saves a compact metadata summary alongside a proposal.
+pub fn save_metadata_summary(env: &Env, p: &crate::types::Proposal) {
+    let desc_len = p.description.len();
+    let preview_len = if desc_len > 256 { 256 } else { desc_len } as usize;
+    let mut buf = [0u8; 1024];
+    let full_len = desc_len as usize;
+    p.description.copy_into_slice(&mut buf[..full_len]);
+    let checksum = fnv1a(&buf[..full_len]);
+    let preview = String::from_str(env, &core::str::from_utf8(&buf[..preview_len]).unwrap_or(""));
+    let meta = ProposalMetadata {
+        title: p.title.clone(),
+        description_preview: preview,
+        description_checksum: checksum,
+        description_len: desc_len,
+    };
+    env.storage()
+        .persistent()
+        .set(&DataKey::MetadataSummary(p.id), &meta);
+}
+
+/// Loads a metadata summary for a proposal.
+pub fn load_metadata_summary(env: &Env, proposal_id: u64) -> Option<ProposalMetadata> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::MetadataSummary(proposal_id))
 }
