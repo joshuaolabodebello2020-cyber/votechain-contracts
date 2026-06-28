@@ -39,9 +39,9 @@ use soroban_sdk::{contract, contractclient, contractimpl, token, Address, Env, S
 use storage::{
     get_admin as storage_get_admin, get_contract_state, get_last_proposal, get_min_duration,
     get_min_proposal_balance, get_proposal_cooldown, get_restrict_admin_vote, get_timelock_duration,
-    get_version, get_amend_window, get_voter_snapshot, get_voting_token, get_veto_threshold,
-    has_voted, is_initialized, is_paused, load_proposal, mark_voted, next_id, save_proposal,
-    save_vote_record, save_voter_snapshot, set_admin, set_contract_state, set_last_proposal,
+    get_version, get_amend_window, get_voting_token, get_veto_threshold,
+    has_voted, is_initialized, is_paused, load_proposal, next_id, save_proposal,
+    save_vote_record, remove_vote_record, set_admin, set_contract_state, set_last_proposal,
     set_min_duration, set_max_duration, set_min_proposal_balance, set_paused, set_proposal_cooldown,
     set_restrict_admin_vote, set_timelock_duration, set_version, set_veto_threshold, set_voting_token,
     get_vote_record, get_max_duration, set_pending_admin, get_pending_admin, clear_pending_admin,
@@ -606,22 +606,15 @@ impl GovernanceContract {
             }
         }
 
-        // SEC-010 (checks-effects-interactions): write the dedup flag BEFORE the
-        // cross-contract call so that even if the execution model ever allowed
-        // re-entry, a second cast_vote for the same voter would be rejected.
-        mark_voted(&env, proposal_id, &voter);
+        // SEC-010 (checks-effects-interactions): write a sentinel VoteRecord BEFORE the
+        // cross-contract call so that re-entry is rejected by has_voted above.
+        // weight=0 sentinel is overwritten with real balance below, or removed on NoVotingPower.
+        // SC-013: single write replaces the former mark_voted + save_voter_snapshot pair.
+        save_vote_record(&env, proposal_id, &voter, &VoteRecord { vote_type: vote.clone(), weight: 0 });
 
-        let token_client = token::Client::new(&env, &get_voting_token(&env)?);
-        // Snapshot: capture the voter's balance at vote time and persist it.
-        let weight = match get_voter_snapshot(&env, proposal_id, &voter) {
-            Some(w) => w,
-            None => {
-                let live = delegation::voting_weight(&env, &voter)?;
-                save_voter_snapshot(&env, proposal_id, &voter, live);
-                live
-            }
-        };
+        let weight = delegation::voting_weight(&env, &voter)?;
         if weight <= 0 {
+            remove_vote_record(&env, proposal_id, &voter);
             return Err(ContractError::NoVotingPower);
         }
 
@@ -829,11 +822,11 @@ impl GovernanceContract {
         }
 
         // Mark delegate as voted before cross-contract calls (SEC-010).
-        mark_voted(&env, proposal_id, &voter);
+        // SC-013: sentinel VoteRecord replaces mark_voted + save_voter_snapshot.
+        save_vote_record(&env, proposal_id, &voter, &VoteRecord { vote_type: vote.clone(), weight: 0 });
 
         let token_client = token::Client::new(&env, &get_voting_token(&env)?);
         let own_weight = token_client.balance(&voter);
-        save_voter_snapshot(&env, proposal_id, &voter, own_weight);
 
         // Accumulate delegated weight.
         let mut delegated_weight: i128 = 0;
@@ -852,9 +845,8 @@ impl GovernanceContract {
                 delegated_weight = delegated_weight
                     .checked_add(d_weight)
                     .ok_or(ContractError::VoteTallyOverflow)?;
-                // Mark delegator as voted so they cannot double-vote.
-                mark_voted(&env, proposal_id, &delegator);
-                save_voter_snapshot(&env, proposal_id, &delegator, d_weight);
+                // SC-013: single VoteRecord write replaces mark_voted + save_voter_snapshot.
+                save_vote_record(&env, proposal_id, &delegator, &VoteRecord { vote_type: vote.clone(), weight: d_weight });
             }
         }
 
@@ -862,6 +854,7 @@ impl GovernanceContract {
             .checked_add(delegated_weight)
             .ok_or(ContractError::VoteTallyOverflow)?;
         if weight <= 0 {
+            remove_vote_record(&env, proposal_id, &voter);
             return Err(ContractError::NoVotingPower);
         }
 

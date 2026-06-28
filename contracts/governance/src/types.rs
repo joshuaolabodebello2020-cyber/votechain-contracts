@@ -191,10 +191,9 @@ pub enum DataKey {
     /// Monotonic counter used to derive the next proposal ID (instance storage).
     ProposalCount,
 
-    /// Boolean flag recording whether `voter` has voted on `proposal_id` (persistent storage).
-    HasVoted(u64, Address),
-
-    /// Detailed vote record (vote type + weight) for `voter` on `proposal_id` (persistent storage).
+    /// SC-013: Single composite key per voter per proposal (replaces HasVoted + VoterSnapshot).
+    /// Key presence is the deduplication flag; `weight` field stores the balance snapshot.
+    /// Before: 3 keys (HasVoted, VoteRecord, VoterSnapshot). After: 1 key (VoteRecord).
     VoteRecord(u64, Address),
 
     /// Contract administrator address (instance storage).
@@ -226,9 +225,6 @@ pub enum DataKey {
 
     /// Contract version stored as a `(major, minor, patch)` semver tuple (instance storage).
     Version,
-
-    /// Token-balance snapshot for `voter` on `proposal_id`, captured at vote time (persistent storage).
-    VoterSnapshot(u64, Address),
 
     /// Mandatory delay (seconds) between a proposal passing and it becoming executable (instance storage).
     TimelockDuration,
