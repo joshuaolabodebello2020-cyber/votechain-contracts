@@ -151,6 +151,8 @@ npm run dev   # http://localhost:3000
 
 ## Common Issues
 
+> For a comprehensive list of issues and solutions, see the [Troubleshooting Guide](TROUBLESHOOTING.md).
+
 ### WASM target missing
 
 **Symptom:** `error[E0463]: can't find crate for 'std'` when building contracts.

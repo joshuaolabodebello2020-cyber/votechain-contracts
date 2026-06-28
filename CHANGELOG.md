@@ -46,6 +46,13 @@ Every entry belongs under a release heading and one of the following subsection 
 
 ### Added
 - ADR-007: document vote delegation design decision (deferred). ([#273](https://github.com/Vera3289/votechain-contracts/issues/273))
+- Frontend validation mutation tests for boundary and malformed input cases. ([#562](https://github.com/Vera3289/votechain-contracts/issues/562))
+- Security regression tests for admin endpoint access control. ([#563](https://github.com/Vera3289/votechain-contracts/issues/563))
+- Troubleshooting guide for local development at `docs/TROUBLESHOOTING.md`. ([#561](https://github.com/Vera3289/votechain-contracts/issues/561))
+- API changelog for breaking changes at `docs/api/API_CHANGELOG.md`. ([#560](https://github.com/Vera3289/votechain-contracts/issues/560))
+
+### Changed
+- Admin endpoints (`POST /proposals/invalidate`, `GET /metrics/cache`) now require `X-Admin-Key` header. ([#563](https://github.com/Vera3289/votechain-contracts/issues/563))
 
 ## [0.1.0] - 2026-04-27
 

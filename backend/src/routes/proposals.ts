@@ -12,6 +12,7 @@ import {
 } from "../middleware/redisCache";
 import { validate } from "../middleware/requestValidator";
 import { sendSuccess } from "../middleware/response";
+import { requireAdmin } from "../middleware/adminAuth";
 
 const router = Router();
 
@@ -67,6 +68,7 @@ router.get(
 // POST /proposals/invalidate — called by the event indexer on new on-chain events
 router.post(
   "/proposals/invalidate",
+  requireAdmin,
   validate({
     body: {
       id: { type: "string", required: false, min: 1, max: 64, pattern: /^[a-zA-Z0-9_-]+$/ },
@@ -80,7 +82,7 @@ router.post(
 );
 
 // GET /metrics/cache — exposes hit/miss counters
-router.get("/metrics/cache", (_req: Request, res: Response) => {
+router.get("/metrics/cache", requireAdmin, (_req: Request, res: Response) => {
   sendSuccess(res, getCacheMetrics());
 });
 
