@@ -2,11 +2,15 @@
  * Governance routes - provides dashboard metrics and statistics.
  * RPC calls are wrapped with a circuit breaker so upstream failures degrade
  * gracefully instead of cascading.
+ *
+ * Feature flags control which endpoints are active. Disabled features return
+ * a clear message indicating they are not available.
  */
 
 import { Router, Request, Response } from "express";
 import { validate } from "../middleware/requestValidator";
 import { sendSuccess, sendError } from "../middleware/response";
+import { getFeatureFlags, DISABLED_FEATURE_MESSAGE } from "../config/featureFlags";
 
 const router = Router();
 
@@ -15,6 +19,9 @@ router.get(
   "/governance/stats",
   validate({}),
   async (_req: Request, res: Response) => {
+    if (!getFeatureFlags().enableGovernanceStats) {
+      return sendError(res, 503, "FEATURE_DISABLED", DISABLED_FEATURE_MESSAGE);
+    }
     try {
       // TODO: Replace with real Stellar RPC / indexer call
       const stats = {
@@ -64,6 +71,9 @@ router.get(
     },
   }),
   async (req: Request, res: Response) => {
+    if (!getFeatureFlags().enableVoterVotes) {
+      return sendError(res, 503, "FEATURE_DISABLED", DISABLED_FEATURE_MESSAGE);
+    }
     const { address } = req.params;
     // TODO: Replace with real Stellar RPC / indexer call
     sendSuccess(res, []);

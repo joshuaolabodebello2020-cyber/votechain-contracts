@@ -411,6 +411,44 @@ cargo install --locked stellar-cli@21.6.0 --features opt
 
 ---
 
+---
+
+## 9. Backend Feature Flags
+
+The backend API server supports config-driven feature flags to enable or disable optional functionality without code changes. Flags are read from environment variables at request time, so toggling requires only a process restart.
+
+### Available flags
+
+| Environment variable | Default | Endpoint controlled |
+|---|---|---|
+| `FEATURE_GOVERNANCE_STATS` | `true` | `GET /api/v1/governance/stats` |
+| `FEATURE_VOTER_VOTES` | `true` | `GET /api/v1/voters/:address/votes` |
+| `FEATURE_PROPOSAL_INVALIDATION` | `true` | `POST /api/v1/proposals/invalidate` |
+| `FEATURE_ADVANCED_METRICS` | `false` (beta) | `GET /api/v1/metrics/cache` |
+
+Accepted values: `true` or `1` to enable, `false` or `0` to disable.
+
+### Toggling a flag
+
+Edit `.env` and restart the backend:
+
+```bash
+FEATURE_ADVANCED_METRICS=true   # enable beta cache metrics
+FEATURE_VOTER_VOTES=false       # disable voter vote history
+```
+
+### Disabled endpoint response
+
+```json
+{
+  "errors": [{ "code": "FEATURE_DISABLED", "message": "This feature is currently disabled. Contact your administrator for more information." }]
+}
+```
+
+HTTP status: `503`.
+
+---
+
 ## Related Documentation
 
 - [Proposal Lifecycle](lifecycle.md) — state diagram and transition rules
