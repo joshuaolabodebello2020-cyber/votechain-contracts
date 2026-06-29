@@ -5,10 +5,7 @@ import Navbar from "./components/Navbar";
 import { ProposalSkeletonList } from "./components/ProposalCardSkeleton";
 import OnboardingTutorial from "./components/OnboardingTutorial";
 import { RpcStatus } from "./components/RpcStatus";
-import { SessionTimeoutWarning } from "./components/SessionTimeoutWarning";
-import { useSessionTimeout } from "./hooks/useSessionTimeout";
-import { useProposals } from "./hooks/useProposals";
-import { useWalletStore } from "./store";
+import { useSessionTimeoutWarning } from "./hooks/useSessionTimeoutWarning";
 
 const ProposalList = React.lazy(() => import("./pages/ProposalList"));
 const ProposalDetail = React.lazy(() => import("./pages/ProposalDetail"));
@@ -22,32 +19,66 @@ const VoteHistoryPage = React.lazy(() => import("./pages/VoteHistoryPage"));
 function PageFallback() {
   return (
     <p className="sr-only" aria-live="polite">
-      Loading page…
+      Loading pageâ€¦
     </p>
   );
 }
 
 export default function App() {
   const { t } = useTranslation();
-  const { refresh } = useProposals();
-  const disconnect = useWalletStore((s) => s.disconnect);
-
-  const { showWarning, resetSession } = useSessionTimeout({
-    onExpired: disconnect,
-    onRefresh: refresh,
-  });
+  const { warningVisible, secondsUntilExpiry, keepAlive } = useSessionTimeoutWarning();
 
   return (
     <ErrorBoundary section="App">
       <OnboardingTutorial />
-      {/* Skip navigation link — allows keyboard users to bypass repeated nav (WCAG 2.4.1) */}
+      {/* Skip navigation link â€” allows keyboard users to bypass repeated nav (WCAG 2.4.1) */}
       <a href="#main-content" className="skip-link">
         {t("nav.skipToMain")}
       </a>
 
       <Navbar />
 
-      {showWarning && <SessionTimeoutWarning onDismiss={resetSession} />}
+      {warningVisible && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            background: '#1e3a8a',
+            color: '#ebf8ff',
+            padding: '1rem',
+            margin: '0 1rem 1rem',
+            borderRadius: '0.5rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '1rem',
+          }}
+        >
+          <div>
+            <p style={{ margin: 0, fontWeight: 700 }}>
+              Session expires soon â€” refresh now to keep your proposal data current.
+            </p>
+            <p style={{ margin: '0.25rem 0 0', fontSize: '0.95rem' }}>
+              Auto-logout in {secondsUntilExpiry} second{secondsUntilExpiry === 1 ? '' : 's'} if there is no activity.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={keepAlive}
+            style={{
+              background: '#ffffff',
+              color: '#1e3a8a',
+              border: 'none',
+              borderRadius: '0.375rem',
+              padding: '0.75rem 1rem',
+              cursor: 'pointer',
+              fontWeight: 700,
+            }}
+          >
+            Stay signed in
+          </button>
+        </div>
+      )}
 
       <main id="main-content">
         <div className="container">
