@@ -1,4 +1,5 @@
 import Redis from "ioredis";
+import { withTimeout, redisTimeoutMs } from "./timeout";
 
 const RETRY_DELAYS = [100, 200, 400, 800, 1600];
 
@@ -32,4 +33,14 @@ export function getRedisClient(): Redis | null {
     client = createRedisClient();
   }
   return client;
+}
+
+/**
+ * Explicitly connect the Redis client with a configurable timeout.
+ * Callers should catch and handle `TimeoutError` for graceful degradation.
+ */
+export async function connectRedisClient(): Promise<void> {
+  const redis = getRedisClient();
+  if (!redis) return;
+  await withTimeout(redis.connect(), redisTimeoutMs());
 }

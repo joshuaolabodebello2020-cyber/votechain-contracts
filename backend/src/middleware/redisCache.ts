@@ -11,6 +11,7 @@
 
 import { createClient, RedisClientType } from "redis";
 import { Request, Response, NextFunction } from "express";
+import { withTimeout, redisTimeoutMs } from "../timeout";
 
 // ── Redis client ───────────────────────────────────────────────────────────
 
@@ -19,7 +20,7 @@ let redis: RedisClientType;
 export async function connectRedis(url = process.env.REDIS_URL ?? "redis://localhost:6379") {
   redis = createClient({ url }) as RedisClientType;
   redis.on("error", (err) => console.error("[redis] error:", err));
-  await redis.connect();
+  await withTimeout(redis.connect(), redisTimeoutMs());
   console.log("[redis] connected to", url);
 }
 
@@ -67,7 +68,7 @@ function cacheMiddleware(keyFn: (req: Request) => string, ttl: number) {
 
     const key = keyFn(req);
     try {
-      const cached = await redis.get(key);
+      const cached = await withTimeout(redis.get(key), redisTimeoutMs());
       if (cached !== null) {
         metrics.hits++;
         res.setHeader("X-Cache", "HIT");
@@ -85,7 +86,7 @@ function cacheMiddleware(keyFn: (req: Request) => string, ttl: number) {
     const originalJson = res.json.bind(res);
     res.json = (body: unknown) => {
       const serialized = JSON.stringify(body);
-      redis.setEx(key, ttl, serialized).catch((err) =>
+      withTimeout(redis.setEx(key, ttl, serialized), redisTimeoutMs()).catch((err) =>
         console.error("[redis] setEx error:", err)
       );
       return originalJson(body);

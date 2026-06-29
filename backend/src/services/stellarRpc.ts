@@ -11,6 +11,8 @@
  */
 
 import { rpc as StellarRpc, xdr, scValToNative } from "@stellar/stellar-sdk";
+import { withTimeout, rpcTimeoutMs } from "../timeout";
+import { withRetry, rpcRetryOptions } from "../retry";
 
 // ---------------------------------------------------------------------------
 // Client singleton
@@ -60,8 +62,10 @@ export async function readContractData(
 ): Promise<unknown> {
   const server = getRpcServer();
   try {
-    const entry = await server.getContractData(contractId, key, durability);
-    // entry.val is LedgerEntryData; extract ScVal via .contractData().val()
+    const entry = await withRetry(
+      () => withTimeout(server.getContractData(contractId, key, durability), rpcTimeoutMs()),
+      rpcRetryOptions()
+    );
     const scVal = entry.val.contractData().val();
     return scValToNative(scVal);
   } catch (err: unknown) {
@@ -78,13 +82,18 @@ export async function fetchProposalCount(): Promise<number> {
   const contractId = getGovernanceContractId();
   const server = getRpcServer();
   try {
-    const entry = await server.getContractData(
-      contractId,
-      xdr.ScVal.scvLedgerKeyContractInstance(),
-      StellarRpc.Durability.Persistent
+    const entry = await withRetry(
+      () => withTimeout(
+        server.getContractData(
+          contractId,
+          xdr.ScVal.scvLedgerKeyContractInstance(),
+          StellarRpc.Durability.Persistent
+        ),
+        rpcTimeoutMs()
+      ),
+      rpcRetryOptions()
     );
     const instance = entry.val.contractData().val().instance();
-    // instance().storage() is an xdr.ScMap with key/val ScVal pairs
     const storage = instance.storage();
     if (!storage) return 0;
     for (const item of storage) {

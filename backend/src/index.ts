@@ -1,5 +1,5 @@
 import express from "express";
-import { getRedisClient } from "./redis";
+import { connectRedisClient, getRedisClient } from "./redis";
 import { getCachedProposal, getCacheStats } from "./cache";
 
 const app = express();
@@ -37,12 +37,9 @@ app.get("/metrics/cache", (_req, res) => {
 });
 
 // Graceful startup — warn if Redis unavailable but keep server running (#459)
-const redis = getRedisClient();
-if (redis) {
-  redis.connect().catch((err: Error) => {
-    console.warn("[startup] Redis unavailable:", err.message, "— continuing without cache");
-  });
-}
+connectRedisClient().catch((err: Error) => {
+  console.warn("[startup] Redis unavailable:", err.message, "— continuing without cache");
+});
 
 app.listen(PORT, () => console.log(`votechain-backend listening on :${PORT}`));
 
