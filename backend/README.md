@@ -50,3 +50,17 @@ Returns governance metrics.
 
 - **Parameters**:
   - None expected. Empty schema validation is applied.
+---
+
+## Backend Dependency Timeouts and Retry Configuration
+
+The backend supports configurable external dependency timeouts and retry policies via environment variables.
+
+- `RPC_TIMEOUT_MS`: timeout for individual Stellar RPC requests (default: `10000` ms).
+- `RPC_MAX_RETRIES`: additional retry attempts after the first RPC failure (default: `3`).
+- `RPC_RETRY_BASE_MS`: starting backoff delay for RPC retries, doubled per attempt (default: `200` ms).
+- `REDIS_TIMEOUT_MS`: timeout for Redis connect/get/set operations (default: `3000` ms).
+- `REDIS_MAX_RETRIES`: maximum Redis reconnect retry attempts (default: `5`).
+- `REDIS_RETRY_BASE_MS`: starting backoff delay for Redis reconnect retries (default: `100` ms).
+
+When Redis is unavailable during startup, the backend logs a warning and continues running without cache, allowing graceful degradation for clients.

@@ -62,8 +62,10 @@ app.use(payloadErrorHandler);
 
 const PORT = process.env.PORT ?? 3001;
 
-connectRedis().then(() => {
-  app.listen(PORT, () => console.log(`[server] listening on :${PORT}`));
+connectRedis().catch((err: Error) => {
+  console.warn("[startup] Redis unavailable:", err.message, "— continuing without cache");
 });
+
+app.listen(PORT, () => console.log(`[server] listening on :${PORT}`));
 
 export default app;

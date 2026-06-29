@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { withTimeout, TimeoutError } from "../timeout";
-import { withRetry } from "../retry";
+import { withRetry, rpcRetryOptions } from "../retry";
 
 // ── withTimeout ─────────────────────────────────────────────────────────────
 
@@ -89,5 +89,34 @@ describe("withRetry", () => {
     // attempt 1 fail → delay 100 * 2^0 = 100, attempt 2 fail → delay 100 * 2^1 = 200
     expect(delays).toEqual([100, 200]);
     spy.mockRestore();
+  });
+});
+
+// ── rpcRetryOptions ──────────────────────────────────────────────────────────
+describe("rpcRetryOptions", () => {
+  const originalEnv = { ...process.env };
+
+  afterEach(() => {
+    process.env = { ...originalEnv };
+  });
+
+  it("returns configured retry options from env vars", () => {
+    process.env.RPC_MAX_RETRIES = "2";
+    process.env.RPC_RETRY_BASE_MS = "150";
+
+    const opts = rpcRetryOptions();
+
+    expect(opts.maxAttempts).toBe(3);
+    expect(opts.baseDelayMs).toBe(150);
+  });
+
+  it("falls back to defaults for invalid env values", () => {
+    process.env.RPC_MAX_RETRIES = "invalid";
+    process.env.RPC_RETRY_BASE_MS = "invalid";
+
+    const opts = rpcRetryOptions();
+
+    expect(opts.maxAttempts).toBe(4);
+    expect(opts.baseDelayMs).toBe(200);
   });
 });

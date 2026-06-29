@@ -1,4 +1,5 @@
 import { getRedisClient } from "./redis";
+import { withTimeout, redisTimeoutMs } from "./timeout";
 
 const TTL_SECONDS = 300;
 const KEY_PREFIX = "proposal:";
@@ -9,7 +10,10 @@ export async function cacheProposal(id: string, data: unknown): Promise<void> {
   const redis = getRedisClient();
   if (!redis) return;
   try {
-    await redis.set(KEY_PREFIX + id, JSON.stringify(data), "EX", TTL_SECONDS);
+    await withTimeout(
+      redis.set(KEY_PREFIX + id, JSON.stringify(data), "EX", TTL_SECONDS),
+      redisTimeoutMs()
+    );
   } catch (err) {
     console.warn("[cache] set failed:", (err as Error).message);
   }
@@ -19,7 +23,7 @@ export async function getCachedProposal(id: string): Promise<unknown | null> {
   const redis = getRedisClient();
   if (!redis) { stats.misses++; return null; }
   try {
-    const raw = await redis.get(KEY_PREFIX + id);
+    const raw = await withTimeout(redis.get(KEY_PREFIX + id), redisTimeoutMs());
     if (raw) { stats.hits++; return JSON.parse(raw); }
     stats.misses++;
     return null;
@@ -34,7 +38,7 @@ export async function invalidateProposal(id: string): Promise<void> {
   const redis = getRedisClient();
   if (!redis) return;
   try {
-    await redis.del(KEY_PREFIX + id);
+    await withTimeout(redis.del(KEY_PREFIX + id), redisTimeoutMs());
   } catch (err) {
     console.warn("[cache] invalidate failed:", (err as Error).message);
   }

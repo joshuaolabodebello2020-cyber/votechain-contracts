@@ -13,12 +13,39 @@ import { createClient, RedisClientType } from "redis";
 import { Request, Response, NextFunction } from "express";
 import { withTimeout, redisTimeoutMs } from "../timeout";
 
+function parseEnvInt(name: string, fallback: number): number {
+  const value = parseInt(process.env[name] ?? "", 10);
+  return Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
+function redisRetryMaxAttempts(): number {
+  return parseEnvInt("REDIS_MAX_RETRIES", 5);
+}
+
+function redisRetryBaseMs(): number {
+  return parseEnvInt("REDIS_RETRY_BASE_MS", 100);
+}
+
 // ── Redis client ───────────────────────────────────────────────────────────
 
-let redis: RedisClientType;
+let redis: RedisClientType | undefined;
 
 export async function connectRedis(url = process.env.REDIS_URL ?? "redis://localhost:6379") {
-  redis = createClient({ url }) as RedisClientType;
+  redis = createClient({
+    url,
+    socket: {
+      reconnectStrategy: (retries: number) => {
+        const maxAttempts = redisRetryMaxAttempts();
+        if (retries > maxAttempts) {
+          console.error("[redis] max retries reached, giving up");
+          return false;
+        }
+        const delay = redisRetryBaseMs() * Math.pow(2, retries - 1);
+        console.warn(`[redis] reconnect attempt ${retries} in ${delay}ms`);
+        return delay;
+      },
+    },
+  }) as RedisClientType;
   redis.on("error", (err) => console.error("[redis] error:", err));
   await withTimeout(redis.connect(), redisTimeoutMs());
   console.log("[redis] connected to", url);
@@ -126,7 +153,7 @@ export async function invalidateProposalCache(id?: string | number) {
   const keys: string[] = [];
   // Get all proposal list keys
   try {
-    const listKeys = await redis.keys("proposals:list*");
+    const listKeys = await withTimeout(redis.keys("proposals:list*"), redisTimeoutMs());
     keys.push(...listKeys);
   } catch (err) {
     console.error("[redis] keys error:", err);
@@ -134,7 +161,7 @@ export async function invalidateProposalCache(id?: string | number) {
   if (id !== undefined) keys.push(KEY.item(id));
   if (keys.length > 0) {
     try {
-      await redis.del(keys);
+      await withTimeout(redis.del(keys), redisTimeoutMs());
       console.log("[redis] invalidated keys:", keys);
     } catch (err) {
       console.error("[redis] del error:", err);

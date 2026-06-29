@@ -2,7 +2,7 @@
  * Retry utility with exponential backoff.
  *
  * Environment variables:
- *   RPC_MAX_RETRIES      – max retry attempts for RPC calls   (default: 3)
+ *   RPC_MAX_RETRIES      – additional retry attempts after first failure (default: 3)
  *   RPC_RETRY_BASE_MS    – base delay in ms (doubles each attempt, default: 200)
  */
 
@@ -42,9 +42,14 @@ export async function withRetry<T>(fn: () => Promise<T>, opts: RetryOptions = {}
 }
 
 /** Retry options derived from environment variables (for RPC calls). */
+function parseEnvInt(name: string, fallback: number): number {
+  const value = parseInt(process.env[name] ?? "", 10);
+  return Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
 export function rpcRetryOptions(): RetryOptions {
   return {
-    maxAttempts: parseInt(process.env.RPC_MAX_RETRIES ?? "3", 10) + 1,
-    baseDelayMs: parseInt(process.env.RPC_RETRY_BASE_MS ?? "200", 10),
+    maxAttempts: parseEnvInt("RPC_MAX_RETRIES", DEFAULT_MAX_ATTEMPTS) + 1,
+    baseDelayMs: parseEnvInt("RPC_RETRY_BASE_MS", DEFAULT_BASE_DELAY_MS),
   };
 }
