@@ -156,7 +156,8 @@
   },
   "languageSwitcher": {
     "ariaLabel": "Select language",
-    "en": "English"
+    "en": "English",
+    "es": "Español"
   },
   "loading": "Loading…",
   "session": {

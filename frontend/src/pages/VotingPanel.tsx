@@ -50,6 +50,7 @@ function VoteButton({ choice, selected, disabled, onClick, label }: VoteButtonPr
       onClick={onClick}
       disabled={disabled}
       aria-pressed={selected}
+      aria-label={`Vote ${choice}${selected ? ' (selected)' : ''}`}
       style={{
         ...CHOICE_STYLE[choice],
         opacity: disabled ? 0.5 : 1,
@@ -98,12 +99,16 @@ function ProposalVoteCard({ proposal, walletWeight, onVote, isPending, optimisti
           {proposal.description}
         </p>
         {optimisticVote && (
-          <p style={{ 
-            color: optimisticVote.status === 'confirmed' ? '#4ade80' : 
-                   optimisticVote.status === 'failed' ? '#fca5a5' : '#7dd3fc',
-            fontSize: '0.8rem',
-            marginTop: '0.25rem'
-          }}>
+          <p
+            role="status"
+            aria-live="polite"
+            style={{
+              color: optimisticVote.status === 'confirmed' ? '#4ade80' :
+                     optimisticVote.status === 'failed' ? '#fca5a5' : '#7dd3fc',
+              fontSize: '0.8rem',
+              marginTop: '0.25rem'
+            }}
+          >
             {optimisticVote.status === 'confirmed' ? '✓ Vote confirmed' :
              optimisticVote.status === 'failed' ? '✗ Vote failed' :
              'Vote pending...'}
