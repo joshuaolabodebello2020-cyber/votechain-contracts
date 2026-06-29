@@ -78,7 +78,6 @@ fuzz_target!(|data: &[u8]| {
         &0_u64,         // amend_window
         &0_u64,         // timelock_duration
         &0_i128,        // veto_threshold
-        &0_u32,         // persistent_storage_ttl
     );
 
     let proposer = Address::generate(&env);
