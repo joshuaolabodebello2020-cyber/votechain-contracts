@@ -73,11 +73,15 @@ describe('GET /api/proposals/:id', () => {
 
 describe('POST /api/proposals/invalidate', () => {
   let app: Express;
-  beforeEach(() => { app = buildApp(); });
+  beforeEach(() => {
+    process.env.ADMIN_API_KEY = 'test-admin-key';
+    app = buildApp();
+  });
 
   it('returns ok:true when given an id', async () => {
     const res = await request(app)
       .post('/api/proposals/invalidate')
+      .set('X-Admin-Key', 'test-admin-key')
       .send({ id: 'P-101' });
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
@@ -87,6 +91,7 @@ describe('POST /api/proposals/invalidate', () => {
   it('returns ok:true and invalidates list when no id given', async () => {
     const res = await request(app)
       .post('/api/proposals/invalidate')
+      .set('X-Admin-Key', 'test-admin-key')
       .send({});
     expect(res.status).toBe(200);
     expect(res.body.invalidated).toBe('list');
@@ -95,10 +100,15 @@ describe('POST /api/proposals/invalidate', () => {
 
 describe('GET /api/metrics/cache', () => {
   let app: Express;
-  beforeEach(() => { app = buildApp(); });
+  beforeEach(() => {
+    process.env.ADMIN_API_KEY = 'test-admin-key';
+    app = buildApp();
+  });
 
   it('returns cache metrics object', async () => {
-    const res = await request(app).get('/api/metrics/cache');
+    const res = await request(app)
+      .get('/api/metrics/cache')
+      .set('X-Admin-Key', 'test-admin-key');
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty('hits');
     expect(res.body).toHaveProperty('misses');
