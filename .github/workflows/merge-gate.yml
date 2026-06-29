@@ -26,6 +26,9 @@ jobs:
             const requiredChecks = [
               'CI / test',
               'CI / build-wasm',
+              'CI / Backend TypeScript Build & Lint',
+              'CI / Backend Coverage',
+              'Frontend CI / build',
               'CodeQL'
             ];
             

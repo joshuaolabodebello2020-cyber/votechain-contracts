@@ -29,11 +29,35 @@ scrape_configs:
     scrape_interval: 10s
     scrape_timeout: 5s
 
-  # Stellar RPC metrics (if available)
+  # Stellar RPC health
   - job_name: "stellar-rpc"
     static_configs:
       - targets: ["stellar-rpc:11626"]
     metrics_path: "/metrics"
+
+  # Stellar RPC HTTP endpoint (Soroban RPC)
+  - job_name: "stellar-rpc-http"
+    static_configs:
+      - targets: ["stellar-node:8000"]
+    metrics_path: "/soroban/rpc"
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # Backend Express API
+  - job_name: "backend"
+    static_configs:
+      - targets: ["backend:3001"]
+    metrics_path: "/ready"
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # Indexer service
+  - job_name: "indexer"
+    static_configs:
+      - targets: ["indexer:4000"]
+    metrics_path: "/events"
+    scrape_interval: 30s
+    scrape_timeout: 10s
 
   # PostgreSQL metrics (if available)
   - job_name: "postgres"
