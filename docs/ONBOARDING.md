@@ -250,6 +250,15 @@ make doc         # Generate and open rustdoc
 
 ---
 
+## Key References
+
+- **[Governance Glossary](GOVERNANCE_GLOSSARY.md)** — definitions of governance terms used throughout the project (quorum, delegation, proposal lifecycle, etc.)
+- **[Architecture Diagram](ARCHITECTURE_DIAGRAM.md)** — visual overview of how frontend, backend, contracts, and indexer interact
+- **[Versioning Policy](VERSIONING_POLICY.md)** — how releases are tagged and versions managed
+- **[Proposal Lifecycle](lifecycle.md)** — state diagram and transition rules for proposals
+
+---
+
 ## Getting Help
 
 - **[GitHub Discussions](https://github.com/Vera3289/votechain-contracts/discussions)** — ask questions and propose ideas

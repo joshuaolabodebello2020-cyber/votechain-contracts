@@ -30,6 +30,8 @@ VoteChain enables DAOs, protocols, and communities to create proposals, cast tok
 - [Contributing](#contributing)
 - [Resources](#resources)
 
+> **New to VoteChain?** Start with the [Onboarding Guide](docs/ONBOARDING.md). See the [Governance Glossary](docs/GOVERNANCE_GLOSSARY.md) for term definitions and the [Architecture Diagram](docs/ARCHITECTURE_DIAGRAM.md) for a visual system overview.
+
 ---
 
 ## Live Demo
