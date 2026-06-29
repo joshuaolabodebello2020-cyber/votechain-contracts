@@ -67,7 +67,7 @@ fuzz_target!(|data: &[u8]| {
     client.initialize(
         &admin, &tok_id,
         &0_i128, &0_u64, &60_u64, &2_592_000_u64,
-        &false, &0_u64, &0_u64, &0_i128, &0_u32,
+        &false, &0_u64, &0_u64, &0_i128,
     );
 
     // Create a valid proposal

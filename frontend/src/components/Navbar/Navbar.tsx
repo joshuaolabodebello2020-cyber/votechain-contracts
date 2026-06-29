@@ -1,33 +1,31 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './Navbar.css';
 
 type Network = 'mainnet' | 'testnet' | 'local';
 
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 const Navbar: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [network, setNetwork] = useState<Network>('testnet'); // Default to testnet
+  const [network, setNetwork] = useState<Network>('testnet');
   const [walletNetwork, setWalletNetwork] = useState<Network>('testnet');
   const [showWarning, setShowWarning] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const hamburgerRef = useRef<HTMLButtonElement>(null);
+
+  const closeMenu = useCallback(() => {
+    setIsOpen(false);
+    hamburgerRef.current?.focus();
+  }, []);
 
   const toggleMenu = () => {
-    setIsOpen(!isOpen);
+    setIsOpen((prev) => !prev);
   };
 
-  const closeMenu = () => {
-    setIsOpen(false);
-  };
-
-  // Check for network mismatch
   useEffect(() => {
-    if (network !== walletNetwork) {
-      setShowWarning(true);
-    } else {
-      setShowWarning(false);
-    }
+    setShowWarning(network !== walletNetwork);
   }, [network, walletNetwork]);
 
-  // Close menu on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
@@ -37,36 +35,45 @@ const Navbar: React.FC = () => {
 
     if (isOpen) {
       document.addEventListener('mousedown', handleClickOutside);
-    } else {
-      document.removeEventListener('mousedown', handleClickOutside);
     }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen, closeMenu]);
 
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isOpen]);
-
-  // Close menu on Escape key
   useEffect(() => {
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        closeMenu();
-      }
-    };
+    if (!isOpen || !menuRef.current) return;
 
-    if (isOpen) {
-      window.addEventListener('keydown', handleEscape);
-    } else {
-      window.removeEventListener('keydown', handleEscape);
+    const menu = menuRef.current;
+    const firstFocusable = menu.querySelector<HTMLElement>(FOCUSABLE);
+    firstFocusable?.focus();
+
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        closeMenu();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+
+      const focusable = Array.from(menu.querySelectorAll<HTMLElement>(FOCUSABLE));
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     }
 
-    return () => {
-      window.removeEventListener('keydown', handleEscape);
-    };
-  }, [isOpen]);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, closeMenu]);
 
   return (
-    <nav className="navbar">
+    <nav className="navbar" aria-label="Main navigation">
       <div className="navbar-container">
         <div className="navbar-logo">
           <a href="/">VoteChain</a>
@@ -75,36 +82,39 @@ const Navbar: React.FC = () => {
               {network.charAt(0).toUpperCase() + network.slice(1)}
             </span>
             {showWarning && (
-              <span className="network-warning" title="Wallet network mismatch!">
+              <span className="network-warning" role="alert" title="Wallet network mismatch!">
                 ⚠️
               </span>
             )}
           </div>
         </div>
 
-        {/* Desktop Links */}
         <div className="navbar-links desktop-only">
           <a href="/proposals">Proposals</a>
           <a href="/create">Create</a>
           <a href="/about">About</a>
         </div>
 
-        {/* Hamburger Icon */}
-        <button 
-          className={`hamburger ${isOpen ? 'is-active' : ''}`} 
+        <button
+          ref={hamburgerRef}
+          className={`hamburger ${isOpen ? 'is-active' : ''}`}
           onClick={toggleMenu}
           aria-label="Toggle navigation"
           aria-expanded={isOpen}
+          aria-controls="mobile-nav-menu"
         >
           <span className="hamburger-box">
             <span className="hamburger-inner"></span>
           </span>
         </button>
 
-        {/* Mobile Menu */}
-        <div 
+        <div
+          id="mobile-nav-menu"
           ref={menuRef}
           className={`mobile-menu ${isOpen ? 'is-open' : ''}`}
+          role="dialog"
+          aria-modal={isOpen}
+          aria-label="Mobile navigation"
         >
           <div className="mobile-menu-content">
             <div className="mobile-network-info">
@@ -113,7 +123,7 @@ const Navbar: React.FC = () => {
                 {network.charAt(0).toUpperCase() + network.slice(1)}
               </span>
               {showWarning && (
-                <div className="mismatch-alert">
+                <div className="mismatch-alert" role="alert">
                   Wallet connected to {walletNetwork}
                 </div>
               )}

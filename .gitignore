@@ -6,6 +6,9 @@ target/
 .env.integration
 *.wasm
 
+# Environment-specific secret files derived from deploy/*.env.example
+deploy/*.env
+
 # Coverage reports
 lcov.info
 coverage/

@@ -408,6 +408,27 @@
   .quorum-value { align-self: flex-start; }
 }
 
+@media (max-width: 640px) {
+  .proposal-detail { margin: 0.75rem; padding: 1rem; }
+  .proposal-title { font-size: 1.35rem; }
+
+  .proposal-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .btn {
+    min-height: 44px;
+    min-width: 44px;
+    width: 100%;
+  }
+
+  .language-selector select {
+    min-height: 44px;
+  }
+}
+
 @media (max-width: 480px) {
   .proposal-detail { margin: 16px; padding: 20px; }
   .proposal-title { font-size: 1.5rem; }

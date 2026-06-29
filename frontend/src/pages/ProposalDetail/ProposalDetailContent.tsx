@@ -82,7 +82,7 @@ const ProposalDetailContent: React.FC<ProposalDetailContentProps> = ({
           </div>
         )}
 
-        <div className="proposal-status-badge" data-status={proposal.status}>
+        <div className="proposal-status-badge" data-status={proposal.status} role="status" aria-live="polite" aria-label={`Proposal status: ${proposal.status}`}>
           {proposal.status}
         </div>
       </div>
@@ -165,9 +165,9 @@ const ProposalDetailContent: React.FC<ProposalDetailContentProps> = ({
                 style={{ width: `${Math.min(100, Number((totalVotes * BigInt(100)) / (proposal.quorum || BigInt(1))))}%` }}
               ></div>
             </div>
-            <div className="quorum-status">
-              {totalVotes >= proposal.quorum 
-                ? '✅ Quorum Met' 
+            <div className="quorum-status" role="status" aria-live="polite">
+              {totalVotes >= proposal.quorum
+                ? '✅ Quorum Met'
                 : `${(proposal.quorum - totalVotes).toString()} more votes needed`}
             </div>
           </div>
@@ -176,25 +176,25 @@ const ProposalDetailContent: React.FC<ProposalDetailContentProps> = ({
 
       <div className="proposal-actions">
         {proposal.status === ProposalStatus.Active && !isExpired && (
-          <div className="vote-buttons">
-            <button onClick={() => onVote?.('Yes')} className="btn btn-yes">Vote Yes</button>
-            <button onClick={() => onVote?.('No')} className="btn btn-no">Vote No</button>
-            <button onClick={() => onVote?.('Abstain')} className="btn btn-abstain">Abstain</button>
+          <div className="vote-buttons" role="group" aria-label="Vote on this proposal">
+            <button onClick={() => onVote?.('Yes')} className="btn btn-yes" aria-label={`Vote yes on proposal #${proposal.id}`}>Vote Yes</button>
+            <button onClick={() => onVote?.('No')} className="btn btn-no" aria-label={`Vote no on proposal #${proposal.id}`}>Vote No</button>
+            <button onClick={() => onVote?.('Abstain')} className="btn btn-abstain" aria-label={`Abstain on proposal #${proposal.id}`}>Abstain</button>
           </div>
         )}
 
         {proposal.status === ProposalStatus.Active && isExpired && (
-          <button onClick={onFinalize} className="btn btn-primary">Finalize Proposal</button>
+          <button onClick={onFinalize} className="btn btn-primary" aria-label={`Finalize proposal #${proposal.id}`}>Finalize Proposal</button>
         )}
 
         {proposal.status === ProposalStatus.Passed && (
-          <button onClick={onExecute} className="btn btn-success" disabled={!isAdmin}>
+          <button onClick={onExecute} className="btn btn-success" disabled={!isAdmin} aria-label={isAdmin ? `Execute proposal #${proposal.id}` : `Proposal #${proposal.id} awaiting execution`}>
             {isAdmin ? 'Execute Proposal' : 'Awaiting Execution'}
           </button>
         )}
 
         {isAdmin && (proposal.status === ProposalStatus.Active || proposal.status === ProposalStatus.Passed) && (
-          <button onClick={onCancel} className="btn btn-danger">Cancel Proposal</button>
+          <button onClick={onCancel} className="btn btn-danger" aria-label={`Cancel proposal #${proposal.id}`}>Cancel Proposal</button>
         )}
       </div>
     </div>

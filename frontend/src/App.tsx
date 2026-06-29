@@ -5,6 +5,10 @@ import Navbar from "./components/Navbar";
 import { ProposalSkeletonList } from "./components/ProposalCardSkeleton";
 import OnboardingTutorial from "./components/OnboardingTutorial";
 import { RpcStatus } from "./components/RpcStatus";
+import { SessionTimeoutWarning } from "./components/SessionTimeoutWarning";
+import { useSessionTimeout } from "./hooks/useSessionTimeout";
+import { useProposals } from "./hooks/useProposals";
+import { useWalletStore } from "./store";
 
 const ProposalList = React.lazy(() => import("./pages/ProposalList"));
 const ProposalDetail = React.lazy(() => import("./pages/ProposalDetail"));
@@ -25,6 +29,13 @@ function PageFallback() {
 
 export default function App() {
   const { t } = useTranslation();
+  const { refresh } = useProposals();
+  const disconnect = useWalletStore((s) => s.disconnect);
+
+  const { showWarning, resetSession } = useSessionTimeout({
+    onExpired: disconnect,
+    onRefresh: refresh,
+  });
 
   return (
     <ErrorBoundary section="App">
@@ -35,6 +46,8 @@ export default function App() {
       </a>
 
       <Navbar />
+
+      {showWarning && <SessionTimeoutWarning onDismiss={resetSession} />}
 
       <main id="main-content">
         <div className="container">

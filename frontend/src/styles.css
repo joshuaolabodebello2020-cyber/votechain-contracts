@@ -647,7 +647,7 @@ main { flex: 1; padding: 2rem 0 4rem; }
 .site-footer a:hover { text-decoration: underline; }
 
 /* ── Responsive ───────────────────────────────────────────── */
-@media (max-width: 600px) {
+@media (max-width: 640px) {
   .page-heading h1 { font-size: 1.4rem; }
   .toolbar { flex-direction: column; align-items: stretch; }
   .search-wrap { min-width: unset; }
@@ -655,6 +655,57 @@ main { flex: 1; padding: 2rem 0 4rem; }
   .state-badge { align-self: flex-start; }
   .proposer-address { max-width: 120px; }
   .vote-counts { gap: .75rem; }
+
+  .container { padding: 0 1rem; }
+
+  .btn,
+  .filter-btn,
+  .page-btn,
+  .action-btn,
+  button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .vote-buttons {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .vote-buttons .btn {
+    width: 100%;
+  }
+
+  .proposal-card {
+    padding: 1rem;
+  }
+
+  .card-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+
+  .filter-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+    padding-bottom: 0.25rem;
+  }
+
+  .filter-btn {
+    flex-shrink: 0;
+  }
+
+  .proposal-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .toast {
+    right: 0.5rem;
+    bottom: 0.5rem;
+    width: calc(100vw - 1rem);
+  }
 }
 
 /* ── Reduced motion ───────────────────────────────────────── */
