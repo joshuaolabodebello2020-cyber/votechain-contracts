@@ -204,6 +204,12 @@
   font-weight: 500;
   padding: 10px 0;
   border-bottom: 1px solid #f3f4f6;
+  border-radius: 4px;
+}
+
+.mobile-menu-content a:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
 }
 
 /* Responsive Design */
@@ -214,6 +220,17 @@
 
   .hamburger {
     display: block;
+  }
+
+  .mobile-menu-content a {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+
+  .hamburger {
+    min-width: 44px;
+    min-height: 44px;
   }
 }
 

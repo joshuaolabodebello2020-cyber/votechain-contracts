@@ -189,7 +189,7 @@ export default function ProposalList({ proposals }: Props) {
                     <Highlight text={proposal.title} term={highlightTerm} />
                   </h3>
                 </div>
-                <span className={`state-badge status-${proposal.state.toLowerCase()}`}>
+                <span className={`state-badge status-${proposal.state.toLowerCase()}`} role="status" aria-label={`Status: ${proposal.state}`}>
                   {labelForState(proposal.state)}
                 </span>
               </div>

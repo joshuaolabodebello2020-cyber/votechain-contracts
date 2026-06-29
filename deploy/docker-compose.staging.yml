@@ -1,0 +1,68 @@
+# =============================================================================
+# VoteChain — Staging Docker Compose
+# =============================================================================
+# Brings up the backend, indexer, Redis, and a Postgres database for staging.
+# The Stellar RPC endpoint is the public Testnet; no local node is started.
+#
+# Usage:
+#   cp deploy/staging.env.example deploy/staging.env   # fill in secrets
+#   docker compose -f deploy/docker-compose.staging.yml --env-file deploy/staging.env up -d
+# =============================================================================
+
+services:
+  backend:
+    build:
+      context: ../
+      dockerfile: backend/Dockerfile
+    env_file: staging.env
+    ports:
+      - "${PORT:-3001}:3001"
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  indexer:
+    build:
+      context: ../
+      dockerfile: indexer/Dockerfile
+    env_file: staging.env
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: votechain
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+      POSTGRES_DB: votechain_staging
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U votechain"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  db-data:

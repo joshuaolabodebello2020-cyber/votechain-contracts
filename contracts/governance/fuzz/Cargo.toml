@@ -25,6 +25,12 @@ path = "fuzz_targets/fuzz_finalise.rs"
 test = false
 doc = false
 
+[[bin]]
+name = "fuzz_lifecycle"
+path = "fuzz_targets/fuzz_lifecycle.rs"
+test = false
+doc = false
+
 [dependencies]
 libfuzzer-sys = "0.4"
 votechain-governance = { path = "..", features = ["testutils"] }

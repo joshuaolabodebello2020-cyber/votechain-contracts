@@ -1,8 +1,15 @@
 # Clippy configuration for votechain-contracts
-# All warnings are treated as errors via `-- -D warnings` in CI
+#
+# Workspace-level lint rules are in Cargo.toml under [workspace.lints.clippy].
+# This file configures numeric thresholds that Cargo.toml cannot express.
+#
+# All warnings are treated as errors via `-- -D warnings` in CI.
 
-# Enforce a reasonable cognitive complexity limit
+# Functions with cognitive complexity above this trigger a warning.
 cognitive-complexity-threshold = 10
 
-# Allow up to 9 function arguments before suggesting a struct
+# Functions with more args than this trigger `too_many_arguments`.
 too-many-arguments-threshold = 9
+
+# Types with more than this many variants trigger `large_enum_variant`.
+enum-variant-size-threshold = 200

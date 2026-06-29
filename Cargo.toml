@@ -13,6 +13,34 @@ exclude = [
 [workspace.dependencies]
 soroban-sdk = { version = "22.0.0" }
 
+# ─── Lint rules (#494) ───────────────────────────────────────────────────────
+# Build fails on any new lint violation. Run `cargo clippy --workspace` locally
+# before pushing to avoid CI surprises.
+[workspace.lints.rust]
+unsafe_code            = "deny"
+unused_must_use        = "deny"
+unused_imports         = "deny"
+dead_code              = "warn"
+unreachable_patterns   = "deny"
+
+[workspace.lints.clippy]
+# Correctness — high-signal, catches real bugs
+enum_glob_use          = "deny"
+cast_possible_truncation = "deny"
+cast_sign_loss         = "deny"
+cast_possible_wrap     = "deny"
+integer_arithmetic     = "deny"
+unwrap_used            = "deny"
+panic                  = "deny"
+expect_used            = "deny"
+
+# Style — enforces idiomatic, readable Rust
+needless_pass_by_value = "warn"
+redundant_closure_for_method_calls = "warn"
+manual_let_else        = "warn"
+cloned_instead_of_copied = "warn"
+implicit_clone         = "warn"
+
 [profile.release]
 opt-level = "z"
 overflow-checks = true

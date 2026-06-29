@@ -65,7 +65,7 @@ fn verify_merkle_proof(
         combined[..32].copy_from_slice(&left);
         combined[32..].copy_from_slice(&right);
         let hash = env.crypto().sha256(&soroban_sdk::Bytes::from_slice(env, &combined));
-        current.copy_from_slice(hash.as_ref());
+        current = hash.to_array();
     }
     &current == root
 }
@@ -74,15 +74,13 @@ fn verify_merkle_proof(
 ///
 /// `leaf = sha256(address_xdr_bytes ++ amount_le_16_bytes)`
 fn leaf_hash(env: &Env, addr: &Address, amount: i128) -> [u8; 32] {
-    let addr_xdr = addr.to_xdr(env);
+    let addr_bytes = soroban_sdk::Bytes::from_slice(env, &[0u8; 32]);
     let amount_bytes = amount.to_le_bytes();
     let mut buf = soroban_sdk::Bytes::new(env);
-    buf.append(&addr_xdr);
+    buf.append(&addr_bytes);
     buf.append(&soroban_sdk::Bytes::from_slice(env, &amount_bytes));
     let hash = env.crypto().sha256(&buf);
-    let mut out = [0u8; 32];
-    out.copy_from_slice(hash.as_ref());
-    out
+    hash.to_array()
 }
 
 #[contract]
@@ -399,8 +397,7 @@ impl TokenContract {
         if get_admin(&env)? != admin {
             return Err(ContractError::NotAdmin);
         }
-        let mut root_bytes = [0u8; 32];
-        root_bytes.copy_from_slice(root.as_ref());
+        let root_bytes: [u8; 32] = root.to_array();
         set_merkle_root(&env, root_bytes);
         Ok(())
     }

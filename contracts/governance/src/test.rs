@@ -3489,7 +3489,7 @@ fn test_upgrade_rejects_downgrade() {
     let t = setup_env();
     t.client.upgrade(&t.admin, &(2, 0, 0));
     let result = t.client.try_upgrade(&t.admin, &(1, 9, 9));
-    assert_eq!(result, Err(Ok(ContractError::DowngradeNotAllowed)));
+    assert_eq!(result, Err(Ok(ContractError::NoDowngrade)));
 }
 
 /// Same version is rejected (not strictly greater).
@@ -3497,7 +3497,7 @@ fn test_upgrade_rejects_downgrade() {
 fn test_upgrade_rejects_same_version() {
     let t = setup_env();
     let result = t.client.try_upgrade(&t.admin, &(1, 0, 0));
-    assert_eq!(result, Err(Ok(ContractError::DowngradeNotAllowed)));
+    assert_eq!(result, Err(Ok(ContractError::NoDowngrade)));
 }
 
 /// Non-admin cannot upgrade.
@@ -3670,7 +3670,7 @@ fn test_get_config_before_init_fails() {
     env.mock_all_auths();
     let client = GovernanceContractClient::new(&env, &env.register(GovernanceContract, ()));
     let result = client.try_get_config();
-    assert_eq!(result, Err(Ok(ContractError::VotingTokenNotSet)));
+    assert_eq!(result, Err(Ok(ContractError::TokenNotSet)));
 }
 
 // ── Issue #486: Vote delegation / proxy voting ────────────────────────────────

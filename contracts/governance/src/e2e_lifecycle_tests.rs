@@ -61,7 +61,6 @@ fn make_suite<'a>() -> Suite<'a> {
         &0_u64,           // amend_window
         &0_u64,           // timelock_duration
         &0_i128,          // veto_threshold
-        &0_u32,           // persistent_storage_ttl
     );
 
     Suite { env, gov, token, admin }
@@ -294,7 +293,7 @@ fn e2e_zero_balance_cannot_vote() {
     let result = s.gov.try_cast_vote(&voter, &id, &Vote::Yes);
     assert_eq!(
         result.err().unwrap().unwrap(),
-        ContractError::NoVotingPower
+        ContractError::NoPower
     );
 }
 
@@ -331,7 +330,7 @@ fn e2e_finalise_before_end_time_fails() {
     let result = s.gov.try_finalise(&id);
     assert_eq!(
         result.err().unwrap().unwrap(),
-        ContractError::VotingStillOpen
+        ContractError::StillOpen
     );
 }
 
@@ -348,7 +347,7 @@ fn e2e_execute_non_passed_proposal_fails() {
     let result = s.gov.try_execute(&s.admin, &id);
     assert_eq!(
         result.err().unwrap().unwrap(),
-        ContractError::ProposalNotPassed
+        ContractError::NotPassed
     );
 }
 
@@ -425,7 +424,7 @@ fn e2e_comprehensive_lifecycle_test() {
 
     // Failure case: finalise before voting ends rejected
     let finalise_early_result = s.gov.try_finalise(&id1);
-    assert_eq!(finalise_early_result.err().unwrap().unwrap(), ContractError::VotingStillOpen);
+    assert_eq!(finalise_early_result.err().unwrap().unwrap(), ContractError::StillOpen);
 
     // Failure case: non-admin cancel rejected
     let non_admin = Address::generate(&s.env);
@@ -471,7 +470,7 @@ fn e2e_comprehensive_lifecycle_test() {
 
     // Failure case: execute rejected proposal rejected
     let execute_rejected_result = s.gov.try_execute(&s.admin, &id2);
-    assert_eq!(execute_rejected_result.err().unwrap().unwrap(), ContractError::ProposalNotPassed);
+    assert_eq!(execute_rejected_result.err().unwrap().unwrap(), ContractError::NotPassed);
 
     // ── 3. THIRD PROPOSAL: CANCELLED (ADMIN CANCELS MID-VOTE) ───────────────────
     let id3 = new_proposal(&s, 120, 7200);
@@ -493,6 +492,188 @@ fn e2e_comprehensive_lifecycle_test() {
 
     // ── 4. VERIFY ALL PROPOSAL COUNTS AND STATES ───────────────────────────────
     assert_eq!(s.gov.proposal_count(), 3);
-    let proposals: Vec<u64> = (1..=3).collect();
-    assert_eq!(proposals.len(), 3);
+    assert_eq!(s.gov.get_proposal(&1).id, 1);
+    assert_eq!(s.gov.get_proposal(&2).id, 2);
+    assert_eq!(s.gov.get_proposal(&3).id, 3);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Issue #493: Snapshot and tally correctness tests after finalise
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn finalise_produces_correct_passed_outcome() {
+    let s = make_suite();
+    let id = new_proposal(&s, 100, 3600);
+
+    let v1 = mint_vote(&s, 80, id, Vote::Yes);
+    let v2 = mint_vote(&s, 50, id, Vote::Yes);
+    let v3 = mint_vote(&s, 30, id, Vote::No);
+
+    advance(&s, 3601);
+    s.gov.finalise(&id);
+
+    let p = s.gov.get_proposal(&id);
+    assert_eq!(p.state, ProposalState::Passed);
+    assert_eq!(p.votes_yes, 130);
+    assert_eq!(p.votes_no, 30);
+    assert_eq!(p.votes_abstain, 0);
+    assert_eq!(p.quorum, 100);
+}
+
+#[test]
+fn finalise_produces_correct_rejected_outcome() {
+    let s = make_suite();
+    let id = new_proposal(&s, 200, 3600);
+
+    mint_vote(&s, 90, id, Vote::Yes);
+    mint_vote(&s, 100, id, Vote::No);
+
+    advance(&s, 3601);
+    s.gov.finalise(&id);
+
+    let p = s.gov.get_proposal(&id);
+    assert_eq!(p.state, ProposalState::Rejected);
+    assert_eq!(p.votes_yes, 90);
+    assert_eq!(p.votes_no, 100);
+}
+
+#[test]
+fn vote_snapshots_unchanged_after_finalise() {
+    let s = make_suite();
+    let id = new_proposal(&s, 50, 3600);
+
+    let voter = Address::generate(&s.env);
+    s.token.mint(&s.admin, &voter, &500);
+    s.gov.cast_vote(&voter, &id, &Vote::Yes);
+
+    let record_before = s.gov.get_vote(&id, &voter).unwrap();
+    assert_eq!(record_before.weight, 500);
+
+    advance(&s, 3601);
+    s.gov.finalise(&id);
+
+    let record_after = s.gov.get_vote(&id, &voter).unwrap();
+    assert_eq!(record_after.weight, record_before.weight);
+    assert_eq!(record_after.weight, 500);
+
+    let p = s.gov.get_proposal(&id);
+    assert_eq!(p.votes_yes, 500);
+    assert_eq!(p.state, ProposalState::Passed);
+}
+
+#[test]
+fn tallies_frozen_after_finalise() {
+    let s = make_suite();
+    let id = new_proposal(&s, 100, 3600);
+
+    mint_vote(&s, 200, id, Vote::Yes);
+
+    advance(&s, 3601);
+    s.gov.finalise(&id);
+
+    let p1 = s.gov.get_proposal(&id);
+    let p2 = s.gov.get_proposal(&id);
+    assert_eq!(p1.votes_yes, p2.votes_yes);
+    assert_eq!(p1.votes_no, p2.votes_no);
+    assert_eq!(p1.votes_abstain, p2.votes_abstain);
+    assert_eq!(p1.state, p2.state);
+}
+
+#[test]
+fn late_finalise_still_produces_correct_outcome() {
+    let s = make_suite();
+    let id = new_proposal(&s, 100, 3600);
+
+    mint_vote(&s, 200, id, Vote::Yes);
+    mint_vote(&s, 50, id, Vote::No);
+
+    // Advance well past the voting period (10x the duration)
+    advance(&s, 36_000);
+    s.gov.finalise(&id);
+
+    let p = s.gov.get_proposal(&id);
+    assert_eq!(p.state, ProposalState::Passed);
+    assert_eq!(p.votes_yes, 200);
+    assert_eq!(p.votes_no, 50);
+}
+
+#[test]
+fn double_finalise_rejected() {
+    let s = make_suite();
+    let id = new_proposal(&s, 100, 3600);
+
+    mint_vote(&s, 200, id, Vote::Yes);
+
+    advance(&s, 3601);
+    s.gov.finalise(&id);
+    assert_eq!(s.gov.get_proposal(&id).state, ProposalState::Passed);
+
+    let result = s.gov.try_finalise(&id);
+    assert!(result.is_err());
+}
+
+#[test]
+fn finalise_with_only_abstain_votes_rejected() {
+    let s = make_suite();
+    let id = new_proposal(&s, 100, 3600);
+
+    mint_vote(&s, 200, id, Vote::Abstain);
+
+    advance(&s, 3601);
+    s.gov.finalise(&id);
+
+    let p = s.gov.get_proposal(&id);
+    assert_eq!(p.state, ProposalState::Rejected);
+    assert_eq!(p.votes_abstain, 200);
+    assert_eq!(p.votes_yes, 0);
+    assert_eq!(p.votes_no, 0);
+}
+
+#[test]
+fn finalise_preserves_multi_voter_snapshots() {
+    let s = make_suite();
+    let id = new_proposal(&s, 100, 3600);
+
+    let v1 = Address::generate(&s.env);
+    let v2 = Address::generate(&s.env);
+    let v3 = Address::generate(&s.env);
+    s.token.mint(&s.admin, &v1, &300);
+    s.token.mint(&s.admin, &v2, &150);
+    s.token.mint(&s.admin, &v3, &75);
+
+    s.gov.cast_vote(&v1, &id, &Vote::Yes);
+    s.gov.cast_vote(&v2, &id, &Vote::No);
+    s.gov.cast_vote(&v3, &id, &Vote::Abstain);
+
+    advance(&s, 3601);
+    s.gov.finalise(&id);
+
+    let r1 = s.gov.get_vote(&id, &v1).unwrap();
+    let r2 = s.gov.get_vote(&id, &v2).unwrap();
+    let r3 = s.gov.get_vote(&id, &v3).unwrap();
+    assert_eq!(r1.weight, 300);
+    assert_eq!(r2.weight, 150);
+    assert_eq!(r3.weight, 75);
+
+    let p = s.gov.get_proposal(&id);
+    assert_eq!(p.votes_yes, 300);
+    assert_eq!(p.votes_no, 150);
+    assert_eq!(p.votes_abstain, 75);
+    assert_eq!(p.state, ProposalState::Passed);
+}
+
+#[test]
+fn no_votes_finalises_as_rejected() {
+    let s = make_suite();
+    let id = new_proposal(&s, 100, 3600);
+
+    advance(&s, 3601);
+    s.gov.finalise(&id);
+
+    let p = s.gov.get_proposal(&id);
+    assert_eq!(p.state, ProposalState::Rejected);
+    assert_eq!(p.votes_yes, 0);
+    assert_eq!(p.votes_no, 0);
+    assert_eq!(p.votes_abstain, 0);
 }
