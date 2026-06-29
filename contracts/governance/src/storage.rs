@@ -142,10 +142,8 @@ pub fn get_storage_bump_threshold(env: &Env) -> u32 {
 //                      is keyed by a variable (proposal ID, voter address, etc.).
 //
 //   DataKey::Proposal(id)                  – full proposal struct
-//   DataKey::HasVoted(proposal_id, voter)  – deduplication flag per voter
-//   DataKey::VoteRecord(proposal_id, voter)– immutable vote audit record
-//   DataKey::VoterSnapshot(proposal_id, voter) – balance snapshot at vote time
-//   DataKey::LastProposal(proposer)        – timestamp of proposer's last proposal
+//   DataKey::VoteRecord(proposal_id, voter) – vote type + weight snapshot (SC-013: replaces HasVoted + VoterSnapshot)
+//   DataKey::LastProposal(proposer)         – timestamp of proposer's last proposal
 //
 // TEMPORARY storage  – not used in this contract. Allowances in the token
 //                      contract use temporary storage; see token/src/storage.rs.
@@ -261,26 +259,35 @@ pub fn get_veto_threshold(env: &Env) -> i128 {
     env.storage().instance().get(&DataKey::VetoThreshold).unwrap_or(0)
 }
 
-/// Records that `voter` has voted on `proposal_id`.
-/// TTL is automatically bumped to prevent expiry on long-running proposals.
-pub fn mark_voted(env: &Env, proposal_id: u64, voter: &Address) {
-    env.storage().persistent().set(&DataKey::HasVoted(proposal_id, voter.clone()), &true);
-    bump_has_voted_ttl(env, proposal_id, voter);
-}
+// =============================================================================
+// SC-013: Per-voter-per-proposal storage — single VoteRecord key
+//
+// Before: HasVoted(id,voter), VoteRecord(id,voter), VoterSnapshot(id,voter) = 3 writes
+// After:  VoteRecord(id,voter) only = 1 write
+// Savings per vote: 2 persistent writes, 2 TTL extend_ttl calls, 2 key encodings.
+// =============================================================================
 
 /// Returns `true` if `voter` has already voted on `proposal_id`.
+/// SC-013: checks VoteRecord key existence — no separate HasVoted key.
 pub fn has_voted(env: &Env, proposal_id: u64, voter: &Address) -> bool {
     env.storage()
         .persistent()
-        .get(&DataKey::HasVoted(proposal_id, voter.clone()))
-        .unwrap_or(false)
+        .has(&DataKey::VoteRecord(proposal_id, voter.clone()))
 }
 
-/// Stores the vote record for `voter` on `proposal_id`.
-/// TTL is automatically bumped to prevent expiry on long-running proposals.
+/// Stores the vote record (type + weight) for `voter` on `proposal_id`.
+/// SC-013: replaces mark_voted + save_voter_snapshot + save_vote_record.
 pub fn save_vote_record(env: &Env, proposal_id: u64, voter: &Address, record: &VoteRecord) {
-    env.storage().persistent().set(&DataKey::VoteRecord(proposal_id, voter.clone()), record);
+    let key = DataKey::VoteRecord(proposal_id, voter.clone());
+    env.storage().persistent().set(&key, record);
     bump_vote_record_ttl(env, proposal_id, voter);
+}
+
+/// Removes the vote record. Used to roll back the reentrancy sentinel on error.
+pub fn remove_vote_record(env: &Env, proposal_id: u64, voter: &Address) {
+    env.storage()
+        .persistent()
+        .remove(&DataKey::VoteRecord(proposal_id, voter.clone()));
 }
 
 /// Returns the vote record for `voter` on `proposal_id`, or `None` if not voted.
@@ -324,24 +331,6 @@ pub fn get_last_proposal(env: &Env, proposer: &Address) -> u64 {
         .persistent()
         .get(&DataKey::LastProposal(proposer.clone()))
         .unwrap_or(0)
-}
-
-/// Records the voter's token balance snapshot for a given proposal.
-/// Called once per voter per proposal at the time of casting their vote.
-/// TTL is automatically bumped to prevent expiry on long-running proposals.
-pub fn save_voter_snapshot(env: &Env, proposal_id: u64, voter: &Address, weight: i128) {
-    env.storage()
-        .persistent()
-        .set(&DataKey::VoterSnapshot(proposal_id, voter.clone()), &weight);
-    bump_voter_snapshot_ttl(env, proposal_id, voter);
-}
-
-/// Returns the stored vote-weight snapshot for a voter on a proposal.
-/// Returns `None` if no snapshot has been recorded yet.
-pub fn get_voter_snapshot(env: &Env, proposal_id: u64, voter: &Address) -> Option<i128> {
-    env.storage()
-        .persistent()
-        .get(&DataKey::VoterSnapshot(proposal_id, voter.clone()))
 }
 
 // =============================================================================
@@ -623,22 +612,6 @@ pub fn bump_vote_record_ttl(env: &Env, proposal_id: u64, voter: &Address) {
     env.storage()
         .persistent()
         .extend_ttl(&DataKey::VoteRecord(proposal_id, voter.clone()), ttl, ttl);
-}
-
-/// Bumps the TTL of a HasVoted flag entry.
-pub fn bump_has_voted_ttl(env: &Env, proposal_id: u64, voter: &Address) {
-    let ttl = get_persistent_storage_ttl(env);
-    env.storage()
-        .persistent()
-        .extend_ttl(&DataKey::HasVoted(proposal_id, voter.clone()), ttl, ttl);
-}
-
-/// Bumps the TTL of a voter snapshot entry.
-pub fn bump_voter_snapshot_ttl(env: &Env, proposal_id: u64, voter: &Address) {
-    let ttl = get_persistent_storage_ttl(env);
-    env.storage()
-        .persistent()
-        .extend_ttl(&DataKey::VoterSnapshot(proposal_id, voter.clone()), ttl, ttl);
 }
 
 /// Bumps the TTL of a LastProposal entry.

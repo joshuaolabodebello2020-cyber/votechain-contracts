@@ -614,21 +614,13 @@ impl GovernanceContract {
             }
         }
 
-        // SEC-010 (checks-effects-interactions): write the dedup flag BEFORE the
-        // cross-contract call so that even if the execution model ever allowed
-        // re-entry, a second cast_vote for the same voter would be rejected.
-        mark_voted(&env, proposal_id, &voter);
+        // SEC-010 (checks-effects-interactions): write a sentinel VoteRecord BEFORE the
+        // cross-contract call so that re-entry is rejected by has_voted above.
+        // weight=0 sentinel is overwritten with real balance below, or removed on NoVotingPower.
+        // SC-013: single write replaces the former mark_voted + save_voter_snapshot pair.
+        save_vote_record(&env, proposal_id, &voter, &VoteRecord { vote_type: vote.clone(), weight: 0 });
 
-        let token_client = token::Client::new(&env, &get_voting_token(&env)?);
-        // Snapshot: capture the voter's balance at vote time and persist it.
-        let weight = match get_voter_snapshot(&env, proposal_id, &voter) {
-            Some(w) => w,
-            None => {
-                let live = delegation::voting_weight(&env, &voter)?;
-                save_voter_snapshot(&env, proposal_id, &voter, live);
-                live
-            }
-        };
+        let weight = delegation::voting_weight(&env, &voter)?;
         if weight <= 0 {
             return Err(ContractError::NoPower);
         }
@@ -774,7 +766,6 @@ impl GovernanceContract {
 
         let token_client = token::Client::new(&env, &get_voting_token(&env)?);
         let own_weight = token_client.balance(&voter);
-        save_voter_snapshot(&env, proposal_id, &voter, own_weight);
 
         let mut delegated_weight: i128 = 0;
         for delegator in delegators.iter() {
