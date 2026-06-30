@@ -413,39 +413,36 @@ cargo install --locked stellar-cli@21.6.0 --features opt
 
 ---
 
-## 9. Backend Feature Flags
+## 9. Admin Audit Logging
 
-The backend API server supports config-driven feature flags to enable or disable optional functionality without code changes. Flags are read from environment variables at request time, so toggling requires only a process restart.
+All privileged API calls are recorded in an in-process audit log to support traceability and incident investigation.
 
-### Available flags
+### What is logged
 
-| Environment variable | Default | Endpoint controlled |
-|---|---|---|
-| `FEATURE_GOVERNANCE_STATS` | `true` | `GET /api/v1/governance/stats` |
-| `FEATURE_VOTER_VOTES` | `true` | `GET /api/v1/voters/:address/votes` |
-| `FEATURE_PROPOSAL_INVALIDATION` | `true` | `POST /api/v1/proposals/invalidate` |
-| `FEATURE_ADVANCED_METRICS` | `false` (beta) | `GET /api/v1/metrics/cache` |
+Every call that passes through `requireAdmin` middleware records an entry with:
 
-Accepted values: `true` or `1` to enable, `false` or `0` to disable.
+| Field | Description |
+|---|---|
+| `timestamp` | ISO-8601 UTC time of the event |
+| `actor` | `"admin"` on success, `"unknown"` on failure |
+| `action` | `AUTH_SUCCESS`, `AUTH_FAILURE`, or `CACHE_INVALIDATION` |
+| `endpoint` | Request path (e.g. `/proposals/invalidate`) |
+| `method` | HTTP method |
+| `statusCode` | Response status code |
 
-### Toggling a flag
+Sensitive values (the `X-Admin-Key` header, request bodies) are **never** included in log entries.
 
-Edit `.env` and restart the backend:
+### Inspecting the audit log
 
 ```bash
-FEATURE_ADVANCED_METRICS=true   # enable beta cache metrics
-FEATURE_VOTER_VOTES=false       # disable voter vote history
+curl -H "X-Admin-Key: $ADMIN_API_KEY" http://localhost:3001/api/v1/audit-log
 ```
 
-### Disabled endpoint response
+Returns a JSON array of all recorded entries. The endpoint itself requires admin authentication.
 
-```json
-{
-  "errors": [{ "code": "FEATURE_DISABLED", "message": "This feature is currently disabled. Contact your administrator for more information." }]
-}
-```
+### Configuration
 
-HTTP status: `503`.
+Set `ADMIN_API_KEY` in your environment (see `.env.example`). Rotate the key immediately if it is compromised. The log is held in memory and resets on process restart — for persistent storage, pipe stdout to a log aggregator.
 
 ---
 
