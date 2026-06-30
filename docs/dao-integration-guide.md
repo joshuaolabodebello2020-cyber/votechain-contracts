@@ -411,6 +411,41 @@ cargo install --locked stellar-cli@21.6.0 --features opt
 
 ---
 
+---
+
+## 9. Admin Audit Logging
+
+All privileged API calls are recorded in an in-process audit log to support traceability and incident investigation.
+
+### What is logged
+
+Every call that passes through `requireAdmin` middleware records an entry with:
+
+| Field | Description |
+|---|---|
+| `timestamp` | ISO-8601 UTC time of the event |
+| `actor` | `"admin"` on success, `"unknown"` on failure |
+| `action` | `AUTH_SUCCESS`, `AUTH_FAILURE`, or `CACHE_INVALIDATION` |
+| `endpoint` | Request path (e.g. `/proposals/invalidate`) |
+| `method` | HTTP method |
+| `statusCode` | Response status code |
+
+Sensitive values (the `X-Admin-Key` header, request bodies) are **never** included in log entries.
+
+### Inspecting the audit log
+
+```bash
+curl -H "X-Admin-Key: $ADMIN_API_KEY" http://localhost:3001/api/v1/audit-log
+```
+
+Returns a JSON array of all recorded entries. The endpoint itself requires admin authentication.
+
+### Configuration
+
+Set `ADMIN_API_KEY` in your environment (see `.env.example`). Rotate the key immediately if it is compromised. The log is held in memory and resets on process restart — for persistent storage, pipe stdout to a log aggregator.
+
+---
+
 ## Related Documentation
 
 - [Proposal Lifecycle](lifecycle.md) — state diagram and transition rules
